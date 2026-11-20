@@ -1,0 +1,62 @@
+ticket = "B03"
+
+[vc01]
+status = "PASS"
+
+[review]
+pending_findings = 0
+
+[[criteria]]
+id = "B03-AC01"
+mandatory = true
+
+[[criteria.cases]]
+id = "B03-TC01"
+mode = "automated"
+tests = [
+    "tests/quality/test_check.py::test_clean_project_passes_every_step",
+    "tests/quality/test_migrations.py::test_current_migrations_apply_roll_back_and_match_models",
+]
+
+[[criteria.cases]]
+id = "B03-TC01-local-and-ci"
+mode = "external"
+result = "PASS"
+evidence = "docs/evidence/B03-ci-checks.md#b03-tc01--batería-local-y-ci"
+
+[[criteria]]
+id = "B03-AC02"
+mandatory = true
+
+[[criteria.cases]]
+id = "B03-TC02"
+mode = "automated"
+tests = [
+    "tests/quality/test_check.py::test_each_infraction_fails_the_battery",
+    "tests/quality/test_migrations.py::test_models_without_migration_are_reported",
+    "tests/quality/test_evidence.py::test_one_unmet_criterion_of_three_blocks_approval",
+    "tests/quality/test_evidence.py::test_failing_mandatory_criterion_blocks_even_above_threshold",
+    "tests/quality/test_evidence.py::test_process_conditions_block_full_completeness",
+    "tests/quality/test_evidence.py::test_command_fails_when_any_ticket_is_blocked",
+    "tests/quality/test_api_diff.py::test_command_reports_difference_without_touching_baseline",
+]
+
+[[criteria.cases]]
+id = "B03-TC02-ci-red-probe"
+mode = "external"
+result = "PASS"
+evidence = "docs/evidence/B03-ci-checks.md#b03-tc02--sonda-red-en-ci"
+
+[[criteria]]
+id = "B03-AC03"
+mandatory = true
+
+[[criteria.cases]]
+id = "B03-TC03"
+mode = "automated"
+tests = [
+    "tests/quality/test_hygiene.py::test_flags_comments_but_not_hash_inside_strings",
+    "tests/quality/test_hygiene.py::test_allows_localized_tool_directives",
+    "tests/quality/test_hygiene.py::test_command_fails_and_lists_comment_locations",
+    "tests/quality/test_hygiene.py::test_command_succeeds_without_comments",
+]
