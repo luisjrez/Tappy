@@ -10,6 +10,7 @@ from tests.support import (
     UNREACHABLE_DATABASE_PASSWORD,
     UNREACHABLE_DATABASE_URL,
     VALID_SECRET,
+    app_environment,
     free_port,
     run_tappy,
     spawn_tappy,
@@ -35,9 +36,8 @@ def running_api() -> Iterator[int]:
     port = free_port()
     process = spawn_tappy(
         {
+            **app_environment(UNREACHABLE_DATABASE_URL),
             "TAPPY_ENVIRONMENT": "local",
-            "TAPPY_SECRET_KEY": VALID_SECRET,
-            "TAPPY_DATABASE_URL": UNREACHABLE_DATABASE_URL,
             "TAPPY_PORT": str(port),
         }
     )

@@ -12,6 +12,14 @@ _Evitar_: cliente, cuenta.
 Persona del comercio que utiliza Tappy para crear y consultar cobros.
 _Evitar_: pagador, comercio cuando se habla de una persona.
 
+**Administrador / Administrator**:
+Persona interna de Tappy con acceso global al back office para gestionar operadores y revisar operaciones. No pertenece a un comercio ni puede marcar un cobro como recibido sin evidencia validada.
+_Evitar_: superusuario, dueño.
+
+**Identidad / Identity**:
+Credencial de acceso de un administrador u operador: correo registrado, contraseña con hash, rol y estado. Una identidad inactiva no autoriza ninguna operación.
+_Evitar_: usuario, cuenta.
+
 **Pagador / Payer**:
 Persona que revisa y autoriza el pago desde su institución bancaria compatible.
 _Evitar_: usuario de Tappy, cliente registrado.

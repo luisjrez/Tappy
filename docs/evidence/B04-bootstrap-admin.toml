@@ -23,6 +23,8 @@ tests = [
     "tests/identity/test_bootstrap_admin.py::test_bootstrap_admin_reports_active_admin_without_exposing_password",
     "tests/identity/test_bootstrap_admin.py::test_stored_password_is_an_argon2id_hash",
     "tests/identity/test_password_policy.py::test_hash_verifies_only_the_original_password",
+    "tests/identity/test_password_policy.py::test_compatible_unicode_forms_are_the_same_password",
+    "tests/identity/test_bootstrap_admin.py::test_windows_line_ending_is_not_part_of_the_password",
 ]
 
 [[criteria]]
@@ -37,6 +39,7 @@ tests = [
     "tests/identity/test_bootstrap_admin.py::test_invalid_bootstrap_input_creates_nothing_and_hides_password",
     "tests/identity/test_password_policy.py::test_accepts_passwords_at_the_length_limits",
     "tests/identity/test_password_policy.py::test_rejects_short_long_and_common_passwords",
+    "tests/identity/test_password_policy.py::test_common_password_check_applies_after_unicode_normalization",
 ]
 
 [[criteria]]
@@ -50,4 +53,5 @@ mode = "automated"
 tests = [
     "tests/identity/test_bootstrap_admin.py::test_repeating_bootstrap_keeps_single_identity_and_original_password",
     "tests/identity/test_bootstrap_admin.py::test_bootstrap_never_elevates_an_existing_operator",
+    "tests/identity/test_bootstrap_admin.py::test_database_rejects_emails_differing_only_by_case",
 ]

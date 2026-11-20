@@ -44,7 +44,11 @@ uv run python -m tappy.identity bootstrap-admin --email admin@example.com
 uv run python -m tappy.identity show --email admin@example.com
 ```
 
-Passwords need 12 to 128 characters and are rejected when they appear in a short list of common passwords; they are stored as Argon2id hashes. Running the command again for an existing email changes nothing and exits with an error.
+Passwords are normalized with Unicode NFKC, need 12 to 128 characters and are rejected when they appear in a short list of common passwords; they are stored as Argon2id hashes. Running the command again for an existing email (compared case-insensitively) changes nothing and exits with an error.
+
+## Session policy
+
+Agreed before identity work and implemented by the session tickets (B05/B06): opaque access tokens valid for 15 minutes, renewal with atomic rotation, and an absolute session lifetime of 30 days. All three values will be configurable through environment variables; logout and identity deactivation revoke access immediately.
 
 ## Checks
 

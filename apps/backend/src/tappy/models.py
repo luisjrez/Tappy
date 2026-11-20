@@ -1,5 +1,6 @@
-from tappy.identity.models import User
+from tappy.identity.models import Identity
 from tappy.platform.persistence import Base
 
-MODELS = (User,)
+__all__ = ["Identity", "metadata"]
+
 metadata = Base.metadata

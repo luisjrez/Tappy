@@ -1,5 +1,9 @@
+import unicodedata
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
+
+from tappy.identity.errors import PasswordPolicyError
 
 MINIMUM_LENGTH = 12
 MAXIMUM_LENGTH = 128
@@ -31,26 +35,27 @@ COMMON_PASSWORDS = frozenset(
 hasher = PasswordHasher()
 
 
-class PasswordPolicyError(ValueError):
-    pass
+def normalized(password: str) -> str:
+    return unicodedata.normalize("NFKC", password)
 
 
 def check_policy(password: str) -> None:
-    if len(password) < MINIMUM_LENGTH:
+    candidate = normalized(password)
+    if len(candidate) < MINIMUM_LENGTH:
         raise PasswordPolicyError(f"Password must have at least {MINIMUM_LENGTH} characters")
-    if len(password) > MAXIMUM_LENGTH:
+    if len(candidate) > MAXIMUM_LENGTH:
         raise PasswordPolicyError(f"Password must have at most {MAXIMUM_LENGTH} characters")
-    if password.casefold() in COMMON_PASSWORDS:
+    if candidate.casefold() in COMMON_PASSWORDS:
         raise PasswordPolicyError("Password is too common")
 
 
 def hash_password(password: str) -> str:
     check_policy(password)
-    return hasher.hash(password)
+    return hasher.hash(normalized(password))
 
 
 def verify_password(password_hash: str, password: str) -> bool:
     try:
-        return hasher.verify(password_hash, password)
+        return hasher.verify(password_hash, normalized(password))
     except VerificationError, InvalidHashError:
         return False

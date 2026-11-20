@@ -1,7 +1,9 @@
 import re
+from typing import NamedTuple
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from tappy.identity.passwords import hash_password, verify_password
 from tests.support import run_identity
@@ -35,12 +37,21 @@ def test_bootstrap_admin_reports_active_admin_without_exposing_password(
         assert ADMIN_PASSWORD not in output
 
 
-def stored_users(database_url: str) -> list[tuple[str, str, str, str]]:
+class StoredIdentity(NamedTuple):
+    email: str
+    password_hash: str
+    role: str
+    status: str
+
+
+def stored_users(database_url: str) -> list[StoredIdentity]:
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
-            rows = connection.execute(text("SELECT email, password_hash, role, status FROM users"))
-            return [(row.email, row.password_hash, row.role, row.status) for row in rows]
+            rows = connection.execute(
+                text("SELECT email, password_hash, role, status FROM identities")
+            )
+            return [StoredIdentity(*row) for row in rows]
     finally:
         engine.dispose()
 
@@ -94,20 +105,22 @@ def test_repeating_bootstrap_keeps_single_identity_and_original_password(
     assert repeated.returncode != 0
     assert "already exists" in repeated.stderr
     assert stored_users(migrated_database_url) == original
-    assert verify_password(original[0][1], ADMIN_PASSWORD)
+    assert verify_password(original[0].password_hash, ADMIN_PASSWORD)
 
 
 def test_bootstrap_never_elevates_an_existing_operator(migrated_database_url: str) -> None:
     engine = create_engine(migrated_database_url)
-    with engine.begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO users (id, email, password_hash, role, status) "
-                "VALUES (gen_random_uuid(), :email, :hash, 'operator', 'active')"
-            ),
-            {"email": ADMIN_EMAIL, "hash": hash_password(ADMIN_PASSWORD)},
-        )
-    engine.dispose()
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO identities (id, email, password_hash, role, status) "
+                    "VALUES (gen_random_uuid(), :email, :hash, 'operator', 'active')"
+                ),
+                {"email": ADMIN_EMAIL, "hash": hash_password(ADMIN_PASSWORD)},
+            )
+    finally:
+        engine.dispose()
 
     result = run_identity(
         migrated_database_url,
@@ -118,7 +131,7 @@ def test_bootstrap_never_elevates_an_existing_operator(migrated_database_url: st
     )
 
     assert result.returncode != 0
-    assert [user[2] for user in stored_users(migrated_database_url)] == ["operator"]
+    assert [user.role for user in stored_users(migrated_database_url)] == ["operator"]
 
 
 def test_stored_password_is_an_argon2id_hash(migrated_database_url: str) -> None:
@@ -130,7 +143,36 @@ def test_stored_password_is_an_argon2id_hash(migrated_database_url: str) -> None
         stdin=f"{ADMIN_PASSWORD}\n",
     )
 
-    [(_, password_hash, _, _)] = stored_users(migrated_database_url)
+    [stored] = stored_users(migrated_database_url)
 
-    assert password_hash.startswith("$argon2id$")
-    assert ADMIN_PASSWORD not in password_hash
+    assert stored.password_hash.startswith("$argon2id$")
+    assert ADMIN_PASSWORD not in stored.password_hash
+
+
+def test_windows_line_ending_is_not_part_of_the_password(migrated_database_url: str) -> None:
+    run_identity(
+        migrated_database_url,
+        "bootstrap-admin",
+        "--email",
+        ADMIN_EMAIL,
+        stdin=f"{ADMIN_PASSWORD}\r\n",
+    )
+
+    [stored] = stored_users(migrated_database_url)
+
+    assert verify_password(stored.password_hash, ADMIN_PASSWORD)
+
+
+def test_database_rejects_emails_differing_only_by_case(migrated_database_url: str) -> None:
+    engine = create_engine(migrated_database_url)
+    insert = text(
+        "INSERT INTO identities (id, email, password_hash, role, status) "
+        "VALUES (gen_random_uuid(), :email, 'hash', 'operator', 'active')"
+    )
+    try:
+        with engine.begin() as connection:
+            connection.execute(insert, {"email": "case@tappy.example"})
+        with pytest.raises(IntegrityError), engine.begin() as connection:
+            connection.execute(insert, {"email": "CASE@tappy.example"})
+    finally:
+        engine.dispose()
