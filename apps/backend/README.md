@@ -35,6 +35,17 @@ curl http://127.0.0.1:8000/ready
 
 Missing or invalid configuration stops startup with the list of invalid variables; values are never printed.
 
+## First administrator
+
+There is no public sign-up and no default password. Provision the first administrator from a trusted shell; the password is read only from standard input (hidden and confirmed when typed in a terminal), never from arguments or environment variables:
+
+```sh
+uv run python -m tappy.identity bootstrap-admin --email admin@example.com
+uv run python -m tappy.identity show --email admin@example.com
+```
+
+Passwords need 12 to 128 characters and are rejected when they appear in a short list of common passwords; they are stored as Argon2id hashes. Running the command again for an existing email changes nothing and exits with an error.
+
 ## Checks
 
 One command runs the whole battery locally and in CI (`.github/workflows/backend.yml`). It needs the Compose services running and the variables from `.env` exported:
