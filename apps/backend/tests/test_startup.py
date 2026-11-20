@@ -7,6 +7,7 @@ from urllib.request import urlopen
 import pytest
 
 from tests.support import (
+    UNREACHABLE_DATABASE_PASSWORD,
     UNREACHABLE_DATABASE_URL,
     VALID_SECRET,
     free_port,
@@ -62,7 +63,7 @@ def test_startup_fails_when_required_variable_is_missing() -> None:
     assert "TAPPY_ENVIRONMENT" in result.stderr
     assert "Traceback" not in result.stderr
     assert VALID_SECRET not in result.stderr + result.stdout
-    assert "synthetic-unreachable-password" not in result.stderr + result.stdout
+    assert UNREACHABLE_DATABASE_PASSWORD not in result.stderr + result.stdout
 
 
 @pytest.mark.parametrize(

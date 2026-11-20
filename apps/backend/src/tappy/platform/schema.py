@@ -1,3 +1,5 @@
+from functools import cache
+
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
@@ -19,6 +21,7 @@ def upgrade_to_head(database_url: str) -> None:
     command.upgrade(alembic_config(database_url), "head")
 
 
+@cache
 def head_revision() -> str | None:
     return ScriptDirectory.from_config(alembic_config()).get_current_head()
 

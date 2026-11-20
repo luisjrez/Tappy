@@ -13,8 +13,10 @@ def create_app(settings: Settings) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        database.dispose()
+        try:
+            yield
+        finally:
+            database.dispose()
 
     app = FastAPI(title="Tappy", lifespan=lifespan)
     app.state.settings = settings

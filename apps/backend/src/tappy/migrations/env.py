@@ -17,11 +17,13 @@ def database_url() -> str:
 
 def run_migrations() -> None:
     engine = create_engine(database_url(), poolclass=NullPool)
-    with engine.connect() as connection:
-        context.configure(connection=connection, target_metadata=Base.metadata)
-        with context.begin_transaction():
-            context.run_migrations()
-    engine.dispose()
+    try:
+        with engine.connect() as connection:
+            context.configure(connection=connection, target_metadata=Base.metadata)
+            with context.begin_transaction():
+                context.run_migrations()
+    finally:
+        engine.dispose()
 
 
 if context.config.config_file_name:

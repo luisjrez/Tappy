@@ -6,10 +6,10 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, text
 
 from tappy.main import create_app
-from tappy.platform.migrations import upgrade_to_head
+from tappy.platform.schema import upgrade_to_head
 from tests.support import build_settings, free_port, isolated_environment
 
 COMPOSE_FILE = Path(__file__).resolve().parents[1] / "compose.yaml"
@@ -47,9 +47,12 @@ class ComposeProject:
     def start_database(self) -> None:
         self.compose("up", "--detach", "--wait", "db")
 
-    def restart_database(self) -> None:
-        self.compose("restart", "db")
+    def recreate_database(self) -> None:
+        self.compose("down")
         self.start_database()
+
+    def stop_database(self) -> None:
+        self.compose("stop", "db")
 
     def query(self, sql: str) -> str:
         return self.compose(
@@ -67,25 +70,52 @@ def local_compose() -> Iterator[ComposeProject]:
         project.compose("down", "--volumes")
 
 
-def test_local_data_survives_database_restart_and_stays_out_of_test_database(
+def store_probe(database_url: str) -> None:
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("CREATE TABLE persistence_probe (label text NOT NULL)"))
+            connection.execute(
+                text("INSERT INTO persistence_probe VALUES (:label)"), {"label": PROBE_DATUM}
+            )
+    finally:
+        engine.dispose()
+
+
+def database_names(database_url: str) -> set[str]:
+    engine = create_engine(database_url)
+    try:
+        with engine.connect() as connection:
+            return set(connection.execute(text("SELECT datname FROM pg_database")).scalars())
+    finally:
+        engine.dispose()
+
+
+def readiness_status(database_url: str) -> int:
+    with TestClient(create_app(build_settings(database_url=database_url))) as client:
+        return client.get("/ready").status_code
+
+
+def test_local_data_survives_database_recreation_and_stays_out_of_test_server(
     local_compose: ComposeProject, empty_database_url: str
 ) -> None:
     upgrade_to_head(local_compose.database_url)
-    local_compose.query("CREATE TABLE persistence_probe (label text NOT NULL)")
-    local_compose.query("INSERT INTO persistence_probe VALUES ('synthetic-persisted-datum')")
+    store_probe(local_compose.database_url)
 
-    local_compose.restart_database()
-
-    with TestClient(create_app(build_settings(database_url=local_compose.database_url))) as client:
-        readiness = client.get("/ready")
-    test_engine = create_engine(empty_database_url)
-    with test_engine.connect() as connection:
-        test_tables = inspect(connection).get_table_names()
-        test_databases = connection.execute(text("SELECT datname FROM pg_database")).scalars()
-        test_database_names = set(test_databases)
-    test_engine.dispose()
+    local_compose.recreate_database()
 
     assert local_compose.query("SELECT label FROM persistence_probe") == PROBE_DATUM
-    assert readiness.status_code == HTTPStatus.OK
-    assert "persistence_probe" not in test_tables
-    assert "tappy" not in test_database_names
+    assert readiness_status(local_compose.database_url) == HTTPStatus.OK
+    assert "tappy" not in database_names(empty_database_url)
+
+
+def test_readiness_turns_unavailable_when_local_postgres_stops(
+    local_compose: ComposeProject,
+) -> None:
+    upgrade_to_head(local_compose.database_url)
+    ready_while_running = readiness_status(local_compose.database_url)
+
+    local_compose.stop_database()
+
+    assert ready_while_running == HTTPStatus.OK
+    assert readiness_status(local_compose.database_url) == HTTPStatus.SERVICE_UNAVAILABLE

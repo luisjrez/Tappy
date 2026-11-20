@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from tappy.platform.config import Settings
-from tappy.platform.migrations import is_schema_current
+from tappy.platform.schema import is_schema_current
 
 CONNECT_TIMEOUT_SECONDS = 2
 

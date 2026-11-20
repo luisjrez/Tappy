@@ -3,7 +3,7 @@ from http import HTTPStatus
 from fastapi.testclient import TestClient
 
 from tappy.main import create_app
-from tappy.platform.migrations import upgrade_to_head
+from tappy.platform.schema import upgrade_to_head
 from tests.support import UNREACHABLE_DATABASE_PASSWORD, build_settings
 
 
