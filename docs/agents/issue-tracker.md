@@ -19,6 +19,6 @@ PRs as a request surface: no. Los PRs de implementación sí pasan review, pero 
 
 ## Operaciones de relación
 
-Sub-issue: POST repos/luisjrez/Tappy/issues/PADRE/sub_issues con issue_id del hijo.
+Sub-issue: POST repos/luisjrez/Tappy/issues/PADRE/sub_issues con sub_issue_id del hijo.
 Bloqueo: POST repos/luisjrez/Tappy/issues/HIJO/dependencies/blocked_by con issue_id del blocker.
 Si la plataforma no soporta una relación, conservar enlaces explícitos en cuerpos y reportar el límite; no afirmar relación nativa no verificada.
