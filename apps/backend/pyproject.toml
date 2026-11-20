@@ -3,9 +3,12 @@ name = "tappy-backend"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.16",
     "fastapi>=0.165",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.14",
     "pydantic-settings>=2.16",
+    "sqlalchemy>=2.0",
     "uvicorn>=0.54",
 ]
 
@@ -36,6 +39,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "PT", "RUF", "N", "S", "AS
 "tests/**" = ["S101", "S105", "S106"]
 "tests/support.py" = ["S603"]
 "tests/test_startup.py" = ["S310"]
+"tests/test_persistence.py" = ["S603", "S607"]
 
 [tool.mypy]
 python_version = "3.14"
