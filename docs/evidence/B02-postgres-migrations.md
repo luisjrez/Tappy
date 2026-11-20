@@ -7,7 +7,7 @@ Ticket: [#10](https://github.com/luisjrez/Tappy/issues/10) · Historia: [H1 #1](
 - Ticket, UC/AC/TC y comprobación: B02-UC01–UC03, B02-AC01–AC03, B02-TC01–TC03, B02-VC01.
 - Modalidad: **resultado inicial** para `GET /ready`, Compose y migraciones (superficies nuevas). `GET /health` (B01) no cambia de contrato: su regresión se cubre con los tests de B01, que siguen en verde.
 - Aplicabilidad: API sí (`/ready`); comandos sí (Compose, Alembic, psql); panel **no aplica** (sin vistas).
-- Base: rama B01 `a59c02c` (PR #51). Revisión evaluada: commit candidato de B02 (SHA en el PR y en la tabla de review).
+- Base: rama B01 `a59c02c` (PR #51). Revisión evaluada: commit candidato `fe3dc49`; código final `fa29dba` tras correcciones de review. Tests, checks y salidas de esta página se ejecutaron sobre `fa29dba`; commits posteriores solo modifican este archivo.
 - Entorno: macOS (Darwin 25.6), Colima + Docker Compose 5.0.2, `postgres:18.6-alpine`, Python 3.14.8, SQLAlchemy 2.1.9, Alembic 1.20.1, psycopg 3.3.9, resto como B01. Fecha: 2026-11-20. Ejecutor: sesión local de desarrollo del autor del PR.
 - Actor: Desarrollador. Datos: contraseñas y filas sintéticas (`synthetic-…`).
 
@@ -17,7 +17,7 @@ Ticket: [#10](https://github.com/luisjrez/Tappy/issues/10) · Historia: [H1 #1](
 - `TAPPY_DATABASE_URL` es `SecretStr`: la URL con contraseña no se imprime en errores de configuración.
 - `Database` por instancia de app: engine con `pool_pre_ping` y `connect_timeout=2`; `transaction()` abre una sesión y una transacción por uso; `dispose()` en el `lifespan`.
 - `SessionDependency`: una sesión transaccional por petición (commit al terminar, rollback ante excepción).
-- Alembic empaquetado como `tappy:migrations`; `0001_baseline` es la primera revisión. `/ready` = Postgres alcanzable **y** esquema en head; si no, `503 {"status":"unavailable"}` sin detalles.
+- Alembic empaquetado como `tappy:migrations` (helpers en `tappy.platform.schema`, head cacheado); `0001_baseline` es la primera revisión. `/ready` = Postgres alcanzable **y** esquema en head; si no, `503 {"status":"unavailable"}` sin detalles. Interpretación: el Red del ticket pide que «migración sobre base vacía» falle, y una base sin migrar no está lista para servir; por eso readiness exige el esquema en head además de la conexión.
 - Tests: cada test que necesita DB crea y borra su propia base `tappy_test_<uuid>` en `test-db`; el `conftest` aborta si `TAPPY_TEST_DATABASE_URL` apunta al mismo host:puerto que `TAPPY_DATABASE_URL`.
 
 ## Trazabilidad UC → AC → TC → test
@@ -25,8 +25,8 @@ Ticket: [#10](https://github.com/luisjrez/Tappy/issues/10) · Historia: [H1 #1](
 | UC | AC | TC | Test real | Resultado |
 | --- | --- | --- | --- | --- |
 | B02-UC01 | B02-AC01 | B02-TC01 | `tests/test_readiness.py::test_readiness_turns_ready_after_migrating_an_empty_database` (base vacía: 503 → `upgrade head` → 200) | PASS |
-| B02-UC02 | B02-AC02 | B02-TC02 | `tests/test_readiness.py::test_readiness_reports_unavailable_database_without_internal_details` (sin contraseña ni nombre de excepción en la respuesta) | PASS |
-| B02-UC03 | B02-AC03 | B02-TC03 | `tests/test_persistence.py::test_local_data_survives_database_restart_and_stays_out_of_test_database` (proyecto Compose desechable con volumen: dato + migración sobreviven a `restart`; la base de tests no contiene ni la tabla ni la base local) | PASS |
+| B02-UC02 | B02-AC02 | B02-TC02 | `tests/test_persistence.py::test_readiness_turns_unavailable_when_local_postgres_stops` (Postgres de Compose en marcha → 200; `docker compose stop db` → 503); `tests/test_readiness.py::test_readiness_reports_unavailable_database_without_internal_details` (servidor inalcanzable: cuerpo exacto `{"status":"unavailable"}`, sin contraseña) | PASS |
+| B02-UC03 | B02-AC03 | B02-TC03 | `tests/test_persistence.py::test_local_data_survives_database_recreation_and_stays_out_of_test_server` (proyecto Compose desechable: dato + revisión sobreviven a `down` + `up` gracias al volumen `db-data`; el servidor de tests no contiene la base `tappy`) + guarda del `conftest` que aborta si ambas URLs comparten host:puerto | PASS |
 | Refactor del ticket | — | adicional | `tests/test_sessions.py::test_each_request_uses_its_own_transaction` (sesión distinta por petición; commit en éxito, rollback en error) | PASS |
 
 ## TDD
@@ -35,7 +35,7 @@ Ticket: [#10](https://github.com/luisjrez/Tappy/issues/10) · Historia: [H1 #1](
 | --- | --- | --- |
 | Readiness con DB caída | `assert 404 == 503` (sin ruta) | `Database.is_ready()` + `GET /ready` con 503 |
 | Readiness tras migrar base vacía | Readiness respondía 200 con base sin migrar: `assert 200 == 503` | Alembic `tappy:migrations`, `0001_baseline`, `is_schema_current` (revisión actual == head) |
-| Persistencia tras reinicio | Mutación de control: `db` en `tmpfs` en lugar de volumen → `psql … SELECT label FROM persistence_probe` falla tras `restart` (exit 1). Restaurado el volumen → PASS. (Una mutación con volumen anónimo no detecta nada porque `restart` conserva el contenedor; descartada.) | Volumen `db-data` |
+| Persistencia tras recrear el servicio | Mutaciones de control: `db` en `tmpfs` y `db` con volumen anónimo → `psql … SELECT label FROM persistence_probe` falla tras `down` + `up` (exit 1). Con `restart` la mutación de volumen anónimo no se detectaba (hallazgo de review), por eso el test recrea el contenedor. Restaurado `db-data` → PASS. | Volumen `db-data` |
 | Sesión transaccional por petición | Stub sin ciclo de transacción: `assert [] == ['accepted']` | `Database.transaction()` (`session.begin()`) y `get_session` |
 
 Refactor: ciclo de sesión/transacción centralizado en `Database.transaction()`; ninguna sesión se comparte entre peticiones. `free_port` movido a `tests/support.py`.
@@ -47,7 +47,7 @@ Refactor: ciclo de sesión/transacción centralizado en `Database.transaction()`
 | `uv run ruff format --check .` | `23 files already formatted` | 0 |
 | `uv run ruff check .` | `All checks passed!` | 0 |
 | `uv run mypy` | `Success: no issues found in 22 source files` | 0 |
-| `uv run pytest` | `10 passed` | 0 |
+| `uv run pytest` | `11 passed` | 0 |
 
 Exención nueva acotada: `tests/test_persistence.py` → `S603`/`S607` (invoca el CLI `docker compose` con argumentos fijos).
 
@@ -66,20 +66,24 @@ Contrato: `ReadinessStatus {status: "ready" | "unavailable"}`; 503 documentado e
 
 ## Comandos — resultado inicial
 
+Volumen `tappy_db-data` recién creado; salida resumida (sin líneas de progreso repetidas):
+
 ```text
-$ uv run alembic upgrade head
-INFO [alembic.runtime.migration] Running upgrade  -> 0001_baseline
-exit=0
-$ uv run alembic current
-0001_baseline (head)
-exit=0
-$ docker compose exec -T db psql … "CREATE TABLE vc01_probe …; INSERT … 'synthetic-vc01'"
-$ docker compose stop db && docker compose up -d --wait db
-$ docker compose exec -T db psql … "SELECT label FROM vc01_probe"
-synthetic-vc01
+$ docker compose up -d --wait db            → Volume tappy_db-data Created … Container tappy-db-1 Healthy   exit=0
+$ curl /ready                               → {"status":"unavailable"} status=503
+$ uv run alembic upgrade head               → Running upgrade  -> 0001_baseline                         exit=0
+$ uv run alembic current                    → 0001_baseline (head)                                      exit=0
+$ curl /ready                               → {"status":"ready"} status=200
+$ docker compose exec -T db psql … "CREATE TABLE vc01_probe …; INSERT … 'synthetic-vc01'"  → CREATE TABLE / INSERT 0 1   exit=0
+$ docker compose stop db                    → Container tappy-db-1 Stopped                             exit=0
+$ curl -i /ready                            → HTTP/1.1 503 · content-type: application/json · {"status":"unavailable"}
+$ docker compose down                       → Container tappy-db-1 Removed                             exit=0
+$ docker compose up -d --wait db            → Container tappy-db-1 Healthy                             exit=0
+$ docker compose exec -T db psql … "SELECT label FROM vc01_probe"                           → synthetic-vc01   exit=0
+$ curl /ready                               → {"status":"ready"} status=200
 ```
 
-La tabla de comprobación se eliminó al terminar.
+La tabla de comprobación se eliminó al terminar. Log del servidor: 0 coincidencias de `password|traceback`.
 
 ## Back office
 
@@ -100,4 +104,19 @@ AC PASS / AC aplicables = 3/3 = **100%**. Checks 100% verdes; sin defectos conoc
 
 ## Review Standards/Spec
 
-Pendiente de completar con el resultado del review del commit candidato.
+Review sobre `fe3dc49`; correcciones en `fa29dba`.
+
+| Eje | Hallazgo | Resolución |
+| --- | --- | --- |
+| Standards / Spec | Evidencia sin SHA exacto | SHAs `fe3dc49`/`fa29dba` registrados |
+| Spec | Salidas VC01 sin códigos de salida | Recapturadas con `exit=` por comando |
+| Spec | TC02 no detenía un Postgres real | Test automatizado con `docker compose stop db` |
+| Spec | TC03 no distinguía volumen con nombre de anónimo (`restart`) | Test recrea el contenedor (`down` + `up`); mutación de volumen anónimo ahora falla |
+| Spec | Aserción de aislamiento que no podía fallar (`persistence_probe` en base nueva) | Eliminada; se conserva «sin base `tappy` en el servidor de tests» y la guarda del `conftest` |
+| Spec | `/ready` también exige esquema en head | Se conserva; interpretación documentada en Diseño |
+| Standards | Literales duplicados de constantes en tests | Usan `UNREACHABLE_DATABASE_PASSWORD`/`PROBE_DATUM` (inserción con parámetro ligado) |
+| Standards | `tappy.migrations` vs `tappy.platform.migrations` ambiguos | Helpers renombrados a `tappy.platform.schema` |
+| Standards (fuera de eje) | Head releído en cada `/ready`; `dispose` sin `try/finally` | `head_revision` cacheado; `try/finally` en `lifespan` y `env.py` |
+| Standards | URL como `str` en helpers de Alembic; `Base` vacío; patrón repetido `get_settings`/`get_database` | Aceptados: frontera de la API de Alembic; `Base` es el destino de metadata de Alembic; dos copias toleradas |
+
+Re-revisión: pendiente de registrar con su resultado.
