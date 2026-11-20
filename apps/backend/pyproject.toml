@@ -25,12 +25,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tappy"]
+packages = ["src/tappy", "tools/quality"]
 
 [tool.ruff]
 target-version = "py314"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tools", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "PT", "RUF", "N", "S", "ASYNC", "PL"]
@@ -40,12 +40,15 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "PT", "RUF", "N", "S", "AS
 "tests/support.py" = ["S603"]
 "tests/test_startup.py" = ["S310"]
 "tests/test_persistence.py" = ["S603", "S607"]
+"tests/quality/*" = ["S603"]
+"tools/quality/check.py" = ["S603"]
+"tools/quality/evidence.py" = ["S105", "S314"]
 
 [tool.mypy]
 python_version = "3.14"
 strict = true
-mypy_path = "src"
-packages = ["tappy", "tests"]
+mypy_path = "src:tools"
+packages = ["tappy", "quality", "tests"]
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 
@@ -57,6 +60,7 @@ warn_required_dynamic_aliases = true
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests"]
+pythonpath = ["src", "tools"]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
 filterwarnings = ["error"]

@@ -1,13 +1,13 @@
 import os
 from collections.abc import Iterator
-from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, make_url, text
+from sqlalchemy import make_url
+
+from quality.databases import disposable_database
 
 TEST_SERVER_VARIABLE = "TAPPY_TEST_DATABASE_URL"
 LOCAL_DATABASE_VARIABLE = "TAPPY_DATABASE_URL"
-TEST_DATABASE_PREFIX = "tappy_test_"
 
 
 @pytest.fixture(scope="session")
@@ -36,14 +36,5 @@ def same_server(first: str, second: str) -> bool:
 
 @pytest.fixture
 def empty_database_url(test_server_url: str) -> Iterator[str]:
-    server = make_url(test_server_url)
-    name = f"{TEST_DATABASE_PREFIX}{uuid4().hex}"
-    admin = create_engine(server, isolation_level="AUTOCOMMIT")
-    with admin.connect() as connection:
-        connection.execute(text(f'CREATE DATABASE "{name}"'))
-    try:
-        yield server.set(database=name).render_as_string(hide_password=False)
-    finally:
-        with admin.connect() as connection:
-            connection.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
-        admin.dispose()
+    with disposable_database(test_server_url) as url:
+        yield url

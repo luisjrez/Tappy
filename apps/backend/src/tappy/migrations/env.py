@@ -1,7 +1,7 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import create_engine
+from sqlalchemy import MetaData, create_engine
 from sqlalchemy.pool import NullPool
 
 from tappy.platform.config import load_settings
@@ -15,11 +15,18 @@ def database_url() -> str:
     return load_settings().database_url.get_secret_value()
 
 
+def target_metadata() -> MetaData:
+    configured = context.config.attributes.get("target_metadata", Base.metadata)
+    if not isinstance(configured, MetaData):
+        raise TypeError("target_metadata must be SQLAlchemy MetaData")
+    return configured
+
+
 def run_migrations() -> None:
     engine = create_engine(database_url(), poolclass=NullPool)
     try:
         with engine.connect() as connection:
-            context.configure(connection=connection, target_metadata=Base.metadata)
+            context.configure(connection=connection, target_metadata=target_metadata())
             with context.begin_transaction():
                 context.run_migrations()
     finally:
