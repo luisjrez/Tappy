@@ -1,0 +1,161 @@
+/* Tema Tappy para Tailwind CSS v4 y shadcn/ui. */
+:root {
+  color-scheme: light;
+  --background: #fafaf8;
+  --foreground: #19221d;
+  --card: #ffffff;
+  --primary: #185c46;
+  --primary-foreground: #ffffff;
+  --muted: #f2f4f0;
+  --muted-foreground: #47564d;
+  --border: #d5ddd5;
+  --input: #77867c;
+  --ring: #245dc7;
+  --destructive: #9a3737;
+  --destructive-foreground: #ffffff;
+
+  --success: #e3f4eb;
+  --success-foreground: #236949;
+  --warning: #fbf0da;
+  --warning-foreground: #77551b;
+  --danger: #f9e8e7;
+  --danger-foreground: #9a3737;
+
+  --chart-2: #507565;
+  --chart-3: #5b655f;
+  --chart-4: #426b57;
+  --chart-5: #6b746e;
+
+  --radius: 0.75rem;
+  --tappy-font-sans: var(--font-inter, Inter), system-ui, sans-serif;
+  --tappy-target: 3rem;
+  --tappy-gutter: clamp(1rem, 4vw, 2.5rem);
+  --tappy-content-width: 80rem;
+  --tappy-motion-fast: 120ms;
+  --tappy-motion-standard: 180ms;
+  --tappy-motion-enter: 220ms;
+  --tappy-motion-brand: 520ms;
+  --tappy-ease-out: cubic-bezier(0.2, 0.75, 0.25, 1);
+
+  /* Superficie de marca para el CTA, independiente del tema del sitio. */
+  --tappy-brand-surface: #185c46;
+  --tappy-brand-surface-foreground: #ffffff;
+  --tappy-brand-action: #9ae6c0;
+  --tappy-brand-action-foreground: #102018;
+  --tappy-brand-ring: #a9c6ff;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #111513;
+  --foreground: #f4f7f3;
+  --card: #1a201d;
+  --primary: #9ae6c0;
+  --primary-foreground: #102018;
+  --muted: #252c28;
+  --muted-foreground: #c0cbc3;
+  --border: #45524a;
+  --input: #74857a;
+  --ring: #a9c6ff;
+  --destructive: #ffaaa3;
+  --destructive-foreground: #301818;
+
+  --success: #20372b;
+  --success-foreground: #8fe0b0;
+  --warning: #362d1c;
+  --warning-foreground: #f2d28a;
+  --danger: #3a2526;
+  --danger-foreground: #ffaaa3;
+
+  --chart-2: #7fba9e;
+  --chart-3: #aebbb3;
+  --chart-4: #63a887;
+  --chart-5: #91a899;
+}
+
+:root,
+.dark {
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--muted);
+  --accent-foreground: var(--foreground);
+  --chart-1: var(--primary);
+
+  --sidebar: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+}
+
+@theme inline {
+  --font-sans: var(--tappy-font-sans);
+  --spacing-control: var(--tappy-target);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand-surface: var(--tappy-brand-surface);
+  --color-brand-surface-foreground: var(--tappy-brand-surface-foreground);
+  --color-brand-action: var(--tappy-brand-action);
+  --color-brand-action-foreground: var(--tappy-brand-action-foreground);
+  --color-brand-ring: var(--tappy-brand-ring);
+
+  --radius-sm: calc(var(--radius) - 0.375rem);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.25rem);
+  --radius-2xl: calc(var(--radius) + 0.5rem);
+  --radius-3xl: calc(var(--radius) + 0.75rem);
+  --radius-4xl: calc(var(--radius) + 1rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tappy-motion-fast: 0ms;
+    --tappy-motion-standard: 0ms;
+    --tappy-motion-enter: 0ms;
+    --tappy-motion-brand: 0ms;
+  }
+}
