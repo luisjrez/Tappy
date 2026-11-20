@@ -54,7 +54,7 @@ def run_step(step: Step, project: Path) -> bool:
     for output in step.outputs:
         (project / output).unlink(missing_ok=True)
     print(f"--- {step.name}: {' '.join(step.command[1:])}", flush=True)
-    completed = subprocess.run(step.command, cwd=project, check=False)
+    completed = subprocess.run(step.command, cwd=project, check=False)  # noqa: S603
     passed = completed.returncode == 0
     print(f"{label(passed)} {step.name} (exit {completed.returncode})", flush=True)
     return passed

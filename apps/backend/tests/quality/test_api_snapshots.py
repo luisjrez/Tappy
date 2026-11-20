@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -77,3 +78,48 @@ def test_missing_baseline_fails_and_is_not_created(tmp_path: Path) -> None:
     assert "no approved baseline" in result.stdout
     assert not (contracts_dir / "baselines" / "health.json").exists()
     assert (tmp_path / "reports" / "health.current.json").exists()
+
+
+def test_baseline_without_revision_is_rejected(tmp_path: Path) -> None:
+    unversioned = {key: value for key, value in APPROVED_HEALTH.items() if key != "revision"}
+    contracts_dir = contracts(tmp_path, unversioned)
+
+    result = run_snapshots(contracts_dir, tmp_path / "reports")
+
+    assert result.returncode == 1
+    assert "revision" in result.stdout
+
+
+def test_reports_from_previous_runs_are_cleared(tmp_path: Path) -> None:
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    (reports_dir / "removed-case.diff.txt").write_text("stale")
+
+    run_snapshots(contracts(tmp_path, APPROVED_HEALTH), reports_dir)
+
+    assert not (reports_dir / "removed-case.diff.txt").exists()
+
+
+def test_unsafe_test_server_is_reported_without_traceback(tmp_path: Path) -> None:
+    contracts_dir = tmp_path / "contracts"
+    (contracts_dir / "baselines").mkdir(parents=True)
+    (contracts_dir / "cases.toml").write_text(CASES.replace("unreachable", "migrated"))
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "quality.api_snapshots",
+            f"--contracts={contracts_dir}",
+            f"--reports={tmp_path / 'reports'}",
+        ],
+        env={key: value for key, value in os.environ.items() if key != "TAPPY_TEST_DATABASE_URL"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "TAPPY_TEST_DATABASE_URL" in result.stderr
+    assert "Traceback" not in result.stderr

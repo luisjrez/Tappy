@@ -63,6 +63,8 @@ tests = [
     "tests/quality/test_api_diff.py::test_command_reports_difference_without_touching_baseline",
     "tests/quality/test_api_snapshots.py::test_unexpected_difference_fails_without_touching_baseline",
     "tests/quality/test_api_snapshots.py::test_missing_baseline_fails_and_is_not_created",
+    "tests/quality/test_api_snapshots.py::test_baseline_without_revision_is_rejected",
+    "tests/quality/test_api_snapshots.py::test_unsafe_test_server_is_reported_without_traceback",
 ]
 
 [[criteria.cases]]

@@ -12,14 +12,16 @@ Ticket: [#11](https://github.com/luisjrez/Tappy/issues/11) · Historia: [H1 #1](
 
 ## Diseño
 
-- `tools/quality` (paquete de desarrollo, no se expone por la API):
-  - `check`: comando único con pasos `format`, `lint` (`--no-fix`), `types`, `hygiene`, `migrations`, `tests` (JUnit en `reports/junit.xml`) y `evidence`. Ejecuta todos aunque uno falle y sale con 1 si alguno falla.
-  - `hygiene`: comentarios detectados con `tokenize` (no grep); solo se permiten directivas `noqa`, `type: ignore[...]` y `pragma: no cover`.
-  - `migrations`: base desechable → `upgrade head` → `downgrade base` → `upgrade head` → `alembic check` (drift modelos/migraciones).
-  - `evidence`: manifiestos TOML por ticket (`docs/evidence/*.toml`) con UC/AC/TC → tests; calcula `100 × AC PASS / AC aplicables` sin redondeo y bloquea si <97%, si un AC obligatorio no pasa, si VC01 no es PASS/N/A justificado o si hay hallazgos de review pendientes. Tests ausentes en el JUnit = NOT_RUN; `skipped` = FAIL; casos manuales/externos exigen resultado y evidencia; un AC N/A exige justificación.
-  - `api_diff`: compara snapshots de API con normalización declarada (placeholders estables por documento, que conservan relaciones), orden de listas significativo, tipos/presencia/valor; sale con 1 ante cualquier diferencia y nunca escribe la base.
-- `.github/workflows/backend.yml`: en cada push instala con `uv sync --locked`, levanta Compose y ejecuta `python -m quality.check`; sube `reports/` como artefacto.
-- Manifiestos de B01 y B02 añadidos: sus AC quedan ligados a tests que el CI vuelve a exigir.
+- `tools/quality` (paquete de desarrollo; el wheel solo incluye `src/tappy`, `tools` entra al entorno editable por `dev-mode-dirs`):
+  - `check`: comando único con pasos `format`, `lint` (`--no-fix`), `types`, `hygiene`, `migrations`, `tests` (borra y regenera `reports/junit.xml`), `api` y `evidence`. Ejecuta todos aunque uno falle y sale con 1 si alguno falla.
+  - `hygiene`: comentarios detectados con `tokenize` (no grep); solo se permiten directivas con códigos: `noqa: <códigos>`, `type: ignore[<códigos>]`, `pragma: no cover`. `# noqa` o `# type: ignore` sin códigos se señalan.
+  - `migrations`: base desechable en el servidor de tests aislado (misma guarda que pytest) → `upgrade head` → `downgrade base` → `upgrade head` → `alembic check`.
+  - `evidence`: manifiesto TOML por ticket con `revision` exacta, criterios con `use_cases` obligatorios (UC → AC → TC → tests), VC01 con modalidad (`initial`/`comparison`/`not_applicable`) y evidencia o justificación, y review por eje (`standards`/`spec`: `APPROVED`/`PENDING`/`CHANGES_REQUESTED`) más hallazgos pendientes. Completitud `100 × AC PASS / AC aplicables` sin redondeo; bloquea si <97%, AC obligatorio sin PASS, VC01 sin PASS/evidencia, algún eje no aprobado, hallazgos pendientes o revisión inexistente en el historial (`git merge-base --is-ancestor`; CI con `fetch-depth: 0`). Tests ausentes = NOT_RUN; `skipped` = FAIL.
+  - `api_diff`: diff de snapshots con normalización declarada que conserva relaciones, orden de listas significativo, cambios tipados (`type`/`removed`/`added`/`value`); nunca escribe la base.
+  - `api_snapshots`: casos declarados en `contracts/api/cases.toml`; captura la respuesta actual (DB migrada desechable o inalcanzable), escribe `reports/api/<caso>.current.json` y `<caso>.diff.txt` y compara con `contracts/api/baselines/<caso>.json`, que guarda la revisión aprobada. Sin base aprobada o con diferencias sale con 1; nunca crea ni sobrescribe bases. Aprobar una base es un cambio explícito revisado en el PR.
+- Bases iniciales aprobadas desde la evidencia ya revisada: `health` (B01, `9f53aa9`), `ready-migrated` y `ready-unreachable` (B02, `ccf8eed`).
+- `.github/workflows/backend.yml`: en cada push, `uv sync --locked`, Compose y `python -m quality.check`; sube `reports/` (JUnit y artefactos de API) como artefacto.
+- Manifiestos de B01 y B02 añadidos: el gate de evidencia los vuelve a exigir en cada ejecución.
 
 ## Trazabilidad UC → AC → TC → test
 
@@ -44,7 +46,18 @@ Ticket: [#11](https://github.com/luisjrez/Tappy/issues/11) · Historia: [H1 #1](
 
 Tests que pasaron sin Red propio (implementados por un Green anterior y conservados como regresión): `test_command_succeeds_without_comments`, `test_completeness_is_not_rounded_up`, `test_agreed_optional_criterion_may_fail_within_margin`, `test_vc01_not_applicable_requires_justification[…]`, `test_command_succeeds_when_every_ticket_is_approved`, `test_declared_volatile_values_are_normalized_preserving_relations`, los casos `skipped`/`missing`/vacío de `test_one_unmet_criterion_of_three_blocks_approval`.
 
-Refactor con suite verde: `disposable_database` compartido entre `conftest` y `quality.migrations`; nombres `junit_key`/`outcome_of`; `mandatory_label`.
+Correcciones del review (Red → Green):
+
+| Comportamiento | Red observado | Green |
+| --- | --- | --- |
+| Esquema reforzado del manifiesto (UC, revisión, VC01, review por eje) | 28 de 29 tests fallan con el modelo anterior (campos rechazados) | Modelo nuevo y `blockers()` ampliado |
+| `# noqa` / `# type: ignore` sin códigos | `assert ['# type: ignore'] == ['# noqa', '# type: ignore']` | Regex exige códigos |
+| Artefactos de API con base aprobada | Stub `api_snapshots → exit 0`: 3 fallos | `api_snapshots` con `current`/`diff` y sin escritura de bases |
+| Tipo de status en snapshots | Primera comparación real: `type: status: 503 -> <HTTPStatus.SERVICE_UNAVAILABLE: 503>` | `int(response.status_code)` |
+
+Sin test propio: limpieza de `reports/junit.xml` antes de `tests` (pytest sobrescribe el archivo en todos los casos reproducibles; el cambio evita leer un JUnit viejo si pytest no llega a escribirlo).
+
+Refactor con suite verde: `disposable_database` e `isolated_test_server` compartidos entre `conftest` y `quality.migrations`; `junit_key`/`outcome_of`; `label` en `check`; enums `Status`, `ReviewVerdict`, `Change`.
 
 ## B03-TC01 — Batería local y CI
 

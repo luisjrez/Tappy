@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi.testclient import TestClient
-from pydantic import BaseModel, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from quality.api_diff import compare
-from quality.databases import disposable_database, isolated_test_server
+from quality.databases import IsolationError, disposable_database, isolated_test_server
 from tappy.main import create_app
 from tappy.platform.config import Settings
 from tappy.platform.schema import upgrade_to_head
@@ -30,6 +30,18 @@ class SnapshotCase(BaseModel):
     database: Literal["migrated", "unreachable"]
     body: dict[str, object] | None = None
     normalize: tuple[str, ...] = ()
+
+
+class Baseline(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    revision: str = Field(min_length=7)
+    status: int
+    headers: dict[str, str | None]
+    body: object
+
+    def snapshot(self) -> dict[str, object]:
+        return self.model_dump(exclude={"revision"})
 
 
 class Contracts(BaseModel):
@@ -71,16 +83,27 @@ def check_case(case: SnapshotCase, contracts_dir: Path, reports_dir: Path) -> bo
     if not baseline_path.exists():
         print(f"{case.name}: no approved baseline at {baseline_path}; review the current artifact")
         return False
-    baseline = json.loads(baseline_path.read_text())
-    revision = baseline.pop("revision", "unknown")
-    differences = compare(baseline, current, case.normalize)
-    report = "\n".join(str(difference) for difference in differences)
-    (reports_dir / f"{case.name}.diff.txt").write_text(f"baseline {revision}\n{report}\n")
-    if differences:
-        print(f"{case.name}: {len(differences)} differences against {revision}\n{report}")
+    try:
+        baseline = Baseline.model_validate_json(baseline_path.read_text())
+    except ValidationError as error:
+        print(f"{case.name}: invalid baseline {baseline_path}: {error}")
         return False
-    print(f"{case.name}: no differences against {revision}")
+    differences = compare(baseline.snapshot(), current, case.normalize)
+    report = "\n".join(str(difference) for difference in differences)
+    header = f"baseline {baseline.revision}"
+    (reports_dir / f"{case.name}.diff.txt").write_text(f"{header}\n{report}\n")
+    if differences:
+        print(f"{case.name}: {len(differences)} differences against {baseline.revision}\n{report}")
+        return False
+    print(f"{case.name}: no differences against {baseline.revision}")
     return True
+
+
+def clear_reports(reports_dir: Path) -> None:
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    for pattern in ("*.current.json", "*.diff.txt"):
+        for stale in reports_dir.glob(pattern):
+            stale.unlink()
 
 
 def main(arguments: Sequence[str]) -> int:
@@ -90,8 +113,12 @@ def main(arguments: Sequence[str]) -> int:
     options = parser.parse_args(arguments)
     with (options.contracts / "cases.toml").open("rb") as source:
         contracts = Contracts.model_validate(tomllib.load(source))
-    options.reports.mkdir(parents=True, exist_ok=True)
-    results = [check_case(case, options.contracts, options.reports) for case in contracts.cases]
+    clear_reports(options.reports)
+    try:
+        results = [check_case(case, options.contracts, options.reports) for case in contracts.cases]
+    except IsolationError as error:
+        print(error, file=sys.stderr)
+        return 1
     return 0 if all(results) else 1
 
 

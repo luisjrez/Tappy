@@ -44,7 +44,6 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "PT", "RUF", "N", "S", "AS
 "tests/test_startup.py" = ["S310"]
 "tests/test_persistence.py" = ["S603", "S607"]
 "tests/quality/*" = ["S603"]
-"tools/quality/check.py" = ["S603"]
 
 [tool.mypy]
 python_version = "3.14"
