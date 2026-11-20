@@ -1,6 +1,6 @@
 ticket = "B03"
 
-revision = "5a088e2"
+revision = "36e15c0"
 
 [vc01]
 status = "PASS"
@@ -8,8 +8,8 @@ modality = "initial"
 evidence = "docs/evidence/B03-ci-checks.md#b03-vc01--resultado-inicial-de-comandos"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -71,7 +71,7 @@ tests = [
 id = "B03-TC02-ci-red-probe"
 mode = "external"
 result = "PASS"
-evidence = "docs/evidence/B03-ci-checks.md#b03-tc02--sonda-red-en-ci"
+evidence = "docs/evidence/B03-ci-checks.md#b03-tc02--sondas-red-en-ci-una-infracción-por-vez"
 
 [[criteria]]
 id = "B03-AC03"

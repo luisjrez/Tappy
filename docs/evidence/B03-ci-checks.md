@@ -19,7 +19,7 @@ Ticket: [#11](https://github.com/luisjrez/Tappy/issues/11) · Historia: [H1 #1](
   - `evidence`: manifiesto TOML por ticket con `revision` exacta, criterios con `use_cases` obligatorios (UC → AC → TC → tests), VC01 con modalidad (`initial`/`comparison`/`not_applicable`) y evidencia o justificación, y review por eje (`standards`/`spec`: `APPROVED`/`PENDING`/`CHANGES_REQUESTED`) más hallazgos pendientes. Completitud `100 × AC PASS / AC aplicables` sin redondeo; bloquea si <97%, AC obligatorio sin PASS, VC01 sin PASS/evidencia, algún eje no aprobado, hallazgos pendientes o revisión inexistente en el historial (`git merge-base --is-ancestor`; CI con `fetch-depth: 0`). Tests ausentes = NOT_RUN; `skipped` = FAIL.
   - `api_diff`: diff de snapshots con normalización declarada que conserva relaciones, orden de listas significativo, cambios tipados (`type`/`removed`/`added`/`value`); nunca escribe la base.
   - `api_snapshots`: casos declarados en `contracts/api/cases.toml`; captura la respuesta actual (DB migrada desechable o inalcanzable), escribe `reports/api/<caso>.current.json` y `<caso>.diff.txt` y compara con `contracts/api/baselines/<caso>.json`, que guarda la revisión aprobada. Sin base aprobada o con diferencias sale con 1; nunca crea ni sobrescribe bases. Aprobar una base es un cambio explícito revisado en el PR.
-- Bases iniciales aprobadas desde la evidencia ya revisada: `health` (B01, `9f53aa9`), `ready-migrated` y `ready-unreachable` (B02, `ccf8eed`).
+- Bases iniciales aprobadas en `2027d97` a partir de la evidencia ya revisada de B01 (`health`) y B02 (`ready-migrated`, `ready-unreachable`); su contenido coincide con esa evidencia salvo `environment: "contract"`, propio del arnés de contratos.
 - `.github/workflows/backend.yml`: en cada push, `uv sync --locked`, Compose y `python -m quality.check`; sube `reports/` (JUnit y artefactos de API) como artefacto.
 - Manifiestos de B01 y B02 añadidos: el gate de evidencia los vuelve a exigir en cada ejecución.
 
@@ -53,6 +53,7 @@ Correcciones del review (Red → Green):
 | Esquema reforzado del manifiesto (UC, revisión, VC01, review por eje) | 28 de 29 tests fallan con el modelo anterior (campos rechazados) | Modelo nuevo y `blockers()` ampliado |
 | `# noqa` / `# type: ignore` sin códigos | `assert ['# type: ignore'] == ['# noqa', '# type: ignore']` | Regex exige códigos |
 | Artefactos de API con base aprobada | Stub `api_snapshots → exit 0`: 3 fallos | `api_snapshots` con `current`/`diff` y sin escritura de bases |
+| Validación de bases, limpieza de reportes y servidor de tests inseguro (ronda 2) | `3 failed, 3 passed`: base sin `revision` aceptada, `removed-case.diff.txt` persistía, traceback sin mensaje | `Baseline` Pydantic, `clear_reports`, captura de `IsolationError` |
 | Tipo de status en snapshots | Primera comparación real: `type: status: 503 -> <HTTPStatus.SERVICE_UNAVAILABLE: 503>` | `int(response.status_code)` |
 
 Sin test propio: limpieza de `reports/junit.xml` antes de `tests` (pytest sobrescribe el archivo en todos los casos reproducibles; el cambio evita leer un JUnit viejo si pytest no llega a escribirlo).
@@ -92,8 +93,8 @@ Ramas temporales sobre el control `622bcef` (eliminadas después; su contenido n
 | Infracción | Commit | Ejecución | Resumen del job |
 | --- | --- | --- | --- |
 | Test fallido (`assert "tappy".upper() == "tappy"`) | `6d83ef2` | [44838553072](https://github.com/luisjrez/Tappy/actions/runs/44838553072) | failure · `PASS format, PASS lint, PASS types, PASS hygiene, PASS migrations, FAIL tests, PASS api, PASS evidence` |
-| Error de tipos (`def probe_value() -> int: return "not an int"`) | `b73d6fb` | [44838557153](https://github.com/luisjrez/Tappy/actions/runs/44838557153) | failure · `FAIL types` (el meta-test del fixture, que copia `src`, también falla en `tests`) |
-| Lint (`import os` sin uso) | `0b9fe94` | [44838561253](https://github.com/luisjrez/Tappy/actions/runs/44838561253) | failure · `FAIL lint` (el meta-test del fixture también falla en `tests`) |
+| Error de tipos (`def probe_value() -> int: return "not an int"`) | `b73d6fb` | [44838557153](https://github.com/luisjrez/Tappy/actions/runs/44838557153) | failure · `FAIL types`; en cascada `FAIL tests` (meta-test del fixture) y `FAIL evidence` (B03-AC01 queda en FAIL por ese meta-test) |
+| Lint (`import os` sin uso) | `0b9fe94` | [44838561253](https://github.com/luisjrez/Tappy/actions/runs/44838561253) | failure · `FAIL lint`; en cascada `FAIL tests` y `FAIL evidence` por el mismo meta-test |
 
 En las sondas de tipos y lint, el paso `tests` también falla porque `test_clean_project_passes_every_step` copia el `src` real (con la infracción) a su proyecto fixture: es la misma infracción detectada dos veces, no un segundo cambio. La sonda anterior (`f16c4fa`, [44837307038](https://github.com/luisjrez/Tappy/actions/runs/44837307038)) rompía test y lint a la vez y queda sustituida por estas tres.
 
@@ -183,4 +184,4 @@ AC PASS / AC aplicables = 3/3 = **100%**. VC01 PASS. Hallazgos pendientes: ver r
 | 2 | Standards | Bases sin validar; `IsolationError` con traceback; reportes viejos | `Baseline` Pydantic; error claro; limpieza de `reports/api` (con Red/Green: 3 tests) |
 | 2 | Spec | `merge-base --is-ancestor` no prueba que sea el último código | Límite documentado arriba |
 
-Re-revisión final: pendiente.
+Re-revisión final (ronda 3, sobre `36e15c0`/`30484f1`): sin hallazgos bloqueantes; no bloqueantes de texto (ancla rota del manifiesto, frase de diseño sobre revisiones de las bases, Red de la ronda 2 no registrado, `FAIL evidence` en cascada en las sondas) corregidos en este archivo. Ambos ejes aprobados; manifiesto con `revision = "36e15c0"`.
