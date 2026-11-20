@@ -7,7 +7,7 @@ Ticket: [#10](https://github.com/luisjrez/Tappy/issues/10) · Historia: [H1 #1](
 - Ticket, UC/AC/TC y comprobación: B02-UC01–UC03, B02-AC01–AC03, B02-TC01–TC03, B02-VC01.
 - Modalidad: **resultado inicial** para `GET /ready`, Compose y migraciones (superficies nuevas). `GET /health` (B01) no cambia de contrato: su regresión se cubre con los tests de B01, que siguen en verde.
 - Aplicabilidad: API sí (`/ready`); comandos sí (Compose, Alembic, psql); panel **no aplica** (sin vistas).
-- Base: rama B01 `a59c02c` (PR #51). Revisión evaluada: commit candidato `fe3dc49`; código final `fa29dba` tras correcciones de review. Tests, checks y salidas de esta página se ejecutaron sobre `fa29dba`; commits posteriores solo modifican este archivo.
+- Base: rama B01 `a59c02c` (PR #51). Revisión evaluada: commit candidato `fe3dc49`; código corregido `fa29dba`; código final `ccf8eed` (ajustes de la re-revisión, solo tests). Tests y checks se repitieron sobre `ccf8eed` (11 passed, ruff/mypy verdes); las salidas de API/comandos se capturaron sobre `fa29dba`, sin cambios de código de producción después. Commits posteriores solo modifican este archivo.
 - Entorno: macOS (Darwin 25.6), Colima + Docker Compose 5.0.2, `postgres:18.6-alpine`, Python 3.14.8, SQLAlchemy 2.1.9, Alembic 1.20.1, psycopg 3.3.9, resto como B01. Fecha: 2026-11-20. Ejecutor: sesión local de desarrollo del autor del PR.
 - Actor: Desarrollador. Datos: contraseñas y filas sintéticas (`synthetic-…`).
 
@@ -119,4 +119,4 @@ Review sobre `fe3dc49`; correcciones en `fa29dba`.
 | Standards (fuera de eje) | Head releído en cada `/ready`; `dispose` sin `try/finally` | `head_revision` cacheado; `try/finally` en `lifespan` y `env.py` |
 | Standards | URL como `str` en helpers de Alembic; `Base` vacío; patrón repetido `get_settings`/`get_database` | Aceptados: frontera de la API de Alembic; `Base` es el destino de metadata de Alembic; dos copias toleradas |
 
-Re-revisión: pendiente de registrar con su resultado.
+Re-revisión sobre `69fcb2d`: checks verdes, sin hallazgos bloqueantes. No bloqueantes resueltos en `ccf8eed`: TC02 con Postgres detenido ahora afirma el cuerpo exacto `{"status":"unavailable"}`; la guarda del `conftest` trata `localhost`/`127.0.0.1`/`::1` como el mismo servidor (verificado: `TAPPY_TEST_DATABASE_URL=…@localhost:5482` aborta la suite). Aceptado: `free_port()` puede competir por el puerto con otro proceso local (riesgo bajo). Sin hallazgos pendientes.
