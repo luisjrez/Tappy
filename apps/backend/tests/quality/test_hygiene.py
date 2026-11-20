@@ -67,3 +67,12 @@ def test_command_succeeds_without_comments(tmp_path: Path) -> None:
     result = run_hygiene(tmp_path)
 
     assert result.returncode == 0
+
+
+def test_flags_blanket_directives_without_codes(tmp_path: Path) -> None:
+    source = tmp_path / "module.py"
+    source.write_text("import os  # noqa\nVALUE = os.sep  # type: ignore\n")
+
+    findings = find_comments(source)
+
+    assert [finding.text for finding in findings] == ["# noqa", "# type: ignore"]

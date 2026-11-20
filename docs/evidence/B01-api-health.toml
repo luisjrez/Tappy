@@ -1,13 +1,20 @@
 ticket = "B01"
 
+revision = "9f53aa9"
+
 [vc01]
 status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B01-api-health.md#api--resultado-inicial"
 
 [review]
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
 id = "B01-AC01"
+use_cases = ["B01-UC01"]
 mandatory = true
 
 [[criteria.cases]]
@@ -26,6 +33,7 @@ evidence = "docs/evidence/B01-api-health.md#api--resultado-inicial"
 
 [[criteria]]
 id = "B01-AC02"
+use_cases = ["B01-UC02"]
 mandatory = true
 
 [[criteria.cases]]
@@ -38,6 +46,7 @@ tests = [
 
 [[criteria]]
 id = "B01-AC03"
+use_cases = ["B01-UC03"]
 mandatory = true
 
 [[criteria.cases]]

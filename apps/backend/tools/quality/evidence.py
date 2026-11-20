@@ -1,24 +1,35 @@
 import argparse
+import shutil
+import subprocess
 import sys
 import tomllib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 from xml.etree import ElementTree
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 THRESHOLD = 97
 
 
 class Status(StrEnum):
-    PASS = "PASS"
+    PASS = "PASS"  # noqa: S105
     FAIL = "FAIL"
     BLOCKED = "BLOCKED"
     NOT_RUN = "NOT_RUN"
-    NOT_APPLICABLE = "N/A"
+
+
+class ReviewVerdict(StrEnum):
+    APPROVED = "APPROVED"
+    PENDING = "PENDING"
+    CHANGES_REQUESTED = "CHANGES_REQUESTED"
+
+
+NOT_APPLICABLE = "N/A"
+SEVERITY = (Status.FAIL, Status.BLOCKED, Status.NOT_RUN)
 
 
 class StrictModel(BaseModel):
@@ -29,12 +40,13 @@ class Case(StrictModel):
     id: str
     mode: Literal["automated", "manual", "external"]
     tests: tuple[str, ...] = ()
-    result: Literal["PASS", "FAIL", "BLOCKED", "NOT_RUN"] = "NOT_RUN"
+    result: Status = Status.NOT_RUN
     evidence: str = ""
 
 
 class Criterion(StrictModel):
     id: str
+    use_cases: tuple[str, ...] = Field(min_length=1)
     mandatory: bool
     applicable: bool = True
     justification: str = ""
@@ -48,34 +60,64 @@ class Criterion(StrictModel):
 
 
 class Vc01(StrictModel):
-    status: Literal["PASS", "NOT_APPLICABLE", "NOT_RUN", "FAIL", "BLOCKED"]
+    status: Status
+    modality: Literal["initial", "comparison", "not_applicable"]
+    evidence: str = ""
     justification: str = ""
 
 
 class Review(StrictModel):
-    pending_findings: int
+    standards: ReviewVerdict
+    spec: ReviewVerdict
+    pending_findings: int = Field(ge=0)
 
 
 class Manifest(StrictModel):
     ticket: str
+    revision: str = Field(min_length=7)
     vc01: Vc01
     review: Review
     criteria: tuple[Criterion, ...] = ()
 
 
-def mandatory_label(criterion: Criterion) -> str:
-    return "sí" if criterion.mandatory else "no"
+@dataclass(frozen=True)
+class CaseResult:
+    case: Case
+    status: Status
 
 
 @dataclass(frozen=True)
 class CriterionResult:
     criterion: Criterion
-    status: Status
+    cases: tuple[CaseResult, ...]
+
+    @property
+    def status(self) -> Status | None:
+        if not self.criterion.applicable:
+            return None
+        statuses = [result.status for result in self.cases]
+        if not statuses:
+            return Status.NOT_RUN
+        return next((worst for worst in SEVERITY if worst in statuses), Status.PASS)
+
+    def rows(self) -> list[str]:
+        use_cases = ", ".join(self.criterion.use_cases)
+        mandatory = "yes" if self.criterion.mandatory else "no"
+        prefix = f"| {use_cases} | {self.criterion.id}"
+        if self.status is None:
+            return [f"{prefix} | - | {NOT_APPLICABLE} | {mandatory} |"]
+        if not self.cases:
+            return [f"{prefix} | - | {self.status} | {mandatory} |"]
+        return [
+            f"{prefix} | {result.case.id} | {result.status} | {mandatory} |"
+            for result in self.cases
+        ]
 
 
 @dataclass(frozen=True)
 class Report:
     ticket: str
+    revision: str
     results: tuple[CriterionResult, ...]
     completeness: float | None
     blockers: tuple[str, ...]
@@ -85,20 +127,16 @@ class Report:
         return not self.blockers
 
     def render(self) -> str:
-        rows = [
-            f"| {result.criterion.id} | {result.status} | {mandatory_label(result.criterion)} |"
-            for result in self.results
-        ]
-        completeness = "inválida" if self.completeness is None else f"{self.completeness:.2f}%"
-        verdict = "APROBADO" if self.approved else "BLOQUEADO"
+        completeness = "invalid" if self.completeness is None else f"{self.completeness:.2f}%"
+        verdict = "APPROVED" if self.approved else "BLOCKED"
         return "\n".join(
             [
-                f"## {self.ticket}: {verdict}",
-                "| AC | Estado | Obligatorio |",
-                "| --- | --- | --- |",
-                *rows,
-                f"Completitud: {completeness}",
-                *(f"- Bloqueo: {blocker}" for blocker in self.blockers),
+                f"## {self.ticket}: {verdict} (revision {self.revision})",
+                "| UC | AC | TC | Status | Mandatory |",
+                "| --- | --- | --- | --- | --- |",
+                *(row for result in self.results for row in result.rows()),
+                f"Completeness: {completeness}",
+                *(f"- Blocker: {blocker}" for blocker in self.blockers),
             ]
         )
 
@@ -114,7 +152,7 @@ def junit_key(classname: str, name: str) -> str:
 
 def read_junit(path: Path) -> dict[str, Status]:
     outcomes: dict[str, Status] = {}
-    for case in ElementTree.parse(path).iter("testcase"):
+    for case in ElementTree.parse(path).iter("testcase"):  # noqa: S314
         failed = any(case.find(tag) is not None for tag in ("failure", "error", "skipped"))
         key = junit_key(case.get("classname", ""), case.get("name", ""))
         outcomes[key] = Status.FAIL if failed else Status.PASS
@@ -132,7 +170,9 @@ def outcome_of(test: str, outcomes: dict[str, Status]) -> Status:
 
 def case_status(case: Case, outcomes: dict[str, Status]) -> Status:
     if case.mode != "automated":
-        return recorded_status(case)
+        if case.result is Status.PASS and not case.evidence.strip():
+            return Status.NOT_RUN
+        return case.result
     statuses = [outcome_of(test, outcomes) for test in case.tests]
     if Status.FAIL in statuses:
         return Status.FAIL
@@ -141,61 +181,75 @@ def case_status(case: Case, outcomes: dict[str, Status]) -> Status:
     return Status.PASS
 
 
-def recorded_status(case: Case) -> Status:
-    if case.result == "PASS" and not case.evidence.strip():
-        return Status.NOT_RUN
-    return Status(case.result)
-
-
-def criterion_status(criterion: Criterion, outcomes: dict[str, Status]) -> Status:
-    if not criterion.applicable:
-        return Status.NOT_APPLICABLE
-    statuses = [case_status(case, outcomes) for case in criterion.cases]
-    if not statuses:
-        return Status.NOT_RUN
-    for worst in (Status.FAIL, Status.BLOCKED, Status.NOT_RUN):
-        if worst in statuses:
-            return worst
-    return Status.PASS
-
-
-def evaluate(manifest: Manifest, outcomes: dict[str, Status]) -> Report:
+def evaluate(
+    manifest: Manifest, outcomes: dict[str, Status], revision_exists: Callable[[str], bool]
+) -> Report:
     results = tuple(
-        CriterionResult(criterion, criterion_status(criterion, outcomes))
+        CriterionResult(
+            criterion,
+            tuple(CaseResult(case, case_status(case, outcomes)) for case in criterion.cases),
+        )
         for criterion in manifest.criteria
     )
     applicable = [result for result in results if result.criterion.applicable]
     passed = sum(result.status is Status.PASS for result in applicable)
     completeness = 100 * passed / len(applicable) if applicable else None
-    return Report(manifest.ticket, results, completeness, blockers(manifest, results, completeness))
+    found = blockers(manifest, applicable, completeness, revision_exists)
+    return Report(manifest.ticket, manifest.revision, results, completeness, found)
 
 
 def blockers(
-    manifest: Manifest, results: tuple[CriterionResult, ...], completeness: float | None
+    manifest: Manifest,
+    applicable: Sequence[CriterionResult],
+    completeness: float | None,
+    revision_exists: Callable[[str], bool],
 ) -> tuple[str, ...]:
     found: list[str] = []
     if completeness is None:
-        found.append("sin criterios aplicables: completitud inválida")
+        found.append("no applicable criteria: completeness is invalid")
     elif completeness < THRESHOLD:
-        found.append(f"completitud {completeness:.2f}% por debajo de {THRESHOLD}%")
+        found.append(f"completeness {completeness:.2f}% is below {THRESHOLD}%")
     found.extend(
-        f"{result.criterion.id} obligatorio en {result.status}"
-        for result in results
-        if result.criterion.mandatory
-        and result.criterion.applicable
-        and result.status is not Status.PASS
+        f"mandatory {result.criterion.id} is {result.status}"
+        for result in applicable
+        if result.criterion.mandatory and result.status is not Status.PASS
     )
-    if not vc01_satisfied(manifest.vc01):
-        found.append(f"VC01 en {manifest.vc01.status}")
-    if manifest.review.pending_findings:
-        found.append(f"{manifest.review.pending_findings} hallazgos de review pendientes")
+    found.extend(vc01_problems(manifest.vc01))
+    found.extend(review_problems(manifest.review))
+    if not revision_exists(manifest.revision):
+        found.append(f"revision {manifest.revision} is not in the repository history")
     return tuple(found)
 
 
-def vc01_satisfied(vc01: Vc01) -> bool:
-    return vc01.status == "PASS" or (
-        vc01.status == "NOT_APPLICABLE" and bool(vc01.justification.strip())
+def vc01_problems(vc01: Vc01) -> list[str]:
+    if vc01.status is not Status.PASS:
+        return [f"VC01 is {vc01.status}"]
+    if vc01.modality == "not_applicable" and not vc01.justification.strip():
+        return ["VC01 not applicable without justification"]
+    if vc01.modality != "not_applicable" and not vc01.evidence.strip():
+        return ["VC01 passed without evidence"]
+    return []
+
+
+def review_problems(review: Review) -> list[str]:
+    problems = [
+        f"{axis} review is {verdict}"
+        for axis, verdict in (("standards", review.standards), ("spec", review.spec))
+        if verdict is not ReviewVerdict.APPROVED
+    ]
+    if review.pending_findings:
+        problems.append(f"{review.pending_findings} review findings pending")
+    return problems
+
+
+def revision_in_history(revision: str) -> bool:
+    git = shutil.which("git")
+    if git is None:
+        return False
+    completed = subprocess.run(  # noqa: S603
+        [git, "merge-base", "--is-ancestor", revision, "HEAD"], capture_output=True, check=False
     )
+    return completed.returncode == 0
 
 
 def manifests(location: Path) -> list[Path]:
@@ -208,7 +262,10 @@ def main(arguments: Sequence[str]) -> int:
     parser.add_argument("--junit", type=Path, required=True)
     options = parser.parse_args(arguments)
     outcomes = read_junit(options.junit)
-    reports = [evaluate(load_manifest(path), outcomes) for path in manifests(options.location)]
+    reports = [
+        evaluate(load_manifest(path), outcomes, revision_in_history)
+        for path in manifests(options.location)
+    ]
     for report in reports:
         print(report.render(), end="\n\n")
     if not reports:

@@ -4,13 +4,21 @@ import re
 import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+
+
+class Change(StrEnum):
+    TYPE = "type"
+    REMOVED = "removed"
+    ADDED = "added"
+    VALUE = "value"
 
 
 @dataclass(frozen=True)
 class Difference:
     path: str
-    kind: str
+    kind: Change
     before: str | None
     after: str | None
 
@@ -49,26 +57,26 @@ def join(path: str, key: str) -> str:
 
 def differences(before: object, after: object, path: str) -> Iterator[Difference]:
     if type(before) is not type(after):
-        yield Difference(path, "type", repr(before), repr(after))
+        yield Difference(path, Change.TYPE, repr(before), repr(after))
     elif isinstance(before, dict) and isinstance(after, dict):
         for key in before:
             if key in after:
                 yield from differences(before[key], after[key], join(path, key))
             else:
-                yield Difference(join(path, key), "removed", repr(before[key]), None)
+                yield Difference(join(path, key), Change.REMOVED, repr(before[key]), None)
         for key in after.keys() - before.keys():
-            yield Difference(join(path, key), "added", None, repr(after[key]))
+            yield Difference(join(path, key), Change.ADDED, None, repr(after[key]))
     elif isinstance(before, list) and isinstance(after, list):
         for index in range(max(len(before), len(after))):
             item_path = f"{path}[{index}]"
             if index >= len(after):
-                yield Difference(item_path, "removed", repr(before[index]), None)
+                yield Difference(item_path, Change.REMOVED, repr(before[index]), None)
             elif index >= len(before):
-                yield Difference(item_path, "added", None, repr(after[index]))
+                yield Difference(item_path, Change.ADDED, None, repr(after[index]))
             else:
                 yield from differences(before[index], after[index], item_path)
     elif before != after:
-        yield Difference(path, "value", repr(before), repr(after))
+        yield Difference(path, Change.VALUE, repr(before), repr(after))
 
 
 def compare(baseline: object, current: object, normalized: Sequence[str]) -> list[Difference]:

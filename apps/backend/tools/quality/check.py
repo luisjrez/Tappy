@@ -13,6 +13,7 @@ REPORTS = "reports"
 class Step:
     name: str
     command: tuple[str, ...]
+    outputs: tuple[str, ...] = ()
 
 
 STEPS = (
@@ -21,7 +22,12 @@ STEPS = (
     Step("types", (PYTHON, "-m", "mypy")),
     Step("hygiene", (PYTHON, "-m", "quality.hygiene", "src", "tools", "tests")),
     Step("migrations", (PYTHON, "-m", "quality.migrations")),
-    Step("tests", (PYTHON, "-m", "pytest", f"--junitxml={REPORTS}/junit.xml")),
+    Step(
+        "tests",
+        (PYTHON, "-m", "pytest", f"--junitxml={REPORTS}/junit.xml"),
+        outputs=(f"{REPORTS}/junit.xml",),
+    ),
+    Step("api", (PYTHON, "-m", "quality.api_snapshots")),
     Step(
         "evidence",
         (PYTHON, "-m", "quality.evidence", "../../docs/evidence", f"--junit={REPORTS}/junit.xml"),
@@ -40,11 +46,17 @@ def select_steps(names: str | None) -> list[Step]:
     return [known[name] for name in requested]
 
 
+def label(passed: bool) -> str:
+    return "PASS" if passed else "FAIL"
+
+
 def run_step(step: Step, project: Path) -> bool:
+    for output in step.outputs:
+        (project / output).unlink(missing_ok=True)
     print(f"--- {step.name}: {' '.join(step.command[1:])}", flush=True)
     completed = subprocess.run(step.command, cwd=project, check=False)
     passed = completed.returncode == 0
-    print(f"{'PASS' if passed else 'FAIL'} {step.name} (exit {completed.returncode})", flush=True)
+    print(f"{label(passed)} {step.name} (exit {completed.returncode})", flush=True)
     return passed
 
 
@@ -55,10 +67,7 @@ def main(arguments: Sequence[str]) -> int:
     options = parser.parse_args(arguments)
     results = {step.name: run_step(step, options.project) for step in select_steps(options.steps)}
     failed = [name for name, passed in results.items() if not passed]
-    print(
-        "Summary: "
-        + ", ".join(f"{'PASS' if ok else 'FAIL'} {name}" for name, ok in results.items())
-    )
+    print("Summary: " + ", ".join(f"{label(ok)} {name}" for name, ok in results.items()))
     return 1 if failed else 0
 
 

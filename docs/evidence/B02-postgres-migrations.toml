@@ -1,13 +1,20 @@
 ticket = "B02"
 
+revision = "ccf8eed"
+
 [vc01]
 status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B02-postgres-migrations.md#api--resultado-inicial"
 
 [review]
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
 id = "B02-AC01"
+use_cases = ["B02-UC01"]
 mandatory = true
 
 [[criteria.cases]]
@@ -17,6 +24,7 @@ tests = ["tests/test_readiness.py::test_readiness_turns_ready_after_migrating_an
 
 [[criteria]]
 id = "B02-AC02"
+use_cases = ["B02-UC02"]
 mandatory = true
 
 [[criteria.cases]]
@@ -29,6 +37,7 @@ tests = [
 
 [[criteria]]
 id = "B02-AC03"
+use_cases = ["B02-UC03"]
 mandatory = true
 
 [[criteria.cases]]

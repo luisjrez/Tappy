@@ -25,7 +25,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tappy", "tools/quality"]
+packages = ["src/tappy"]
+
+[tool.hatch.build]
+dev-mode-dirs = ["src", "tools"]
 
 [tool.ruff]
 target-version = "py314"
@@ -42,7 +45,6 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "PT", "RUF", "N", "S", "AS
 "tests/test_persistence.py" = ["S603", "S607"]
 "tests/quality/*" = ["S603"]
 "tools/quality/check.py" = ["S603"]
-"tools/quality/evidence.py" = ["S105", "S314"]
 
 [tool.mypy]
 python_version = "3.14"

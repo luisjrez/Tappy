@@ -5,9 +5,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-TOOL_DIRECTIVE = re.compile(
-    r"#\s*(noqa(: [A-Z0-9, ]+)?|type: ignore\[[\w, -]+\]|pragma: no cover)$"
-)
+TOOL_DIRECTIVE = re.compile(r"#\s*(noqa: [A-Z0-9, ]+|type: ignore\[[\w, -]+\]|pragma: no cover)$")
 EXCLUDED_DIRECTORIES = frozenset({".venv", "venv", "__pycache__", ".mypy_cache", ".ruff_cache"})
 
 

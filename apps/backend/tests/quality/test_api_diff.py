@@ -3,7 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from quality.api_diff import Difference, compare
+from quality.api_diff import Change, Difference, compare
 
 BASELINE_BODY: dict[str, object] = {
     "id": "sale-1",
@@ -51,10 +51,10 @@ def test_reports_type_presence_and_value_changes() -> None:
     differences = compare(BASELINE, current, NORMALIZED)
 
     assert differences == [
-        Difference("body.amount_cents", "type", "15000", "'15000'"),
-        Difference("body.created_at", "removed", "'<normalized:2>'", None),
-        Difference("body.attempts[0].state", "value", "'pending'", "'paid'"),
-        Difference("body.currency", "added", None, "'MXN'"),
+        Difference("body.amount_cents", Change.TYPE, "15000", "'15000'"),
+        Difference("body.created_at", Change.REMOVED, "'<normalized:2>'", None),
+        Difference("body.attempts[0].state", Change.VALUE, "'pending'", "'paid'"),
+        Difference("body.currency", Change.ADDED, None, "'MXN'"),
     ]
 
 
