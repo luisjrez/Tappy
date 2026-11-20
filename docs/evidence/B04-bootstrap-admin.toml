@@ -1,5 +1,5 @@
 ticket = "B04"
-revision = "__REV__"
+revision = "a5d7cb8"
 
 [vc01]
 status = "PASS"
