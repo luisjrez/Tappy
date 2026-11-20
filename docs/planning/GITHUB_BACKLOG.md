@@ -2,7 +2,7 @@
 
 Tracker: [luisjrez/Tappy](https://github.com/luisjrez/Tappy/issues). Publicación y relaciones verificadas mediante API de GitHub. Todos los issues están abiertos; ninguna implementación o prueba funcional se ha ejecutado.
 
-8 historias padre, 40 subtareas, 40 relaciones de sub-issue y 64 bloqueos nativos.
+8 historias padre, 42 subtareas, 42 relaciones de sub-issue y 68 bloqueos nativos.
 
 [Protocolo de calidad](TICKET_QUALITY_PROTOCOL.md) · [Plan detallado](BACKEND_TICKETS_DRAFT.md) · [Plantilla de evidencia](EVIDENCE_COMPARISON_TEMPLATE.md).
 
@@ -25,6 +25,9 @@ Cada subtarea contiene UC/AC/TC, TDD, criterios, dependencias, evidencia inicial
 | B06 — Expirar, renovar y revocar sesiones | [#14](https://github.com/luisjrez/Tappy/issues/14) | [B05](https://github.com/luisjrez/Tappy/issues/13) |
 | B07 — Entrar y salir de Starlette Admin | [#15](https://github.com/luisjrez/Tappy/issues/15) | [B06](https://github.com/luisjrez/Tappy/issues/14) |
 | B08 — Administrar operadores autorizados | [#16](https://github.com/luisjrez/Tappy/issues/16) | [B07](https://github.com/luisjrez/Tappy/issues/15) |
+
+| B41 — Solicitar recuperación de contraseña por correo | [#49](https://github.com/luisjrez/Tappy/issues/49) | [B05](https://github.com/luisjrez/Tappy/issues/13), [B07](https://github.com/luisjrez/Tappy/issues/15) |
+| B42 — Restablecer contraseña y revocar sesiones anteriores | [#50](https://github.com/luisjrez/Tappy/issues/50) | [B41](https://github.com/luisjrez/Tappy/issues/49), [B06](https://github.com/luisjrez/Tappy/issues/14) |
 
 ## [H3 — Comercio y receptor autorizado](https://github.com/luisjrez/Tappy/issues/3)
 

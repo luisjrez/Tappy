@@ -10,7 +10,7 @@ Confirmado por el usuario: FastAPI, PostgreSQL en Docker Compose, SQLAlchemy, Py
 
 **Administrador identificado: Starlette Admin.** Privada Reforma usa `BaseAdmin`, `AuthProvider`, `BaseModelView`, `CustomView` y registro con `add_view`. Sus vistas invocan operaciones autorizadas; no dan CRUD libre al registro financiero. Tappy seguirá esa idea, con permisos y reglas propios. Starlette Admin presenta el login del panel y se conecta a nuestra autenticación: no reemplaza el backend de identidad ni resuelve por sí solo autenticación móvil.
 
-Dirección de implementación del backlog aprobado: monolito modular; Alembic para migraciones; pytest con Postgres real aislado; admin interno global y operador limitado por membresía; sesiones revocables mediante token opaco inicialmente, con renovación acotada; sin registro público, recuperación por correo ni proveedor de identidad externo en esta etapa. Las políticas de duración, credencial inicial y acceso admin deben acordarse antes de B04–B08. No habrá contraseñas predeterminadas en el repo.
+Dirección de implementación del backlog aprobado: monolito modular; Alembic para migraciones; pytest con Postgres real aislado; admin interno global y operador limitado por membresía; sesiones revocables mediante token opaco inicialmente, con renovación acotada; recuperación por correo incluida mediante B41/B42; sin registro público ni proveedor de identidad externo en esta etapa. Las políticas de duración, credencial inicial y acceso admin deben acordarse antes de B04–B08. No habrá contraseñas predeterminadas en el repo.
 
 ### Organización modular, similar en intención a Next.js
 
@@ -65,7 +65,7 @@ Terminado exige aceptación demostrada, regresión pertinente, formato/lint/tipa
 Las historias agrupan subtareas y describen un resultado; no añaden implementación extra. En GitHub se publica una issue padre por historia y sub-issues por ticket, con bloqueos nativos. El usuario autorizó esta publicación; implementar es trabajo posterior.
 
 - **H1 — Base local verificable**: B01, B02, B03.
-- **H2 — Identidad y acceso operativo**: B04, B05, B06, B07, B08.
+- **H2 — Identidad y acceso operativo**: B04, B05, B06, B07, B08, B41, B42.
 - **H3 — Comercio y receptor autorizado**: B09, B10.
 - **H4 — Solicitar y recuperar un cobro QR**: B11, B12, B13, B14, B15, B16.
 - **H5 — Comprobar recepción sin duplicar dinero**: B17, B18, B19, B20, B21, B22, B23, B24, B25, B26.
@@ -418,6 +418,103 @@ Al implementar B03, incorporar al runner el registro de evidencia UC/AC/TC, la f
 - **Aprobación:** resultado inicial conforme al contrato o diferencias esperadas justificadas y probadas; sin regresiones pendientes. VC01 exige declarar aplicabilidad; No aplica requiere justificación revisada. Es una condición de proceso independiente del porcentaje de AC, sin inflar su denominador. No sustituye tests ni autoriza actualizar la base automáticamente.
 
 **Verificación y salida:** registrar evidencia real UC → AC → TC para la revisión exacta; ejecutar checks y regresión del protocolo; exigir VC01 según su modalidad/aplicabilidad, los tres AC y tests aplicables aprobados y completitud ≥97% sin redondeo. Con 3 AC obligatorios se requiere 3/3. Después: commit candidato → review Standards/Spec → corrección y nueva verificación hasta aprobación → PR para human review. Código simple, tipado y sin comentarios explicativos. No abrir PR ni cerrar B08 solo por tener casillas marcadas.
+
+#### B41 — Solicitar recuperación de contraseña por correo
+
+**Bloqueado por:** B05, B07.
+
+**Objetivo y entrega:** Administrador u operador solicita recuperación sin iniciar sesión desde la API o el acceso del panel. Solo una cuenta activa preexistente puede recibir el enlace en su correo registrado. Preparar envío transaccional con adaptador de correo y entrega recuperable; no enviar correos reales desde CI.
+
+- **Red:** Respuesta distinta para correo existente/inexistente, exceso de solicitudes y fallo del proveedor deben quedar cubiertos antes de implementar cada comportamiento.
+- **Green:** Crear solicitud tipada, token aleatorio de recuperación almacenado de forma segura, expiración configurable, envío mediante adaptador externo y formulario de solicitud accesible desde login del panel; estado de entrega recuperable sin filtrar secretos.
+- **Refactor:** Separar identidad, emisión de recuperación, entrega de correo y presentación; reusar sesión/configuración sin reutilizar tokens de acceso como tokens de reset.
+
+**Alcance y dependencias operativas:** El transporte real requiere elegir proveedor, remitente/dominio autorizado y URL de recuperación permitida antes de validar entrega. La prueba real se hace solo con destinatario controlado autorizado, fuera de CI; sin esa evidencia la entrega real queda BLOCKED. La dirección almacenada debe proceder del alta autorizada; no se permite reemplazarla desde la solicitud. Conservación de tokens mediante digest; si el mecanismo durable necesita el secreto para entregar/reintentar, protegerlo y limitar su retención al envío, nunca guardarlo como payload/log legible. No autorizar alta pública, invitaciones ni cambio de email en este ticket.
+
+**Casos de uso**
+
+- **B41-UC01:** Con administrador u operador activo con correo registrado ficticio, solicitar recuperación por api/formulario con transporte de correo de prueba, para obtener: Se acepta solicitud y entrega al correo registrado un enlace de recuperación con origen configurado confiable, sin devolver el token en la respuesta.
+- **B41-UC02:** Con correo no registrado y cuenta desactivada, enviar la misma solicitud para cada caso, para obtener: Mismo status y mensaje genérico que para cuenta activa, con tratamiento temporal comparable; no crea cuenta ni habilita a la desactivada.
+- **B41-UC03:** Con solicitudes repetidas desde mismo origen/destinatario, superar los límites configurados y repetir desde otro proceso, para obtener: Límites persistentes impiden inundar el correo sin revelar existencia de cuenta; no bloquean el login ni cambian contraseña.
+- **B41-UC04:** Con proveedor de correo caído o respuesta ambigua, solicitar, reiniciar proceso y recuperar entrega pendiente, para obtener: Trabajo recuperable y política acotada de reintento; fallo de entrega no modifica credenciales ni se presenta como entrega garantizada.
+- **B41-UC05:** Con token generado, proxy/host manipulados y logs de prueba, inspeccionar vínculo en transporte de prueba y artefactos sanitizados, para obtener: Origen del enlace procede de configuración, no del Host; no hay token bruto en persistencia de recuperación, respuestas ni logs; secretos operativos fuera del repo.
+
+**Criterios de aceptación — obligatorios**
+
+- [ ] **B41-AC01:** Se acepta solicitud y entrega al correo registrado un enlace de recuperación con origen configurado confiable, sin devolver el token en la respuesta. Verificación: B41-TC01.
+- [ ] **B41-AC02:** Mismo status y mensaje genérico que para cuenta activa, con tratamiento temporal comparable; no crea cuenta ni habilita a la desactivada. Verificación: B41-TC02.
+- [ ] **B41-AC03:** Límites persistentes impiden inundar el correo sin revelar existencia de cuenta; no bloquean el login ni cambian contraseña. Verificación: B41-TC03.
+- [ ] **B41-AC04:** Trabajo recuperable y política acotada de reintento; fallo de entrega no modifica credenciales ni se presenta como entrega garantizada. Verificación: B41-TC04.
+- [ ] **B41-AC05:** Origen del enlace procede de configuración, no del Host; no hay token bruto en persistencia de recuperación, respuestas ni logs; secretos operativos fuera del repo. Verificación: B41-TC05.
+
+**Casos de prueba — todos NOT_RUN**
+
+| ID / trazabilidad | Preparación | Acción | Resultado esperado | Ejecución |
+| --- | --- | --- | --- | --- |
+| B41-TC01 → B41-UC01, B41-AC01 | Administrador u operador activo con correo registrado ficticio | Solicitar recuperación por API/formulario con transporte de correo de prueba | Se acepta solicitud y entrega al correo registrado un enlace de recuperación con origen configurado confiable, sin devolver el token en la respuesta | Automatizada con correo simulado y Postgres aislado |
+| B41-TC02 → B41-UC02, B41-AC02 | Correo no registrado y cuenta desactivada | Enviar la misma solicitud para cada caso | Mismo status y mensaje genérico que para cuenta activa, con tratamiento temporal comparable; no crea cuenta ni habilita a la desactivada | Automatizada con correo simulado y Postgres aislado |
+| B41-TC03 → B41-UC03, B41-AC03 | Solicitudes repetidas desde mismo origen/destinatario | Superar los límites configurados y repetir desde otro proceso | Límites persistentes impiden inundar el correo sin revelar existencia de cuenta; no bloquean el login ni cambian contraseña | Automatizada con correo simulado y Postgres aislado |
+| B41-TC04 → B41-UC04, B41-AC04 | Proveedor de correo caído o respuesta ambigua | Solicitar, reiniciar proceso y recuperar entrega pendiente | Trabajo recuperable y política acotada de reintento; fallo de entrega no modifica credenciales ni se presenta como entrega garantizada | Automatizada con correo simulado y Postgres aislado |
+| B41-TC05 → B41-UC05, B41-AC05 | Token generado, proxy/Host manipulados y logs de prueba | Inspeccionar vínculo en transporte de prueba y artefactos sanitizados | Origen del enlace procede de configuración, no del Host; no hay token bruto en persistencia de recuperación, respuestas ni logs; secretos operativos fuera del repo | Automatizada con correo simulado y Postgres aislado |
+
+**B41-TC06 → B41-UC01, B41-AC01:** Prueba externa de entrega a buzón controlado autorizado con remitente configurado: correo recibido con enlace correcto; registrar fecha/revisión y evidencia sanitizada, sin token público. NOT_RUN; ausencia de configuración/acceso produce BLOCKED, no PASS. La aceptación del proveedor no equivale a entrega al buzón.
+
+**Comprobación visible según aplique — B41-VC01 (NOT_RUN)**
+
+Evidencia inicial de API (petición/status/JSON/contrato) y pantallas nuevas; antes/después solo para login/vistas o contrato existentes modificados. Mostrar éxito, error y datos de prueba por rol; no capturar token, correo real ni contraseña. Para B41 añadir mensaje sanitizado del transporte de prueba y evidencia controlada de entrega real. Para B42 mostrar formulario, error de enlace y vuelta al login, más respuestas de acceso tras revocación. No aplica solo con justificación revisada.
+
+**Verificación y salida:** seguir [protocolo común](TICKET_QUALITY_PROTOCOL.md) y [plantilla de evidencia](EVIDENCE_COMPARISON_TEMPLATE.md): Red/Green por caso, refactor, checks Ruff/mypy/pytest/migraciones, matriz UC→AC→TC, completitud ≥97% sin redondeo y todos los AC/tests obligatorios aprobados. Commit candidato → review Standards/Spec → corregir y repetir → PR para human review. Sin comentarios explicativos en código. No implementado; ningún email real enviado durante planificación.
+
+**Referencia de controles:** [OWASP Forgot Password](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
+
+#### B42 — Restablecer contraseña y revocar sesiones anteriores
+
+**Bloqueado por:** B41, B06.
+
+**Objetivo y entrega:** Administrador u operador recupera acceso mediante enlace temporal de un solo uso, establece nueva contraseña y vuelve al login habitual. Incluir API consumible por mobile y página/formulario web mínimo de restablecimiento; no implementar pantallas móviles aquí.
+
+- **Red:** Cubrir token válido, vencido/alterado/reutilizado, consumo concurrente, contraseña inválida y persistencia interrumpida; después implementar cada caso mínimo.
+- **Green:** Validar token/expiración/usuario, cambiar hash, consumir recuperación e invalidar sesiones y enlaces pendientes de manera atómica; formulario con confirmación de contraseña y errores seguros, y aviso transaccional de cambio sin incluir contraseña.
+- **Refactor:** Unificar política de contraseña con login/provisión, revocación con B06 y envío con B41; conservar la transacción de identidad sin acoplar vistas ni proveedor de correo.
+
+**Alcance y dependencias operativas:** Configurar y probar vigencia y política de contraseña antes de activar; no inventar un valor fijo en el código. Formulario sin recursos terceros que filtren el enlace, sin almacenamiento de token en logs/analítica ni headers referrer; proteger solicitudes de cambio de acuerdo con la superficie web. Quien no controla el correo registrado necesita un procedimiento operativo separado; no cambiar correo, recuperar cuentas comprometidas ni introducir MFA/registro público como parte de este ticket.
+
+**Casos de uso**
+
+- **B42-UC01:** Con cuenta activa y token válido de recuperación, abrir enlace, definir y confirmar nueva contraseña, iniciar sesión, para obtener: Nueva contraseña permite acceder con misma identidad/rol/membresía; contraseña previa falla y no hay login automático.
+- **B42-UC02:** Con tokens vencidos, alterados, ya usados y dos consumos concurrentes, intentar restablecer por cada variante, para obtener: Inválidos no cambian contraseña; a lo sumo un consumo concurrente tiene éxito y repetir no produce otro cambio.
+- **B42-UC03:** Con cuenta desactivada después de solicitar enlace y sesión de operador que envía campos role/email/userid ajenos, intentar confirmar recuperación con esos datos, para obtener: No reactiva cuenta ni cambia rol, correo o identidad; solo el token válido identifica a su titular, sin parámetros que eleven permisos.
+- **B42-UC04:** Con sesiones activas api/panel y varios enlaces pendientes antes del cambio, completar recuperación y usar credenciales/enlaces anteriores, para obtener: Todas las sesiones anteriores y enlaces de recuperación pendientes quedan invalidados; nueva autenticación conserva permisos originales.
+- **B42-UC05:** Con nueva contraseña inválida o fallo inducido durante transacción, confirmar y recuperar con el mismo escenario de prueba, para obtener: Error no consume token ni cambia credenciales parcialmente; cuenta y sesiones conservan estado consistente hasta commit exitoso.
+- **B42-UC06:** Con escáner de correo que abre get y reset posterior válido con fallo del aviso de cambio, abrir enlace sin enviar formulario, completar reset y consultar entrega del aviso, para obtener: GET no consume token ni modifica cuenta; confirmación válida programa aviso sin contraseña; fallo de correo no revierte cambio confirmado y su envío se recupera.
+
+**Criterios de aceptación — obligatorios**
+
+- [ ] **B42-AC01:** Nueva contraseña permite acceder con misma identidad/rol/membresía; contraseña previa falla y no hay login automático. Verificación: B42-TC01.
+- [ ] **B42-AC02:** Inválidos no cambian contraseña; a lo sumo un consumo concurrente tiene éxito y repetir no produce otro cambio. Verificación: B42-TC02.
+- [ ] **B42-AC03:** No reactiva cuenta ni cambia rol, correo o identidad; solo el token válido identifica a su titular, sin parámetros que eleven permisos. Verificación: B42-TC03.
+- [ ] **B42-AC04:** Todas las sesiones anteriores y enlaces de recuperación pendientes quedan invalidados; nueva autenticación conserva permisos originales. Verificación: B42-TC04.
+- [ ] **B42-AC05:** Error no consume token ni cambia credenciales parcialmente; cuenta y sesiones conservan estado consistente hasta commit exitoso. Verificación: B42-TC05.
+- [ ] **B42-AC06:** GET no consume token ni modifica cuenta; confirmación válida programa aviso sin contraseña; fallo de correo no revierte cambio confirmado y su envío se recupera. Verificación: B42-TC06.
+
+**Casos de prueba — todos NOT_RUN**
+
+| ID / trazabilidad | Preparación | Acción | Resultado esperado | Ejecución |
+| --- | --- | --- | --- | --- |
+| B42-TC01 → B42-UC01, B42-AC01 | Cuenta activa y token válido de recuperación | Abrir enlace, definir y confirmar nueva contraseña, iniciar sesión | Nueva contraseña permite acceder con misma identidad/rol/membresía; contraseña previa falla y no hay login automático | Automatizada con correo simulado y Postgres aislado |
+| B42-TC02 → B42-UC02, B42-AC02 | Tokens vencidos, alterados, ya usados y dos consumos concurrentes | Intentar restablecer por cada variante | Inválidos no cambian contraseña; a lo sumo un consumo concurrente tiene éxito y repetir no produce otro cambio | Automatizada con correo simulado y Postgres aislado |
+| B42-TC03 → B42-UC03, B42-AC03 | Cuenta desactivada después de solicitar enlace y sesión de operador que envía campos role/email/userId ajenos | Intentar confirmar recuperación con esos datos | No reactiva cuenta ni cambia rol, correo o identidad; solo el token válido identifica a su titular, sin parámetros que eleven permisos | Automatizada con correo simulado y Postgres aislado |
+| B42-TC04 → B42-UC04, B42-AC04 | Sesiones activas API/panel y varios enlaces pendientes antes del cambio | Completar recuperación y usar credenciales/enlaces anteriores | Todas las sesiones anteriores y enlaces de recuperación pendientes quedan invalidados; nueva autenticación conserva permisos originales | Automatizada con correo simulado y Postgres aislado |
+| B42-TC05 → B42-UC05, B42-AC05 | Nueva contraseña inválida o fallo inducido durante transacción | Confirmar y recuperar con el mismo escenario de prueba | Error no consume token ni cambia credenciales parcialmente; cuenta y sesiones conservan estado consistente hasta commit exitoso | Automatizada con correo simulado y Postgres aislado |
+| B42-TC06 → B42-UC06, B42-AC06 | Escáner de correo que abre GET y reset posterior válido con fallo del aviso de cambio | Abrir enlace sin enviar formulario, completar reset y consultar entrega del aviso | GET no consume token ni modifica cuenta; confirmación válida programa aviso sin contraseña; fallo de correo no revierte cambio confirmado y su envío se recupera | Automatizada con correo simulado y Postgres aislado |
+
+**Comprobación visible según aplique — B42-VC01 (NOT_RUN)**
+
+Evidencia inicial de API (petición/status/JSON/contrato) y pantallas nuevas; antes/después solo para login/vistas o contrato existentes modificados. Mostrar éxito, error y datos de prueba por rol; no capturar token, correo real ni contraseña. Para B41 añadir mensaje sanitizado del transporte de prueba y evidencia controlada de entrega real. Para B42 mostrar formulario, error de enlace y vuelta al login, más respuestas de acceso tras revocación. No aplica solo con justificación revisada.
+
+**Verificación y salida:** seguir [protocolo común](TICKET_QUALITY_PROTOCOL.md) y [plantilla de evidencia](EVIDENCE_COMPARISON_TEMPLATE.md): Red/Green por caso, refactor, checks Ruff/mypy/pytest/migraciones, matriz UC→AC→TC, completitud ≥97% sin redondeo y todos los AC/tests obligatorios aprobados. Commit candidato → review Standards/Spec → corregir y repetir → PR para human review. Sin comentarios explicativos en código. No implementado; ningún email real enviado durante planificación.
+
+**Referencia de controles:** [OWASP Forgot Password](https://cheatsheetseries.owasp.org/cheatsheets/Forgot_Password_Cheat_Sheet.html).
 
 ### H3 — Comercio y receptor autorizado
 
@@ -1780,7 +1877,7 @@ Al implementar B03, incorporar al runner el registro de evidencia UC/AC/TC, la f
 - B15/B35 y cada canal real necesitan acceso válido, receptor habilitado y contrato vigente; no se envían mensajes ni se ejecutan transferencias como parte de esta planificación.
 - B17 puede desarrollarse contra el contrato firmado con fixtures sin esperar producción. B18–B34 se pueden verificar en entorno simulado aislado.
 - B35 es la evidencia auténtica del núcleo QR. B36–B39 forman el alcance objetivo celular/enlace: el usuario aún debe confirmar si son obligatorios para la primera entrega. B40 se amplía a esos canales cuando se comprometan; no los declara integrados por defecto.
-- Notificaciones push del dispositivo, entrega de emails, signup público, alta bancaria pública, cambio de cuenta desde mobile, pagos parciales intencionales, devoluciones automáticas, NFC y CRUD arbitrario sobre dinero quedan fuera de este backlog.
+- Notificaciones push del dispositivo, emails ajenos a recuperación/aviso de cambio de contraseña, signup público, alta bancaria pública, cambio de cuenta desde mobile, pagos parciales intencionales, devoluciones automáticas, NFC y CRUD arbitrario sobre dinero quedan fuera de este backlog.
 - B32 permite seguimiento y conciliación, no resolver discrepancias cambiando PAID a mano. Definir una devolución o ajuste financiero exige otro alcance.
 - No hay un ticket «implementar todo el backend» ni se incluyen frontend/mobile ocultos dentro de una subtarea.
 

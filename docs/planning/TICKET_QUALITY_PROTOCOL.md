@@ -1,6 +1,6 @@
 # Protocolo de implementación y verificación por ticket
 
-Estado: estrategia documentada para los tickets de backend. No hay herramientas instaladas ni checks ejecutados sobre una aplicación todavía. Aplica a B01–B40 y a los tickets posteriores que la referencien.
+Estado: estrategia documentada para los tickets de backend. No hay herramientas instaladas ni checks ejecutados sobre una aplicación todavía. Aplica a B01–B42 y a los tickets posteriores que la referencien.
 
 ## Contrato de cada ticket
 

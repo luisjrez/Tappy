@@ -5,7 +5,7 @@ Repositorio: https://github.com/luisjrez/Tappy. Usar gh CLI para leer/publicar/a
 ## Convenciones
 
 - Leer ticket completo, comentarios, etiquetas, padre y bloqueos antes de implementar: gh issue view NUM --repo luisjrez/Tappy --comments.
-- Historias padre H1–H8; subtareas B01–B40 como sub-issues nativas. IDs B/H se conservan en títulos; números GitHub son los identificadores del tracker.
+- Historias padre H1–H8; subtareas B01–B42 como sub-issues nativas. IDs B/H se conservan en títulos; números GitHub son los identificadores del tracker.
 - Dependencias nativas blocked_by son la puerta de ejecución; el cuerpo también enumera enlaces para lectura. Usar database id del blocker, no el número de issue, al crear una dependencia.
 - ready-for-agent significa especificado para implementación, no libre de dependencias. Empezar solo cuando todos los bloqueos estén cerrados y accesos/contratos externos requeridos estén disponibles.
 - ready-for-human para comprobaciones que requieren personas/accesos externos. external-dependency y scope:additional describen restricciones sin sustituir triage.
