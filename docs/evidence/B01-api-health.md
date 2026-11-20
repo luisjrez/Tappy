@@ -8,7 +8,7 @@ Ticket: [#9](https://github.com/luisjrez/Tappy/issues/9) · Historia: [H1 #1](ht
 - Modalidad: **resultado inicial** (primer servicio; no hay health ni arranque previos).
 - Aplicabilidad por superficie: API sí (`GET /health`); comando sí (`python -m tappy`); panel **no aplica**: B01 no crea vistas de back office.
 - Base: `e5bb134` (`main`). No hay base aprobada previa.
-- Revisión evaluada: commit candidato `ca7d9bf` y commit de corrección de review (SHA final en el PR; la evidencia se repitió sobre el HEAD corregido).
+- Revisión evaluada: commit candidato `ca7d9bf`; código final `9f53aa9` (tras correcciones de review). Checks, tests y salidas se repitieron sobre `9f53aa9`; el commit posterior solo modifica este archivo.
 - Entorno: macOS (Darwin 25.6), Python 3.14.8, uv 0.9.5, FastAPI 0.165.0, Starlette 1.10.0, Pydantic 2.14.4, pydantic-settings 2.16.3, Uvicorn 0.54.0, pytest 9.2.0, mypy 2.4.1, Ruff 0.17.6. Fecha: 2026-11-20. Ejecutor: sesión local de desarrollo del autor del PR.
 - Actor: Desarrollador. Fixture: variables sintéticas (`synthetic-…`, `leaked-if-printed`); ningún secreto real.
 - Pasos reproducibles: `cd apps/backend && rm -rf .venv && uv sync`, exportar variables de `.env.example` con valores sintéticos, `.venv/bin/python -m tappy`, `curl http://127.0.0.1:<port>/health`.
@@ -99,7 +99,7 @@ AC PASS / AC aplicables = 3/3 = **100%** (≥97%). Tests/checks 100% verdes; sin
 | Spec | Mensaje de error revelaba la longitud del secreto | Corregido con Red/Green (mensajes redactados) |
 | Spec | Faltaba TC02 con secreto válido y otra variable ausente | Test añadido |
 | Spec / Standards | Aserción de identidad `state is not state` tautológica | Sustituida por rutas/settings observables por instancia; mutación de control |
-| Spec | Plantilla incompleta, sin SHA ni ejecutor | Plantilla completada; SHA candidato y final registrados |
+| Spec | Plantilla incompleta, sin SHA ni ejecutor | Plantilla completada; SHA candidato `ca7d9bf` y final `9f53aa9` registrados |
 | Spec | Instalación limpia en `.venv` no ejercitada | Ejecutada (`rm -rf .venv && uv sync`) y registrada |
 | Spec | `environment` en health como posible ampliación | Se conserva: dato no secreto que demuestra AC03; documentado |
 | Standards | Exenciones de lint para todo `tests/**` | Acotadas por archivo; `PLR2004` eliminado con `HTTPStatus` |
@@ -107,4 +107,4 @@ AC PASS / AC aplicables = 3/3 = **100%** (≥97%). Tests/checks 100% verdes; sin
 | Standards | Expresión densa en `describe_problems` | Extraído `variable_name` |
 | Standards | `environment` como `str` libre | Se mantiene: el ticket no define el conjunto de entornos |
 
-Re-revisión sobre el HEAD corregido: sin hallazgos pendientes.
+Re-revisión Standards/Spec sobre `9f53aa9`: checks verdes (12 formateados, ruff OK, mypy 11 archivos, 6 tests). Spec: sin hallazgos pendientes. Standards: registrar SHAs exactos (resuelto en este archivo); nit latente aceptado — `is_secret` reconoce solo campos tipados exactamente `SecretStr`, suficiente para la configuración actual; un futuro campo secreto opcional deberá ampliar la detección con su test.
