@@ -1,8 +1,5 @@
 import json
-import os
 import socket
-import subprocess
-import sys
 import time
 from collections.abc import Iterator
 from urllib.error import URLError
@@ -10,24 +7,9 @@ from urllib.request import urlopen
 
 import pytest
 
+from tests.support import VALID_SECRET, run_tappy, spawn_tappy
+
 SENSITIVE_SHORT_SECRET = "leaked-if-printed"
-VALID_SECRET = "synthetic-secret-key-for-tests-0123456789"
-
-
-def isolated_environment(environment: dict[str, str]) -> dict[str, str]:
-    inherited = {key: value for key, value in os.environ.items() if not key.startswith("TAPPY_")}
-    return {**inherited, **environment}
-
-
-def start_api(environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, "-m", "tappy"],
-        env=isolated_environment(environment),
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
 
 
 def free_port() -> int:
@@ -52,17 +34,8 @@ def wait_for_json(url: str, deadline_seconds: float) -> object:
 @pytest.fixture
 def running_api() -> Iterator[int]:
     port = free_port()
-    process = subprocess.Popen(
-        [sys.executable, "-m", "tappy"],
-        env=isolated_environment(
-            {
-                "TAPPY_ENVIRONMENT": "local",
-                "TAPPY_SECRET_KEY": VALID_SECRET,
-                "TAPPY_PORT": str(port),
-            }
-        ),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    process = spawn_tappy(
+        {"TAPPY_ENVIRONMENT": "local", "TAPPY_SECRET_KEY": VALID_SECRET, "TAPPY_PORT": str(port)}
     )
     try:
         yield port
@@ -78,11 +51,12 @@ def test_started_api_answers_health(running_api: int) -> None:
 
 
 def test_startup_fails_when_required_variable_is_missing() -> None:
-    result = start_api({"TAPPY_ENVIRONMENT": "test"})
+    result = run_tappy({"TAPPY_SECRET_KEY": VALID_SECRET})
 
     assert result.returncode != 0
-    assert "TAPPY_SECRET_KEY" in result.stderr
+    assert "TAPPY_ENVIRONMENT" in result.stderr
     assert "Traceback" not in result.stderr
+    assert VALID_SECRET not in result.stderr + result.stdout
 
 
 @pytest.mark.parametrize(
@@ -93,9 +67,10 @@ def test_startup_fails_when_required_variable_is_missing() -> None:
     ],
 )
 def test_startup_failure_does_not_expose_secret_values(environment: dict[str, str]) -> None:
-    result = start_api(environment)
+    result = run_tappy(environment)
+    output = result.stderr + result.stdout
 
     assert result.returncode != 0
     assert "TAPPY_SECRET_KEY" in result.stderr
-    assert SENSITIVE_SHORT_SECRET not in result.stderr
-    assert SENSITIVE_SHORT_SECRET not in result.stdout
+    assert SENSITIVE_SHORT_SECRET not in output
+    assert str(len(SENSITIVE_SHORT_SECRET)) not in output
