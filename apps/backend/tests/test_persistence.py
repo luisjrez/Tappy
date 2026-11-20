@@ -91,9 +91,10 @@ def database_names(database_url: str) -> set[str]:
         engine.dispose()
 
 
-def readiness_status(database_url: str) -> int:
+def readiness(database_url: str) -> tuple[int, object]:
     with TestClient(create_app(build_settings(database_url=database_url))) as client:
-        return client.get("/ready").status_code
+        response = client.get("/ready")
+        return response.status_code, response.json()
 
 
 def test_local_data_survives_database_recreation_and_stays_out_of_test_server(
@@ -105,7 +106,7 @@ def test_local_data_survives_database_recreation_and_stays_out_of_test_server(
     local_compose.recreate_database()
 
     assert local_compose.query("SELECT label FROM persistence_probe") == PROBE_DATUM
-    assert readiness_status(local_compose.database_url) == HTTPStatus.OK
+    assert readiness(local_compose.database_url) == (HTTPStatus.OK, {"status": "ready"})
     assert "tappy" not in database_names(empty_database_url)
 
 
@@ -113,9 +114,12 @@ def test_readiness_turns_unavailable_when_local_postgres_stops(
     local_compose: ComposeProject,
 ) -> None:
     upgrade_to_head(local_compose.database_url)
-    ready_while_running = readiness_status(local_compose.database_url)
+    while_running = readiness(local_compose.database_url)
 
     local_compose.stop_database()
 
-    assert ready_while_running == HTTPStatus.OK
-    assert readiness_status(local_compose.database_url) == HTTPStatus.SERVICE_UNAVAILABLE
+    assert while_running == (HTTPStatus.OK, {"status": "ready"})
+    assert readiness(local_compose.database_url) == (
+        HTTPStatus.SERVICE_UNAVAILABLE,
+        {"status": "unavailable"},
+    )

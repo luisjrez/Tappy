@@ -21,9 +21,17 @@ def test_server_url() -> str:
     return url
 
 
+LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def server_address(url: str) -> tuple[str | None, int | None]:
+    parsed = make_url(url)
+    host = "loopback" if parsed.host in LOOPBACK_HOSTS else parsed.host
+    return host, parsed.port
+
+
 def same_server(first: str, second: str) -> bool:
-    first_url, second_url = make_url(first), make_url(second)
-    return (first_url.host, first_url.port) == (second_url.host, second_url.port)
+    return server_address(first) == server_address(second)
 
 
 @pytest.fixture
