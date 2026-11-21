@@ -162,6 +162,15 @@ def revoke_identity_sessions(db: Session, identity_id: uuid.UUID, now: datetime)
     revoke_sessions(db, AccessSession.identity_id == identity_id, now)
 
 
+def share_owner(db: Session, refresh_digest: str) -> None:
+    db.execute(
+        select(Identity.id)
+        .join(AccessSession, AccessSession.identity_id == Identity.id)
+        .where(AccessSession.refresh_digest == refresh_digest)
+        .with_for_update(of=Identity, read=True)
+    )
+
+
 def renew(db: Session, refresh_token: str, now: datetime, policy: SessionPolicy) -> IssuedSession:
     refresh_digest = token_digest(refresh_token)
     presented = db.execute(
@@ -173,6 +182,7 @@ def renew(db: Session, refresh_token: str, now: datetime, policy: SessionPolicy)
         raise InvalidRefreshTokenError
     if presented.rotated_at is not None and presented.rotated_at <= now - policy.reuse_grace:
         raise RefreshTokenReuseError(presented.family_id)
+    share_owner(db, refresh_digest)
     lock_family(db, presented.family_id)
     claimed = db.execute(
         update(AccessSession)

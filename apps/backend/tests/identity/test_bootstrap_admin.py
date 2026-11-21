@@ -176,3 +176,18 @@ def test_database_rejects_emails_differing_only_by_case(migrated_database_url: s
             connection.execute(insert, {"email": "CASE@tappy.example"})
     finally:
         engine.dispose()
+
+
+def test_bootstrap_uses_the_configured_password_policy(migrated_database_url: str) -> None:
+    result = run_identity(
+        migrated_database_url,
+        "bootstrap-admin",
+        "--email",
+        ADMIN_EMAIL,
+        stdin=f"{ADMIN_PASSWORD}\n",
+        extra_environment={"TAPPY_PASSWORD_MIN_LENGTH": "40"},
+    )
+
+    assert result.returncode != 0
+    assert "at least 40 characters" in result.stderr
+    assert stored_users(migrated_database_url) == []

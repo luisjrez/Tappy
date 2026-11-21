@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from pydantic import Field, SecretStr, ValidationError
+from pydantic import Field, SecretStr, ValidationError, ValidationInfo, field_validator
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     smtp_starttls: bool = False
     mail_from: str = "Tappy <no-reply@tappy.example>"
     delivery_max_attempts: int = Field(default=5, ge=1)
+
+    @field_validator("password_max_length")
+    @classmethod
+    def password_bounds_are_consistent(cls, maximum: int, info: ValidationInfo) -> int:
+        minimum = info.data.get("password_min_length")
+        if isinstance(minimum, int) and minimum > maximum:
+            raise ValueError("must not be lower than TAPPY_PASSWORD_MIN_LENGTH")
+        return maximum
 
 
 class ConfigurationError(Exception):

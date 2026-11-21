@@ -1,5 +1,6 @@
 import re
 import smtplib
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from tappy.identity.models import Identity, Role
 from tappy.identity.passwords import PasswordPolicy
 from tappy.identity.reset import PasswordChange, confirm_password_reset
+from tappy.identity.sessions import SessionPolicy, renew
 from tappy.main import create_app
 from tappy.notifications.cli import deliver_pending
 from tappy.notifications.transport import Envelope
@@ -327,3 +329,30 @@ def test_password_policy_comes_from_configuration(migrated_database_url: str) ->
     assert rejected.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert "30" in rejected.json()["detail"]
     assert 'minlength="30"' in page.text
+
+
+def test_renewal_racing_a_reset_does_not_survive_it(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    tokens = client.post(
+        "/auth/login", json={"email": OPERATOR_EMAIL, "password": OLD_PASSWORD}
+    ).json()
+    reset_token = recovery_token(client, settings)
+    database = Database.from_settings(settings)
+    renewal = database.session_factory()
+    renewal.begin()
+    issued = renew(
+        renewal, tokens["refresh_token"], datetime.now(UTC), SessionPolicy.from_settings(settings)
+    )
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        reset = pool.submit(confirm, client, reset_token)
+        time.sleep(0.5)
+        renewal.commit()
+        status = reset.result(timeout=10).status_code
+    renewal.close()
+    database.dispose()
+
+    assert status == HTTPStatus.NO_CONTENT
+    me = client.get("/auth/me", headers={"Authorization": f"Bearer {issued.access_token}"})
+    assert me.status_code == HTTPStatus.UNAUTHORIZED

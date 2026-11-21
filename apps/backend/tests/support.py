@@ -76,11 +76,14 @@ def app_environment(database_url: str) -> dict[str, str]:
 
 
 def run_identity(
-    database_url: str, *arguments: str, stdin: str = ""
+    database_url: str,
+    *arguments: str,
+    stdin: str = "",
+    extra_environment: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [*IDENTITY_COMMAND, *arguments],
-        env=isolated_environment(app_environment(database_url)),
+        env=isolated_environment({**app_environment(database_url), **(extra_environment or {})}),
         input=stdin,
         capture_output=True,
         text=True,
