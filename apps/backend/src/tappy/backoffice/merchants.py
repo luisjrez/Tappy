@@ -10,6 +10,7 @@ from starlette_admin.views import CustomView
 
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.errors import MerchantError
+from tappy.merchants.models import MERCHANT_NAME_MAX_LENGTH
 from tappy.merchants.service import (
     MerchantView,
     assign_operator,
@@ -61,6 +62,7 @@ class MerchantsView(CustomView):
                 "title": self.menu_label,
                 "merchants": merchants,
                 "operators": operators,
+                "name_max_length": MERCHANT_NAME_MAX_LENGTH,
                 "merchants_url": self.merchants_url,
                 "flashed_messages": get_flashed_messages(request),
             },

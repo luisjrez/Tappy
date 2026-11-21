@@ -19,6 +19,7 @@ ADMIN = "admin@tappy.example"
 OPERATOR_A = "operadora.a@tappy.example"
 OPERATOR_B = "operador.b@tappy.example"
 PASSWORD = "credencial operativa 2026"
+DEACTIVATED_AT = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -191,6 +192,20 @@ def test_concurrent_assignments_keep_a_single_membership(
     assert scalar(migrated_database_url, "SELECT count(*) FROM memberships") == 1
 
 
+def wait_until_blocked_on_a_lock(database_url: str) -> None:
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        waiting = scalar(
+            database_url,
+            "SELECT count(*) FROM pg_stat_activity "
+            "WHERE datname = current_database() AND wait_event_type = 'Lock'",
+        )
+        if waiting:
+            return
+        time.sleep(0.01)
+    pytest.fail("assignment never waited for the deactivation lock")
+
+
 def test_assignment_racing_a_deactivation_never_links_an_inactive_operator(
     client: TestClient, migrated_database_url: str
 ) -> None:
@@ -198,17 +213,26 @@ def test_assignment_racing_a_deactivation_never_links_an_inactive_operator(
     merchant_a = create_merchant(client, admin, "Tienda Demo A")
     operator = reference(migrated_database_url, OPERATOR_A)
     database = Database.from_settings(build_settings(database_url=migrated_database_url))
-    deactivation = database.session_factory()
-    deactivation.begin()
-    deactivate_operator(deactivation, uuid.UUID(operator), datetime.now(UTC))
-
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        attempt = pool.submit(assign, client, admin, merchant_a, operator)
-        time.sleep(0.5)
-        deactivation.commit()
-        status = attempt.result(timeout=10).status_code
-    deactivation.close()
-    database.dispose()
+    try:
+        with database.session_factory() as deactivation, deactivation.begin():
+            deactivate_operator(deactivation, uuid.UUID(operator), DEACTIVATED_AT)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                attempt = pool.submit(assign, client, admin, merchant_a, operator)
+                wait_until_blocked_on_a_lock(migrated_database_url)
+                deactivation.commit()
+                status = attempt.result(timeout=10).status_code
+    finally:
+        database.dispose()
 
     assert status == HTTPStatus.UNPROCESSABLE_CONTENT
     assert scalar(migrated_database_url, "SELECT count(*) FROM memberships") == 0
+
+
+@pytest.mark.parametrize("name", ["   ", "N" * 121])
+def test_blank_or_overlong_names_are_rejected(
+    client: TestClient, migrated_database_url: str, name: str
+) -> None:
+    response = client.post("/merchants", json={"name": name}, headers=bearer(client, ADMIN))
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert scalar(migrated_database_url, "SELECT count(*) FROM merchants") == 0

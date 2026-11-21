@@ -9,7 +9,7 @@
             {{ csrf_input(request) }}
             <div class="mb-3">
                 <label class="form-label" for="name">Name</label>
-                <input class="form-control" id="name" name="name" maxlength="120" required>
+                <input class="form-control" id="name" name="name" maxlength="{{ name_max_length }}" required>
             </div>
             <button class="btn btn-primary" type="submit">Create merchant</button>
         </form>

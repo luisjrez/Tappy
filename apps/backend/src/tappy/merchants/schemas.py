@@ -2,11 +2,13 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tappy.merchants.models import MERCHANT_NAME_MAX_LENGTH
+
 
 class MerchantCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=MERCHANT_NAME_MAX_LENGTH)
 
 
 class MembershipRequest(BaseModel):

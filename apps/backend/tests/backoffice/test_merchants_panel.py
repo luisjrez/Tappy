@@ -99,3 +99,21 @@ def test_merchant_form_requires_csrf_and_an_admin(
     assert "/admin/login" in anonymous.headers["location"]
     assert without_csrf.status_code == HTTPStatus.FORBIDDEN
     assert scalar(migrated_database_url, "SELECT count(*) FROM merchants") == 0
+
+
+@pytest.mark.parametrize("name", ["   ", "N" * 121])
+def test_panel_rejects_blank_or_overlong_names_without_creating(
+    client: TestClient, migrated_database_url: str, name: str
+) -> None:
+    sign_in(client)
+
+    response = client.post(
+        "/admin/merchants/create",
+        data={"name": name, "csrftoken": csrf_token(client, "/admin/merchants")},
+        follow_redirects=False,
+    )
+    listing = client.get("/admin/merchants")
+
+    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert "Merchant name must have between 1 and 120 characters" in listing.text
+    assert scalar(migrated_database_url, "SELECT count(*) FROM merchants") == 0

@@ -17,7 +17,7 @@ from tappy.merchants.errors import (
     MerchantNotFoundError,
     OperatorNotAssignableError,
 )
-from tappy.merchants.models import Membership, Merchant
+from tappy.merchants.models import MERCHANT_NAME_MAX_LENGTH, Membership, Merchant
 
 
 @dataclass(frozen=True)
@@ -41,8 +41,8 @@ class AssignmentResult:
 
 def clean_name(name: str) -> str:
     cleaned = " ".join(name.split())
-    if not cleaned:
-        raise InvalidMerchantNameError
+    if not 1 <= len(cleaned) <= MERCHANT_NAME_MAX_LENGTH:
+        raise InvalidMerchantNameError(MERCHANT_NAME_MAX_LENGTH)
     return cleaned
 
 
@@ -129,13 +129,6 @@ def assign_operator(
 ) -> AssignmentResult:
     merchant = merchant_or_raise(db, merchant_id)
     operator = assignable_operator(db, operator_reference)
-    existing = db.scalar(
-        select(Membership.id).where(
-            Membership.merchant_id == merchant.id, Membership.identity_id == operator.id
-        )
-    )
-    if existing is not None:
-        return AssignmentResult(describe(db, merchant), created=False)
     try:
         with db.begin_nested():
             db.add(Membership(merchant_id=merchant.id, identity_id=operator.id, created_at=now))

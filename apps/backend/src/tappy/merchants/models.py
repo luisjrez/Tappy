@@ -6,12 +6,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from tappy.platform.persistence import Base
 
+MERCHANT_NAME_MAX_LENGTH = 120
+
 
 class Merchant(Base):
     __tablename__ = "merchants"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(MERCHANT_NAME_MAX_LENGTH))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

@@ -13,5 +13,5 @@ class OperatorNotAssignableError(MerchantError):
 
 
 class InvalidMerchantNameError(MerchantError):
-    def __init__(self) -> None:
-        super().__init__("Merchant name must not be blank")
+    def __init__(self, max_length: int) -> None:
+        super().__init__(f"Merchant name must have between 1 and {max_length} characters")
