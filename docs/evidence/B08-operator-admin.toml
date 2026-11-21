@@ -1,0 +1,57 @@
+ticket = "B08"
+revision = "c3d72c4"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B08-operator-admin.md#b08-vc01--resultado-inicial-de-api-y-panel"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B08-AC01"
+use_cases = ["B08-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B08-TC01"
+mode = "automated"
+tests = [
+    "tests/identity/test_operators_api.py::test_admin_creates_active_operator_without_echoing_the_secret",
+    "tests/identity/test_operators_api.py::test_invalid_initial_credential_is_rejected_without_echo",
+    "tests/backoffice/test_operators_panel.py::test_admin_creates_operator_from_form_and_sees_it_listed",
+]
+
+[[criteria]]
+id = "B08-AC02"
+use_cases = ["B08-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B08-TC02"
+mode = "automated"
+tests = [
+    "tests/identity/test_operators_api.py::test_non_admins_cannot_create_or_deactivate_operators",
+    "tests/identity/test_operators_api.py::test_there_is_no_public_sign_up_route",
+    "tests/backoffice/test_operators_panel.py::test_anonymous_form_submission_changes_nothing",
+    "tests/backoffice/test_operators_panel.py::test_form_without_csrf_changes_nothing",
+]
+
+[[criteria]]
+id = "B08-AC03"
+use_cases = ["B08-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B08-TC03"
+mode = "automated"
+tests = [
+    "tests/identity/test_operators_api.py::test_repeated_email_is_rejected_without_duplicate",
+    "tests/identity/test_operators_api.py::test_deactivated_operator_session_stops_authorizing",
+    "tests/identity/test_operators_api.py::test_admin_identities_are_not_managed_as_operators",
+    "tests/backoffice/test_operators_panel.py::test_repeated_email_in_form_is_rejected_without_duplicate",
+    "tests/backoffice/test_operators_panel.py::test_deactivation_from_panel_revokes_operator_session",
+]
