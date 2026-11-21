@@ -6,7 +6,7 @@ Ticket: [#14](https://github.com/luisjrez/Tappy/issues/14) · Historia: [H2 #2](
 
 - Ticket, UC/AC/TC y comprobación: B06-UC01–UC03, B06-AC01–AC03, B06-TC01–TC03, B06-VC01.
 - Modalidad: **comparación** para `POST /auth/login` (contrato existente de B05 que se amplía) y **resultado inicial** para `POST /auth/refresh`, `POST /auth/logout` y el comando `deactivate`. Panel no aplica (B07).
-- Base: rama B05 `e223b5e` (PR #56, stack nativo #54); evidencia aprobada de B05 como base de comparación. Revisiones: candidato `eff5ce6` → código final `1093101` (correcciones de review). Checks y tests corresponden a `1093101`; el recorrido VC01 se capturó sobre `eff5ce6` y su comportamiento visible no cambió (las correcciones afectan a carreras concurrentes y a logout con access expirado, cubiertos por tests).
+- Base: rama B05 `e223b5e` (PR #56, stack nativo #54); evidencia aprobada de B05 como base de comparación. Revisiones: candidato `eff5ce6` → correcciones `1093101` → código final `3a07302` (lock por familia). Checks y tests corresponden a `3a07302`; el recorrido VC01 se capturó sobre `eff5ce6` y su comportamiento visible no cambió (las correcciones afectan a carreras concurrentes y a logout con access expirado, cubiertos por tests).
 - Entorno: macOS, Colima + Compose, Python 3.14.8. Fecha: 2026-11-20. Ejecutor: sesión local de desarrollo del autor del PR.
 - Actor: operador autenticado. Datos: identidades sintéticas; tokens redactados.
 
@@ -15,6 +15,7 @@ Ticket: [#14](https://github.com/luisjrez/Tappy/issues/14) · Historia: [H2 #2](
 - Política acordada: access 15 min, renovación con rotación atómica, vida máxima absoluta de 30 días desde el login (`TAPPY_SESSION_MAX_LIFETIME_SECONDS`, mínimo 3600), concentrada en `SessionPolicy.from_settings`.
 - Familia de sesión: cada login crea una familia (`family_id`, `family_expires_at`); cada renovación añade una fila nueva a la misma familia y marca la anterior con `rotated_at`. Migración `0004` (invalida las sesiones existentes al actualizar: eran de 15 minutos y no tenían refresh).
 - `renew`: un único `UPDATE … WHERE refresh_digest = … AND revoked_at IS NULL AND rotated_at IS NULL AND family_expires_at > now AND identidad activa RETURNING …`; la fila bloqueada garantiza que dos renovaciones concurrentes no emitan dos sesiones. Si el refresh ya fue rotado hace más de 10 s (`SessionPolicy.reuse_grace`) es reutilización: `RefreshTokenReuseError`, y el router revoca la familia en **su propia transacción** antes de responder 401 (la transacción de la petición se revierte con la excepción). Dentro de la ventana es una renovación concurrente duplicada: solo falla, sin revocar al ganador.
+- Serialización por familia: `renew` y `revoke_family` toman `pg_advisory_xact_lock` sobre la familia. Así un logout o una revocación concurrente con una renovación espera a que esta confirme y revoca también la sesión recién emitida (bajo READ COMMITTED, sin el lock el `UPDATE` de revocación no veía la fila nueva). La reutilización se detecta antes de tomar el lock, para que su revocación en transacción propia no espere un lock que retiene la propia petición.
 - Decisiones de alcance: la detección de reutilización aplica «no revive una sesión revocada» a un refresh robado/reenviado (práctica de OAuth 2.0 Security BCP); el comando `deactivate` es la interfaz operativa mínima para B06-UC03 hasta la gestión desde API/panel de B08; la migración `0004` borra las sesiones existentes (access de 15 min sin refresh) al actualizar.
 - `is_usable`: un access token deja de autorizar si está revocado, rotado, expirado o su identidad está inactiva.
 - `POST /auth/logout` revoca la familia completa (204); acepta un access token expirado pero nunca uno rotado o revocado, para que cerrar sesión tarde no deje vivo el refresh. `python -m tappy.identity deactivate --email …` marca la identidad inactiva y revoca todas sus sesiones (la gestión desde API/panel llega en B08).
@@ -27,7 +28,7 @@ Ticket: [#14](https://github.com/luisjrez/Tappy/issues/14) · Historia: [H2 #2](
 | --- | --- | --- | --- | --- |
 | B06-UC01 | B06-AC01 | B06-TC01 | `test_renewal_issues_working_tokens_and_retires_the_previous_pair`; `test_expired_access_token_can_be_renewed_within_the_session_lifetime` | PASS |
 | B06-UC02 | B06-AC02 | B06-TC02 | `test_session_cannot_be_renewed_past_its_absolute_lifetime` (29 renovaciones diarias; día 30 → refresh y `/auth/me` 401); `test_reused_refresh_token_fails_and_revokes_the_whole_session`; `test_logged_out_session_is_not_revived_by_renewal`; `test_concurrent_renewals_keep_exactly_one_working_session` (exactamente un éxito y el par ganador funciona); `test_expired_token_is_rejected`; `test_revoked_session_is_rejected` | PASS |
-| B06-UC03 | B06-AC03 | B06-TC03 | `test_logged_out_session_is_not_revived_by_renewal`; `test_deactivated_identity_loses_access_and_renewal` (access, refresh y nuevo login rechazados); `test_logout_with_expired_access_token_still_revokes_the_session`; `test_token_stops_working_when_identity_becomes_inactive` | PASS |
+| B06-UC03 | B06-AC03 | B06-TC03 | `test_logged_out_session_is_not_revived_by_renewal`; `test_deactivated_identity_loses_access_and_renewal` (access, refresh y nuevo login rechazados); `test_logout_with_expired_access_token_still_revokes_the_session`; `test_logout_racing_a_renewal_also_revokes_the_renewed_session` (carrera determinista: renovación sin confirmar + logout concurrente); `test_token_stops_working_when_identity_becomes_inactive` | PASS |
 
 ## TDD
 
@@ -42,6 +43,7 @@ Ticket: [#14](https://github.com/luisjrez/Tappy/issues/14) · Historia: [H2 #2](
 | Logout revoca | Logout sin revocar: falla `…logged_out…` | `revoke_family` |
 | Renovación concurrente conserva un ganador (review) | Test endurecido: `assert len(successes) == 1` fallaba porque el perdedor revocaba al ganador | Ventana de gracia `reuse_grace`; con gracia 0 el test vuelve a fallar |
 | Logout con access expirado (review) | `logout.status_code == 401` en lugar de 204 | `find_access(..., allow_expired=True)` |
+| Logout concurrente con renovación (re-revisión) | El access de la sesión renovada seguía respondiendo 200 tras el logout: `assert 200 == 401` | `lock_family` en `renew` y `revoke_family`; sin el lock en `revoke_family` el test vuelve a fallar |
 
 En las cuatro primeras filas el Red se observó retirando temporalmente el comportamiento ya implementado (el test falla por la ausencia del comportamiento, no por instalación ni sintaxis) y restaurándolo después; las dos últimas tuvieron Red antes de implementar.
 
@@ -74,7 +76,7 @@ Recorrido real (proceso `python -m tappy`, DB local en `0004`; tokens redactados
 
 El log del servidor no contiene tokens (0 coincidencias). Datos de prueba eliminados al terminar. Estado VC01: **PASS** (diferencias de login esperadas y aditivas; recorrido inicial conforme).
 
-## Checks sobre `1093101`
+## Checks sobre `3a07302`
 
 `uv run python -m quality.check`: format, lint, types, hygiene, migrations (`0004` sin drift), tests, api (7 contratos sin diferencias) en PASS; `evidence` bloquea B06 solo hasta aprobar el review.
 
@@ -103,4 +105,6 @@ Ronda 1 sobre `eff5ce6`; correcciones en `1093101`.
 | Standards | Migración `0004` destructiva | Aceptada antes de producción; registrada |
 | Standards | `SessionPolicy.from_settings` acopla a `Settings` | Se conserva: coherente con la organización modular |
 
-Re-revisión: pendiente.
+Re-revisión 1 sobre `1093101`: Standards sin pendientes; Spec, hallazgo de baja severidad: logout/revocación concurrente con una renovación podía dejar viva la sesión nueva (READ COMMITTED). Corregido en `3a07302` con Red/Green (lock consultivo por familia). Durante la corrección, tomar el lock antes de detectar la reutilización provocaba que la revocación en transacción propia esperara el lock de la propia petición (la suite se colgó); se resolvió detectando la reutilización antes del lock.
+
+Re-revisión 2: pendiente.
