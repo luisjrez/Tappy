@@ -1,5 +1,5 @@
 ticket = "B08"
-revision = "c3d72c4"
+revision = "8610294"
 
 [vc01]
 status = "PASS"
@@ -38,6 +38,7 @@ tests = [
     "tests/identity/test_operators_api.py::test_there_is_no_public_sign_up_route",
     "tests/backoffice/test_operators_panel.py::test_anonymous_form_submission_changes_nothing",
     "tests/backoffice/test_operators_panel.py::test_form_without_csrf_changes_nothing",
+    "tests/backoffice/test_operators_panel.py::test_anonymous_deactivation_changes_nothing",
 ]
 
 [[criteria]]
@@ -54,4 +55,5 @@ tests = [
     "tests/identity/test_operators_api.py::test_admin_identities_are_not_managed_as_operators",
     "tests/backoffice/test_operators_panel.py::test_repeated_email_in_form_is_rejected_without_duplicate",
     "tests/backoffice/test_operators_panel.py::test_deactivation_from_panel_revokes_operator_session",
+    "tests/backoffice/test_operators_panel.py::test_reloading_after_creation_does_not_resubmit",
 ]
