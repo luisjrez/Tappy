@@ -1,0 +1,20 @@
+class IdentityError(Exception):
+    pass
+
+
+class PasswordPolicyError(IdentityError):
+    pass
+
+
+class InvalidEmailError(IdentityError):
+    pass
+
+
+class IdentityAlreadyExistsError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("An identity with this email already exists")
+
+
+class IdentityNotFoundError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("No identity with this email")

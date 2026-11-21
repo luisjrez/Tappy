@@ -13,6 +13,7 @@ UNREACHABLE_DATABASE_URL = (
     f"postgresql+psycopg://tappy:{UNREACHABLE_DATABASE_PASSWORD}@127.0.0.1:1/tappy"
 )
 TAPPY_COMMAND = (sys.executable, "-m", "tappy")
+IDENTITY_COMMAND = (sys.executable, "-m", "tappy.identity")
 
 
 def build_settings(
@@ -55,3 +56,25 @@ def free_port() -> int:
         probe.bind(("127.0.0.1", 0))
         port: int = probe.getsockname()[1]
         return port
+
+
+def app_environment(database_url: str) -> dict[str, str]:
+    return {
+        "TAPPY_ENVIRONMENT": "test",
+        "TAPPY_SECRET_KEY": VALID_SECRET,
+        "TAPPY_DATABASE_URL": database_url,
+    }
+
+
+def run_identity(
+    database_url: str, *arguments: str, stdin: str = ""
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [*IDENTITY_COMMAND, *arguments],
+        env=isolated_environment(app_environment(database_url)),
+        input=stdin,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )

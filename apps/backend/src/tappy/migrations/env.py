@@ -4,8 +4,8 @@ from alembic import context
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.pool import NullPool
 
+from tappy.models import metadata
 from tappy.platform.config import load_settings
-from tappy.platform.persistence import Base
 
 
 def database_url() -> str:
@@ -16,7 +16,7 @@ def database_url() -> str:
 
 
 def target_metadata() -> MetaData:
-    configured = context.config.attributes.get("target_metadata", Base.metadata)
+    configured = context.config.attributes.get("target_metadata", metadata)
     if not isinstance(configured, MetaData):
         raise TypeError("target_metadata must be SQLAlchemy MetaData")
     return configured
