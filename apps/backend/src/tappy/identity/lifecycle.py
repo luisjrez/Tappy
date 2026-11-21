@@ -9,10 +9,15 @@ from tappy.identity.provisioning import IdentitySummary, by_email
 from tappy.identity.sessions import revoke_identity_sessions
 
 
-def deactivate_identity(db: Session, email: str, now: datetime) -> IdentitySummary:
-    identity = db.scalar(select(Identity).where(by_email(email)).with_for_update())
+def lock_identity(db: Session, email: str) -> Identity:
+    identity = db.scalar(select(Identity).where(by_email(email)).with_for_update(key_share=True))
     if identity is None:
         raise IdentityNotFoundError
+    return identity
+
+
+def deactivate_identity(db: Session, email: str, now: datetime) -> IdentitySummary:
+    identity = lock_identity(db, email)
     identity.status = IdentityStatus.INACTIVE
     revoke_identity_sessions(db, identity.id, now)
     db.flush()

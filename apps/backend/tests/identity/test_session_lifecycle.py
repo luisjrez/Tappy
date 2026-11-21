@@ -7,7 +7,9 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from sqlalchemy import text
 
+from tappy.identity.lifecycle import lock_identity
 from tappy.identity.sessions import SessionPolicy, log_out, renew
 from tappy.main import create_app
 from tappy.platform.database import Database
@@ -16,6 +18,7 @@ from tests.support import MovableClock, build_settings, create_identity, run_ide
 EMAIL = "operadora@tappy.example"
 PASSWORD = "mostrador seguro 2026"
 START = datetime(2026, 11, 20, 12, 0, tzinfo=UTC)
+POLICY = SessionPolicy(access_lifetime=timedelta(minutes=15), max_lifetime=timedelta(days=30))
 
 
 @pytest.fixture
@@ -184,3 +187,23 @@ def test_logout_racing_a_renewal_also_revokes_the_renewed_session(
 
     assert me_status(client, issued.access_token) == HTTPStatus.UNAUTHORIZED
     assert refresh(client, issued.refresh_token).status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_locking_an_identity_for_deactivation_does_not_block_new_sessions(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    tokens = log_in(client)
+    database = Database.from_settings(build_settings(database_url=migrated_database_url))
+    deactivation = database.session_factory()
+    deactivation.begin()
+    lock_identity(deactivation, EMAIL)
+    try:
+        with database.transaction() as renewal:
+            renewal.execute(text("SET LOCAL lock_timeout = '2s'"))
+            issued = renew(renewal, tokens["refresh_token"], START, POLICY)
+    finally:
+        deactivation.rollback()
+        deactivation.close()
+        database.dispose()
+
+    assert me_status(client, issued.access_token) == HTTPStatus.OK
