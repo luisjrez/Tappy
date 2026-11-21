@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import ColumnElement, select, update
+from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.orm import Session
 
 from tappy.identity.errors import IdentityError, InvalidEmailError
@@ -12,6 +12,8 @@ from tappy.identity.models import AccessSession, Identity, IdentityStatus
 from tappy.identity.passwords import UNKNOWN_IDENTITY_HASH, verify_password
 from tappy.identity.provisioning import IdentitySummary, by_email
 from tappy.platform.config import Settings
+
+ADVISORY_KEY_MASK = (1 << 63) - 1
 
 
 class InvalidCredentialsError(IdentityError):
@@ -115,7 +117,12 @@ def revoke_sessions(db: Session, scope: ColumnElement[bool], now: datetime) -> N
     )
 
 
+def lock_family(db: Session, family_id: uuid.UUID) -> None:
+    db.execute(select(func.pg_advisory_xact_lock(family_id.int & ADVISORY_KEY_MASK)))
+
+
 def revoke_family(db: Session, family_id: uuid.UUID, now: datetime) -> None:
+    lock_family(db, family_id)
     revoke_sessions(db, AccessSession.family_id == family_id, now)
 
 
@@ -125,6 +132,16 @@ def revoke_identity_sessions(db: Session, identity_id: uuid.UUID, now: datetime)
 
 def renew(db: Session, refresh_token: str, now: datetime, policy: SessionPolicy) -> IssuedSession:
     refresh_digest = digest(refresh_token)
+    presented = db.execute(
+        select(AccessSession.family_id, AccessSession.rotated_at).where(
+            AccessSession.refresh_digest == refresh_digest
+        )
+    ).one_or_none()
+    if presented is None:
+        raise InvalidRefreshTokenError
+    if presented.rotated_at is not None and presented.rotated_at <= now - policy.reuse_grace:
+        raise RefreshTokenReuseError(presented.family_id)
+    lock_family(db, presented.family_id)
     claimed = db.execute(
         update(AccessSession)
         .where(
@@ -141,18 +158,10 @@ def renew(db: Session, refresh_token: str, now: datetime, policy: SessionPolicy)
             AccessSession.identity_id, AccessSession.family_id, AccessSession.family_expires_at
         )
     ).one_or_none()
-    if claimed is not None:
-        family = SessionFamily(claimed.identity_id, claimed.family_id, claimed.family_expires_at)
-        return issue_session(db, family, now, policy)
-    presented = db.execute(
-        select(AccessSession.family_id, AccessSession.rotated_at).where(
-            AccessSession.refresh_digest == refresh_digest
-        )
-    ).one_or_none()
-    rotated_at = None if presented is None else presented.rotated_at
-    if presented is not None and rotated_at is not None and rotated_at <= now - policy.reuse_grace:
-        raise RefreshTokenReuseError(presented.family_id)
-    raise InvalidRefreshTokenError
+    if claimed is None:
+        raise InvalidRefreshTokenError
+    family = SessionFamily(claimed.identity_id, claimed.family_id, claimed.family_expires_at)
+    return issue_session(db, family, now, policy)
 
 
 def is_current(identity: Identity, access: AccessSession) -> bool:

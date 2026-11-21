@@ -1,3 +1,4 @@
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -7,7 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
+from tappy.identity.sessions import SessionPolicy, log_out, renew
 from tappy.main import create_app
+from tappy.platform.database import Database
 from tests.support import MovableClock, build_settings, create_identity, run_identity
 
 EMAIL = "operadora@tappy.example"
@@ -154,3 +157,30 @@ def test_logout_with_expired_access_token_still_revokes_the_session(
 
     assert logout.status_code == HTTPStatus.NO_CONTENT
     assert refresh(client, tokens["refresh_token"]).status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_logout_racing_a_renewal_also_revokes_the_renewed_session(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    tokens = log_in(client)
+    settings = build_settings(database_url=migrated_database_url)
+    database = Database.from_settings(settings)
+    policy = SessionPolicy.from_settings(settings)
+    renewal = database.session_factory()
+    renewal.begin()
+    issued = renew(renewal, tokens["refresh_token"], START, policy)
+
+    def concurrent_logout() -> None:
+        with database.transaction() as session:
+            log_out(session, tokens["access_token"], START)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        logout = pool.submit(concurrent_logout)
+        time.sleep(0.5)
+        renewal.commit()
+        logout.result(timeout=10)
+    renewal.close()
+    database.dispose()
+
+    assert me_status(client, issued.access_token) == HTTPStatus.UNAUTHORIZED
+    assert refresh(client, issued.refresh_token).status_code == HTTPStatus.UNAUTHORIZED
