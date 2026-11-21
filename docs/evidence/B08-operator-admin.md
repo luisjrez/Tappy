@@ -96,4 +96,4 @@ Ronda 1 sobre `c3d72c4`, sin bloqueantes; correcciones en `8610294`.
 | Spec | Credencial inicial activa de inmediato | Lectura documentada en Diseño (procedimiento documentado, sin predeterminadas) |
 | Spec | «Retirar CRUD genérico» sin No aplica | No aplica justificado en Diseño |
 
-Re-revisión: pendiente.
+Re-revisión sobre `8610294`: sin hallazgos pendientes en ambos ejes (guard cubre las cuatro rutas y el esquema OpenAPI; PRG con flash sin contraseñas; sin dependencias del texto anterior del 404). Manifiesto aprobado.

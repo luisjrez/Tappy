@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B08-operator-admin.md#b08-vc01--resultado-inicial-de-api-y-panel"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
