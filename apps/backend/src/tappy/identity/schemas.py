@@ -13,10 +13,18 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+class RefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    refresh_token: str = Field(min_length=1, max_length=256)
+
+
 class SessionResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"  # noqa: S105
     expires_at: datetime
+    refresh_token: str
+    refresh_expires_at: datetime
 
 
 class IdentityResponse(BaseModel):

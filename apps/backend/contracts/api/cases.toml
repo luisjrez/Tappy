@@ -28,3 +28,16 @@ name = "me-unauthenticated"
 method = "GET"
 path = "/auth/me"
 database = "migrated"
+
+[[cases]]
+name = "refresh-rejected"
+method = "POST"
+path = "/auth/refresh"
+database = "migrated"
+body = { refresh_token = "unknown-refresh-token" }
+
+[[cases]]
+name = "logout-unauthenticated"
+method = "POST"
+path = "/auth/logout"
+database = "migrated"

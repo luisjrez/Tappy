@@ -4,12 +4,14 @@ import sys
 from collections.abc import Callable, Sequence
 
 from tappy.identity.errors import IdentityError, PasswordPolicyError
+from tappy.identity.lifecycle import deactivate_identity
 from tappy.identity.provisioning import (
     IdentitySummary,
     find_identity,
     normalize_email,
     provision_admin,
 )
+from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, load_settings
 from tappy.platform.database import Database
 
@@ -44,12 +46,22 @@ def bootstrap_admin(database: Database, email: str) -> str:
     return "Administrator provisioned\n" + describe(summary)
 
 
+def deactivate(database: Database, email: str) -> str:
+    with database.transaction() as session:
+        summary = deactivate_identity(session, email, SystemClock().now())
+    return "Identity deactivated; its sessions were revoked\n" + describe(summary)
+
+
 def show(database: Database, email: str) -> str:
     with database.transaction() as session:
         return describe(find_identity(session, email))
 
 
-COMMANDS: dict[str, Handler] = {"bootstrap-admin": bootstrap_admin, "show": show}
+COMMANDS: dict[str, Handler] = {
+    "bootstrap-admin": bootstrap_admin,
+    "deactivate": deactivate,
+    "show": show,
+}
 
 
 def parse(arguments: Sequence[str]) -> argparse.Namespace:

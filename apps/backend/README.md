@@ -48,15 +48,17 @@ Passwords are normalized with Unicode NFKC, need 12 to 128 characters and are re
 
 ## Session policy
 
-`POST /auth/login` returns an opaque bearer token; only its SHA-256 digest is stored. `GET /auth/me` returns the identity that owns the token. Every rejected login (unknown email, wrong password, inactive identity) gets the same `401 Invalid email or password`.
+`POST /auth/login` returns an opaque access token and an opaque refresh token; only their SHA-256 digests are stored. Every rejected login (unknown email, wrong password, inactive identity) gets the same `401 Invalid email or password`. `GET /auth/me` returns the identity that owns the access token.
 
-| Setting | Default | Ticket |
-| --- | --- | --- |
-| `TAPPY_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes, minimum 60) | B05 |
-| Renewal with atomic rotation | — | B06 |
-| Absolute session lifetime | 30 days | B06 |
+| Setting | Default |
+| --- | --- |
+| `TAPPY_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes, minimum 60) |
+| `TAPPY_SESSION_MAX_LIFETIME_SECONDS` | `2592000` (30 days, minimum 3600) |
 
-Logout and identity deactivation revoke access immediately (B06); a token of an inactive identity is already rejected.
+- `POST /auth/refresh {"refresh_token": …}` rotates atomically: it returns a new pair and the previous access and refresh tokens stop working. Renewal never extends the session beyond its absolute lifetime, counted from login.
+- Presenting a refresh token that was already rotated (reuse) fails and revokes the whole session.
+- `POST /auth/logout` with the bearer token revokes the whole session: neither its access token nor its refresh token work afterwards.
+- `uv run python -m tappy.identity deactivate --email …` marks the identity inactive and revokes all its sessions.
 
 ## Checks
 
