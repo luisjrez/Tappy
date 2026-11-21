@@ -1,5 +1,5 @@
 ticket = "B05"
-revision = "7476af9"
+revision = "4f1700f"
 
 [vc01]
 status = "PASS"
@@ -22,6 +22,7 @@ mode = "automated"
 tests = [
     "tests/identity/test_login.py::test_active_operator_logs_in_and_reads_own_identity",
     "tests/identity/test_login.py::test_only_a_digest_of_the_token_is_stored",
+    "tests/identity/test_login.py::test_active_administrator_logs_in",
 ]
 
 [[criteria]]
@@ -46,4 +47,5 @@ tests = [
     "tests/identity/test_login.py::test_requests_without_valid_token_are_rejected",
     "tests/identity/test_login.py::test_each_token_only_reveals_its_own_identity",
     "tests/identity/test_login.py::test_expired_token_is_rejected",
+    "tests/identity/test_login.py::test_token_stops_working_when_identity_becomes_inactive",
 ]
