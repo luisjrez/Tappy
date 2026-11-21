@@ -85,7 +85,7 @@ Capturas tomadas sobre `f14bf51`; siguen vigentes en `c1cdfaf`: entre ambas revi
 
 ## Checks
 
-`uv run python -m quality.check` sobre `c1cdfaf`: PASS format, lint, types (mypy strict, 88 archivos), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (176 passed, 0 fallos, Postgres real aislado), api (11 contratos sin diferencias). `evidence` queda en FAIL solo por la review pendiente. Mutaciones comprobadas: sin bloqueo del comercio → falla la carrera; `extra="ignore"` → falla TC02.
+`uv run python -m quality.check` sobre `c1cdfaf`: PASS format, lint, types (mypy strict, 88 archivos), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (176 passed, 0 fallos, Postgres real aislado), api (11 contratos sin diferencias). `evidence` en PASS tras registrar la review aprobada. Mutaciones comprobadas: sin bloqueo del comercio → falla la carrera; `extra="ignore"` → falla TC02.
 
 ## Supresiones
 
@@ -97,4 +97,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `f14bf51` + `bad4db5` | CHANGES_REQUESTED | CHANGES_REQUESTED | Hard: el 422 por defecto reflejaba la CLABE (campo faltante o CLABE numérica). Smells: restricción del proveedor sin nombre explícito, normalización de texto duplicada, búsqueda de receptor repetida. Spec: aserción «Enabled» que nunca fallaba; arrastre de TC03 solo en la evidencia; regla «sin receptor» fuera de `issuance_block`; metadatos de tema/escala |
+| 2 | `c1cdfaf` + `887f6e3` | APPROVE | APPROVE | Sin hallazgos; handler global aceptado como cambio transversal documentado antes/después |
+
+Hallazgos pendientes: 0.
