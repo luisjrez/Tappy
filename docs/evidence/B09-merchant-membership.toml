@@ -1,0 +1,52 @@
+ticket = "B09"
+revision = "7758b73"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B09-merchant-membership.md#b09-vc01--resultado-inicial-de-api-y-panel"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B09-AC01"
+use_cases = ["B09-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B09-TC01"
+mode = "automated"
+tests = [
+    "tests/merchants/test_merchants_api.py::test_operator_sees_only_the_merchant_it_belongs_to",
+    "tests/merchants/test_merchants_api.py::test_own_merchant_is_readable_and_anonymous_gets_nothing",
+    "tests/backoffice/test_merchants_panel.py::test_admin_creates_merchant_and_assigns_operator_from_panel",
+]
+
+[[criteria]]
+id = "B09-AC02"
+use_cases = ["B09-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B09-TC02"
+mode = "automated"
+tests = [
+    "tests/merchants/test_merchants_api.py::test_operator_cannot_read_or_modify_a_foreign_merchant",
+    "tests/backoffice/test_merchants_panel.py::test_merchant_form_requires_csrf_and_an_admin",
+]
+
+[[criteria]]
+id = "B09-AC03"
+use_cases = ["B09-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B09-TC03"
+mode = "automated"
+tests = [
+    "tests/merchants/test_merchants_api.py::test_repeated_assignment_keeps_one_original_membership",
+    "tests/merchants/test_merchants_api.py::test_only_active_operators_can_be_assigned",
+]
