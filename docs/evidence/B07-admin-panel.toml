@@ -1,5 +1,5 @@
 ticket = "B07"
-revision = "4071ff8"
+revision = "31149bd"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B07-admin-panel.md#b07-vc01--resultado-inicial-del-panel"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -39,6 +39,7 @@ tests = [
     "tests/backoffice/test_admin_access.py::test_api_bearer_token_does_not_open_panel",
     "tests/backoffice/test_admin_access.py::test_revoked_panel_session_loses_access",
     "tests/backoffice/test_admin_access.py::test_demoted_or_deactivated_admin_loses_panel",
+    "tests/backoffice/test_admin_access.py::test_demoted_admin_session_is_revoked_without_renewal",
     "tests/backoffice/test_admin_access.py::test_replayed_panel_cookie_revokes_the_whole_session",
     "tests/backoffice/test_admin_access.py::test_anonymous_logout_changes_nothing",
     "tests/backoffice/test_admin_access.py::test_failed_panel_login_keeps_emails_out_of_logs",
