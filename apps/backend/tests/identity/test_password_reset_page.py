@@ -35,7 +35,7 @@ def test_reset_page_is_self_contained_and_never_leaks_the_link(client: TestClien
     page = client.get("/password-reset")
 
     assert page.status_code == HTTPStatus.OK
-    assert page.headers["referrer-policy"] == "no-referrer"
+    assert page.headers["referrer-policy"] == "same-origin"
     assert "no-store" in page.headers["cache-control"]
     assert "default-src 'none'" in page.headers["content-security-policy"]
     assert re.search(r'(src|href)="https?://', page.text) is None
@@ -134,3 +134,32 @@ def test_oversized_form_fields_are_rejected(client: TestClient, settings: Settin
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert "x" * 300 not in response.text
+
+
+@pytest.mark.parametrize("origin", ["null", "https://evil.example"])
+def test_null_or_foreign_origin_is_rejected(
+    client: TestClient, settings: Settings, migrated_database_url: str, origin: str
+) -> None:
+    token = recovery_token(client, settings)
+
+    response = client.post(
+        "/password-reset",
+        data={"token": token, "new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD},
+        headers={"Origin": origin},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert scalar(migrated_database_url, "SELECT consumed_at FROM password_reset_requests") is None
+
+
+def test_same_origin_browser_submission_is_accepted(client: TestClient, settings: Settings) -> None:
+    token = recovery_token(client, settings)
+
+    response = client.post(
+        "/password-reset",
+        data={"token": token, "new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD},
+        headers={"Origin": settings.public_base_url},
+    )
+
+    assert response.status_code == HTTPStatus.OK
+    assert "Your password was changed" in response.text

@@ -49,7 +49,7 @@ def page(request: Request, recovery: RecoveryDependency, state: PageState) -> HT
         },
         status_code=state.status_code,
     )
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Referrer-Policy"] = "same-origin"
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Content-Security-Policy"] = (
