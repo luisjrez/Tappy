@@ -8,7 +8,7 @@ Ticket: [#49](https://github.com/luisjrez/Tappy/issues/49) · Historia: [H2 #2](
 
 - Ticket, UC/AC/TC y comprobación: B41-UC01–UC05, B41-AC01–AC05, B41-TC01–TC06, B41-VC01.
 - Modalidad: **resultado inicial** (endpoint, worker, formulario del panel y plantilla de login nuevos). La vista de login de B07 cambia solo por el enlace «Forgot your password?» (cambio esperado). Contratos existentes sin diferencias; nuevo `password-reset-request` (202) aprobado en `f02a52a` (mensaje «may be sent»).
-- Base: rama B08 `8610294` (PR #59). Revisiones: candidato `f30a5a5` → código final `f02a52a` (rediseño tras review). Tests, checks y VC01 corresponden a `f02a52a`.
+- Base: rama B08 `8610294` (PR #59). Revisiones: candidato `f30a5a5` → rediseño `f02a52a` → código final `cbe0679` (menores de la re-revisión). Tests y checks corresponden a `cbe0679`; el VC01 se capturó sobre `f02a52a` y su comportamiento visible no cambió.
 - Entorno: macOS, Colima + Compose (Postgres 18.6, Mailpit v1.33.0), Python 3.14.8, cryptography 50.0.2; Chrome (DevTools MCP), 1280×800. Fecha: 2026-11-20. Ejecutor: sesión local de desarrollo del autor del PR.
 - Datos: identidades sintéticas `@tappy.example`; tokens redactados en esta página.
 
@@ -81,9 +81,9 @@ Panel:
 
 Logs del servidor sin `token=` (0 coincidencias). Datos y buzón limpiados al terminar. Estado VC01: **PASS** (resultado inicial; la entrega real es TC06, BLOCKED).
 
-## Checks sobre `f02a52a`
+## Checks sobre `cbe0679`
 
-`uv run python -m quality.check`: format, lint, types, hygiene, migrations (`0005` sin drift), tests, api (9 contratos sin diferencias) en PASS; `evidence`: B01–B08 APPROVED, B41 BLOCKED (80 %, TC06 + review).
+`uv run python -m quality.check`: format, lint, types, hygiene, migrations (`0005` sin drift), tests (`166 passed`), api (9 contratos sin diferencias) en PASS; `evidence`: B01–B08 APPROVED, B41 BLOCKED (80 %, TC06 + review).
 
 ## Supresiones
 
@@ -116,4 +116,4 @@ Ronda 1 sobre `f30a5a5`, sin violaciones duras; correcciones en `f02a52a`.
 | Standards | Digests de límites sin clave; formulario sin límite de longitud y aceptaba archivos | HMAC con clave derivada; límite 254 y solo texto |
 | Standards | `RecoveryService.submit` como Middle Man | Se conserva: agrupa política y sellador para API, panel y worker |
 
-Re-revisión: pendiente.
+Re-revisión sobre `f02a52a`: sin hallazgos bloqueantes en ambos ejes (sin señal de enumeración; entrega por correo aislada; fragmento; HMAC; sin correos en claro fuera de `identities` y destinatario del outbox). Menores aplicados en `cbe0679` con Red/Green: un correo que ya agotó intentos (caídas repetidas a mitad de envío) se marca `failed` sin reenviar (`test_exhausted_email_is_not_sent_again_after_repeated_crashes`); cada trabajo de recuperación corre en su savepoint y un error de DB en uno no frena al resto; el worker borra intentos fuera de la ventana (`test_worker_discards_attempts_outside_the_window`). Ambos ejes aprobados. **B41 sigue BLOCKED por TC06** (80 %).
