@@ -37,11 +37,24 @@ Missing or invalid configuration stops startup with the list of invalid variable
 
 ## Checks
 
-Requires the Compose services running and the variables from `.env` exported (the persistence test also drives `docker compose`).
+One command runs the whole battery locally and in CI (`.github/workflows/backend.yml`). It needs the Compose services running and the variables from `.env` exported:
 
 ```sh
-uv run ruff format --check .
-uv run ruff check .
-uv run mypy
-uv run pytest
+docker compose up -d --wait
+set -a; source .env; set +a
+uv run python -m quality.check
 ```
+
+Steps, all executed even after a failure; the command exits non-zero if any fails:
+
+| Step | Command |
+| --- | --- |
+| format | `ruff format --check .` |
+| lint | `ruff check --no-fix .` |
+| types | `mypy` (strict) |
+| hygiene | `python -m quality.hygiene src tools tests` — flags comments by token, allows only `noqa`, `type: ignore[...]` and `pragma: no cover` directives |
+| migrations | `python -m quality.migrations` — disposable database: upgrade, downgrade to base, upgrade, and model drift check |
+| tests | `pytest --junitxml=reports/junit.xml` |
+| evidence | `python -m quality.evidence ../../docs/evidence --junit=reports/junit.xml` — evaluates each ticket manifest (`docs/evidence/*.toml`): completeness = PASS AC / applicable AC without rounding, ≥97%, every mandatory AC passing, VC01 PASS or justified N/A, zero pending review findings |
+
+`--steps format,lint` runs a subset. `python -m quality.api_diff baseline.json current.json --normalize body.id` compares two API snapshots after declared normalization (relations between normalized values are preserved, list order is significant) and exits 1 on any difference; it never writes the baseline.

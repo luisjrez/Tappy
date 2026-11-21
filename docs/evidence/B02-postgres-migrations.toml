@@ -1,0 +1,48 @@
+ticket = "B02"
+
+revision = "ccf8eed"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B02-postgres-migrations.md#api--resultado-inicial"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B02-AC01"
+use_cases = ["B02-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B02-TC01"
+mode = "automated"
+tests = ["tests/test_readiness.py::test_readiness_turns_ready_after_migrating_an_empty_database"]
+
+[[criteria]]
+id = "B02-AC02"
+use_cases = ["B02-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B02-TC02"
+mode = "automated"
+tests = [
+    "tests/test_persistence.py::test_readiness_turns_unavailable_when_local_postgres_stops",
+    "tests/test_readiness.py::test_readiness_reports_unavailable_database_without_internal_details",
+]
+
+[[criteria]]
+id = "B02-AC03"
+use_cases = ["B02-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B02-TC03"
+mode = "automated"
+tests = [
+    "tests/test_persistence.py::test_local_data_survives_database_recreation_and_stays_out_of_test_server",
+]

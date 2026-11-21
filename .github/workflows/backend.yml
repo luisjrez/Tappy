@@ -1,0 +1,45 @@
+name: backend
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/backend
+    env:
+      TAPPY_ENVIRONMENT: ci
+      TAPPY_SECRET_KEY: ci-synthetic-secret-key-0123456789abcdef
+      TAPPY_POSTGRES_PASSWORD: ci-synthetic-local-password
+      TAPPY_POSTGRES_PORT: "5482"
+      TAPPY_DATABASE_URL: postgresql+psycopg://tappy:ci-synthetic-local-password@127.0.0.1:5482/tappy
+      TAPPY_TEST_POSTGRES_PASSWORD: ci-synthetic-test-password
+      TAPPY_TEST_POSTGRES_PORT: "5483"
+      TAPPY_TEST_DATABASE_URL: postgresql+psycopg://tappy_test:ci-synthetic-test-password@127.0.0.1:5483/postgres
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: docker compose up --detach --wait
+      - run: uv run python -m quality.check
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-reports
+          path: apps/backend/reports/
+          if-no-files-found: warn

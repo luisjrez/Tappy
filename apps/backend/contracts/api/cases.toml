@@ -1,0 +1,17 @@
+[[cases]]
+name = "health"
+method = "GET"
+path = "/health"
+database = "unreachable"
+
+[[cases]]
+name = "ready-migrated"
+method = "GET"
+path = "/ready"
+database = "migrated"
+
+[[cases]]
+name = "ready-unreachable"
+method = "GET"
+path = "/ready"
+database = "unreachable"
