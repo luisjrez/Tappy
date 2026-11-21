@@ -1,5 +1,5 @@
-import hashlib
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select, update
@@ -7,19 +7,39 @@ from sqlalchemy.orm import Session
 
 from tappy.identity.errors import InvalidResetLinkError
 from tappy.identity.models import Identity, IdentityStatus
-from tappy.identity.passwords import hash_password
+from tappy.identity.passwords import PasswordPolicy
 from tappy.identity.provisioning import IdentitySummary
 from tappy.identity.recovery_models import PasswordResetRequest
 from tappy.identity.sessions import revoke_identity_sessions
+from tappy.identity.tokens import token_digest
 
 PasswordChangedNotice = Callable[[Session, Identity, datetime], None]
 
 
-def pending_reset(db: Session, token: str, now: datetime) -> PasswordResetRequest:
+@dataclass(frozen=True)
+class PasswordChange:
+    token: str
+    new_password: str
+    policy: PasswordPolicy
+
+
+def lock_owner(db: Session, digest: str) -> Identity:
+    identity = db.scalar(
+        select(Identity)
+        .join(PasswordResetRequest, PasswordResetRequest.identity_id == Identity.id)
+        .where(PasswordResetRequest.token_digest == digest)
+        .with_for_update(of=Identity, key_share=True)
+    )
+    if identity is None or identity.status is not IdentityStatus.ACTIVE:
+        raise InvalidResetLinkError
+    return identity
+
+
+def pending_reset(db: Session, digest: str, now: datetime) -> PasswordResetRequest:
     reset = db.scalar(
         select(PasswordResetRequest)
         .where(
-            PasswordResetRequest.token_digest == hashlib.sha256(token.encode()).hexdigest(),
+            PasswordResetRequest.token_digest == digest,
             PasswordResetRequest.consumed_at.is_(None),
             PasswordResetRequest.invalidated_at.is_(None),
             PasswordResetRequest.expires_at > now,
@@ -29,15 +49,6 @@ def pending_reset(db: Session, token: str, now: datetime) -> PasswordResetReques
     if reset is None:
         raise InvalidResetLinkError
     return reset
-
-
-def active_owner(db: Session, reset: PasswordResetRequest) -> Identity:
-    identity = db.scalar(
-        select(Identity).where(Identity.id == reset.identity_id).with_for_update(key_share=True)
-    )
-    if identity is None or identity.status is not IdentityStatus.ACTIVE:
-        raise InvalidResetLinkError
-    return identity
 
 
 def invalidate_other_links(db: Session, reset: PasswordResetRequest, now: datetime) -> None:
@@ -54,11 +65,12 @@ def invalidate_other_links(db: Session, reset: PasswordResetRequest, now: dateti
 
 
 def confirm_password_reset(
-    db: Session, token: str, new_password: str, now: datetime, notice: PasswordChangedNotice
+    db: Session, change: PasswordChange, now: datetime, notice: PasswordChangedNotice
 ) -> IdentitySummary:
-    reset = pending_reset(db, token, now)
-    identity = active_owner(db, reset)
-    identity.password_hash = hash_password(new_password)
+    digest = token_digest(change.token)
+    identity = lock_owner(db, digest)
+    reset = pending_reset(db, digest, now)
+    identity.password_hash = change.policy.hash(change.new_password)
     reset.consumed_at = now
     invalidate_other_links(db, reset, now)
     revoke_identity_sessions(db, identity.id, now)

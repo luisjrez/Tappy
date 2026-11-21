@@ -1,4 +1,3 @@
-import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
@@ -11,6 +10,7 @@ from tappy.identity.errors import IdentityError, InvalidEmailError
 from tappy.identity.models import AccessSession, Identity, IdentityStatus, Role
 from tappy.identity.passwords import UNKNOWN_IDENTITY_HASH, verify_password
 from tappy.identity.provisioning import IdentitySummary, by_email
+from tappy.identity.tokens import token_digest
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
 
@@ -94,10 +94,6 @@ class IssuedSession:
         return SessionTokens(self.access_token, self.refresh_token)
 
 
-def digest(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
 def find_active_identity(
     db: Session, credentials: LoginCredentials, required_role: Role | None = None
 ) -> Identity:
@@ -122,8 +118,8 @@ def issue_session(
     access = AccessSession(
         identity_id=family.identity_id,
         family_id=family.family_id,
-        token_digest=digest(access_token),
-        refresh_digest=digest(refresh_token),
+        token_digest=token_digest(access_token),
+        refresh_digest=token_digest(refresh_token),
         created_at=now,
         expires_at=min(now + policy.access_lifetime, family.expires_at),
         family_expires_at=family.expires_at,
@@ -167,7 +163,7 @@ def revoke_identity_sessions(db: Session, identity_id: uuid.UUID, now: datetime)
 
 
 def renew(db: Session, refresh_token: str, now: datetime, policy: SessionPolicy) -> IssuedSession:
-    refresh_digest = digest(refresh_token)
+    refresh_digest = token_digest(refresh_token)
     presented = db.execute(
         select(AccessSession.family_id, AccessSession.rotated_at).where(
             AccessSession.refresh_digest == refresh_digest
@@ -214,7 +210,7 @@ def find_access(
     row = db.execute(
         select(Identity, AccessSession)
         .join(AccessSession, AccessSession.identity_id == Identity.id)
-        .where(AccessSession.token_digest == digest(token))
+        .where(AccessSession.token_digest == token_digest(token))
     ).one_or_none()
     if row is None or not is_current(row.Identity, row.AccessSession):
         raise InvalidAccessTokenError

@@ -44,7 +44,7 @@ uv run python -m tappy.identity bootstrap-admin --email admin@example.com
 uv run python -m tappy.identity show --email admin@example.com
 ```
 
-Passwords are normalized with Unicode NFKC, need 12 to 128 characters and are rejected when they appear in a short list of common passwords; they are stored as Argon2id hashes. Running the command again for an existing email (compared case-insensitively) changes nothing and exits with an error.
+Passwords are normalized with Unicode NFKC, need between `TAPPY_PASSWORD_MIN_LENGTH` (default 12) and `TAPPY_PASSWORD_MAX_LENGTH` (default 128) characters and are rejected when they appear in a short list of common passwords; they are stored as Argon2id hashes. Running the command again for an existing email (compared case-insensitively) changes nothing and exits with an error.
 
 ## Session policy
 
@@ -88,7 +88,7 @@ uv run python -m tappy.notifications deliver
 
 - `GET /password-reset` serves a self-contained page (no third-party resources, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, strict nonce-based CSP). Opening it never consumes the link: a small script reads the token from the URL fragment, removes it from the address bar and fills the form.
 - The form (`POST /password-reset`) and the API for mobile (`POST /auth/password-reset/confirm {"token", "new_password"}` → `204`) share one atomic use case: the link must be unused, not invalidated, unexpired and belong to an active identity; the new password must pass the same policy as sign-in. Then, in one transaction, the password hash changes, the link is consumed, every other pending link is invalidated, all sessions (API and panel) are revoked and a "password changed" notice (without the password) is queued. Nothing is signed in automatically.
-- Invalid, expired or reused links answer `400` "This link is invalid or has expired"; a policy violation answers `422` and keeps the link usable. Extra fields such as `role` or `email` are rejected (`422`). Concurrent confirmations of the same link succeed at most once.
+- Invalid, expired or reused links answer `400` "This link is invalid or has expired"; a policy violation answers `422` and keeps the link usable. Extra fields such as `role` or `email` are rejected (`422`). Concurrent confirmations succeed at most once, even across different pending links of the same identity (the identity row is locked first). The form also rejects a foreign `Origin` header (`403`) and oversized fields.
 
 ## Back office
 

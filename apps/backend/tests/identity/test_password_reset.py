@@ -10,27 +10,26 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 from sqlalchemy.orm import Session
 
-from tappy.identity.models import Identity
-from tappy.identity.reset import confirm_password_reset
+from tappy.identity.models import Identity, Role
+from tappy.identity.passwords import PasswordPolicy
+from tappy.identity.reset import PasswordChange, confirm_password_reset
 from tappy.main import create_app
 from tappy.notifications.cli import deliver_pending
 from tappy.notifications.transport import Envelope
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
-from tests.support import build_settings, create_identity, execute, scalar
+from tests.support import (
+    RecordingTransport,
+    build_settings,
+    create_identity,
+    execute,
+    scalar,
+)
+from tests.support import recovery_token as shared_recovery_token
 
 OPERATOR_EMAIL = "operadora@tappy.example"
 OLD_PASSWORD = "mostrador seguro 2026"
 NEW_PASSWORD = "nueva frase muy segura 2026"
-TOKEN_IN_LINK = re.compile(r"#token=(\S+)")
-
-
-class RecordingTransport:
-    def __init__(self) -> None:
-        self.sent: list[Envelope] = []
-
-    def send(self, envelope: Envelope) -> None:
-        self.sent.append(envelope)
 
 
 @pytest.fixture
@@ -46,12 +45,7 @@ def client(settings: Settings, migrated_database_url: str) -> Iterator[TestClien
 
 
 def recovery_token(client: TestClient, settings: Settings, email: str = OPERATOR_EMAIL) -> str:
-    client.post("/auth/password-reset/request", json={"email": email})
-    transport = RecordingTransport()
-    deliver_pending(settings, transport)
-    match = TOKEN_IN_LINK.search(transport.sent[-1].body)
-    assert match is not None
-    return match.group(1)
+    return shared_recovery_token(client, settings, email)
 
 
 def confirm(client: TestClient, token: str, password: str = NEW_PASSWORD) -> Response:
@@ -142,27 +136,42 @@ def test_deactivated_identity_is_not_reactivated_by_a_pending_link(
     token = recovery_token(client, settings)
     execute(migrated_database_url, "UPDATE identities SET status = 'inactive'")
 
+    before = password_hash(migrated_database_url)
+
     response = confirm(client, token)
 
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert scalar(migrated_database_url, "SELECT status FROM identities") == "inactive"
+    assert password_hash(migrated_database_url) == before
 
 
 @pytest.mark.parametrize("field", ["role", "email", "user_id", "reference"])
 def test_extra_identity_fields_are_rejected_without_changes(
     client: TestClient, settings: Settings, migrated_database_url: str, field: str
 ) -> None:
+    create_identity(migrated_database_url, "otra@tappy.example", OLD_PASSWORD)
+    other = client.post(
+        "/auth/login", json={"email": "otra@tappy.example", "password": OLD_PASSWORD}
+    ).json()
     token = recovery_token(client, settings)
     before = password_hash(migrated_database_url)
 
     response = client.post(
         "/auth/password-reset/confirm",
         json={"token": token, "new_password": NEW_PASSWORD, field: "admin@tappy.example"},
+        headers={"Authorization": f"Bearer {other['access_token']}"},
     )
 
     assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert password_hash(migrated_database_url) == before
-    assert scalar(migrated_database_url, "SELECT role FROM identities") == "operator"
+    assert (
+        scalar(
+            migrated_database_url,
+            "SELECT role FROM identities WHERE email = :email",
+            {"email": OPERATOR_EMAIL},
+        )
+        == "operator"
+    )
     assert confirm(client, token).status_code == HTTPStatus.NO_CONTENT
 
 
@@ -220,8 +229,9 @@ def test_failure_inside_the_transaction_leaves_everything_unchanged(
     def broken_notice(db: Session, identity: Identity, now: datetime) -> None:
         raise RuntimeError("induced failure")
 
+    change = PasswordChange(token, NEW_PASSWORD, PasswordPolicy())
     with pytest.raises(RuntimeError), database.transaction() as db:
-        confirm_password_reset(db, token, NEW_PASSWORD, datetime.now(UTC), broken_notice)
+        confirm_password_reset(db, change, datetime.now(UTC), broken_notice)
     database.dispose()
 
     assert password_hash(migrated_database_url) == before
@@ -255,3 +265,65 @@ def test_change_notice_is_queued_without_password_and_its_failure_keeps_the_chan
     assert notice.subject == "Your Tappy password was changed"
     assert NEW_PASSWORD not in notice.body
     assert login_status(client, NEW_PASSWORD) == HTTPStatus.OK
+
+
+def test_concurrent_different_links_of_one_identity_never_crash(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    tokens = [recovery_token(client, settings) for _ in range(3)]
+    passwords = [f"frase de enlace distinto {index} 2026" for index in range(3)]
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        statuses = list(
+            pool.map(
+                lambda pair: confirm(client, pair[0], pair[1]).status_code,
+                zip(tokens, passwords, strict=True),
+            )
+        )
+
+    assert statuses.count(HTTPStatus.NO_CONTENT) == 1
+    assert statuses.count(HTTPStatus.BAD_REQUEST) == len(tokens) - 1
+
+
+def test_reset_revokes_panel_sessions_and_keeps_the_role(
+    settings: Settings, migrated_database_url: str
+) -> None:
+    create_identity(migrated_database_url, "admin@tappy.example", OLD_PASSWORD, role=Role.ADMIN)
+    with TestClient(create_app(settings), base_url="https://testserver") as panel:
+        csrf = re.search(r'name="csrftoken" value="([^"]+)"', panel.get("/admin/login").text)
+        assert csrf is not None
+        panel.post(
+            "/admin/login",
+            data={
+                "username": "admin@tappy.example",
+                "password": OLD_PASSWORD,
+                "csrftoken": csrf.group(1),
+            },
+        )
+        assert panel.get("/admin/", follow_redirects=False).status_code == HTTPStatus.OK
+        token = recovery_token(panel, settings, "admin@tappy.example")
+
+        confirm(panel, token)
+
+        assert panel.get("/admin/", follow_redirects=False).status_code == HTTPStatus.SEE_OTHER
+        tokens = panel.post(
+            "/auth/login", json={"email": "admin@tappy.example", "password": NEW_PASSWORD}
+        ).json()
+        me = panel.get("/auth/me", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+        assert me.json()["role"] == "admin"
+
+
+def test_password_policy_comes_from_configuration(migrated_database_url: str) -> None:
+    strict = build_settings(database_url=migrated_database_url).model_copy(
+        update={"password_min_length": 30}
+    )
+    create_identity(migrated_database_url, OPERATOR_EMAIL, OLD_PASSWORD)
+    with TestClient(create_app(strict)) as client:
+        token = recovery_token(client, strict)
+
+        rejected = confirm(client, token, NEW_PASSWORD)
+        page = client.get("/password-reset")
+
+    assert rejected.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert "30" in rejected.json()["detail"]
+    assert 'minlength="30"' in page.text

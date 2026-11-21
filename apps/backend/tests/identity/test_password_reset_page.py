@@ -6,22 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tappy.main import create_app
-from tappy.notifications.cli import deliver_pending
-from tappy.notifications.transport import Envelope
 from tappy.platform.config import Settings
 from tests.support import build_settings, create_identity, scalar
+from tests.support import recovery_token as shared_recovery_token
 
 OPERATOR_EMAIL = "operadora@tappy.example"
 OLD_PASSWORD = "mostrador seguro 2026"
 NEW_PASSWORD = "nueva frase muy segura 2026"
-
-
-class RecordingTransport:
-    def __init__(self) -> None:
-        self.sent: list[Envelope] = []
-
-    def send(self, envelope: Envelope) -> None:
-        self.sent.append(envelope)
 
 
 @pytest.fixture
@@ -37,12 +28,7 @@ def client(settings: Settings, migrated_database_url: str) -> Iterator[TestClien
 
 
 def recovery_token(client: TestClient, settings: Settings) -> str:
-    client.post("/auth/password-reset/request", json={"email": OPERATOR_EMAIL})
-    transport = RecordingTransport()
-    deliver_pending(settings, transport)
-    match = re.search(r"#token=(\S+)", transport.sent[-1].body)
-    assert match is not None
-    return match.group(1)
+    return shared_recovery_token(client, settings, OPERATOR_EMAIL)
 
 
 def test_reset_page_is_self_contained_and_never_leaks_the_link(client: TestClient) -> None:
@@ -80,6 +66,7 @@ def test_form_changes_password_and_points_back_to_sign_in(
 
     assert response.status_code == HTTPStatus.OK
     assert "Your password was changed" in response.text
+    assert 'href="/admin/login"' in response.text
     assert "set-cookie" not in response.headers
     login = client.post("/auth/login", json={"email": OPERATOR_EMAIL, "password": NEW_PASSWORD})
     assert login.status_code == HTTPStatus.OK
@@ -112,3 +99,38 @@ def test_form_errors_are_safe_and_change_nothing(
     assert token not in response.text
     assert NEW_PASSWORD not in response.text
     assert scalar(migrated_database_url, "SELECT consumed_at FROM password_reset_requests") is None
+
+
+def test_invalid_link_clears_the_stored_token(client: TestClient, settings: Settings) -> None:
+    response = client.post(
+        "/password-reset",
+        data={"token": "unknown", "new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD},
+    )
+
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert 'sessionStorage.removeItem("tappy-reset-token")' in response.text
+
+
+def test_foreign_origin_cannot_submit_the_form(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    token = recovery_token(client, settings)
+
+    response = client.post(
+        "/password-reset",
+        data={"token": token, "new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD},
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    assert scalar(migrated_database_url, "SELECT consumed_at FROM password_reset_requests") is None
+
+
+def test_oversized_form_fields_are_rejected(client: TestClient, settings: Settings) -> None:
+    response = client.post(
+        "/password-reset",
+        data={"token": "x" * 300, "new_password": NEW_PASSWORD, "confirm_password": NEW_PASSWORD},
+    )
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert "x" * 300 not in response.text

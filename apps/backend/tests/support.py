@@ -1,14 +1,18 @@
 import os
+import re
 import socket
 import subprocess
 import sys
 from datetime import datetime, timedelta
 
+from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 
 from tappy.identity.models import IdentityStatus, Role
 from tappy.identity.passwords import hash_password
+from tappy.notifications.cli import deliver_pending
+from tappy.notifications.transport import Envelope
 from tappy.platform.config import Settings
 
 VALID_SECRET = "synthetic-secret-key-for-tests-0123456789"
@@ -17,6 +21,7 @@ UNREACHABLE_DATABASE_URL = (
     f"postgresql+psycopg://tappy:{UNREACHABLE_DATABASE_PASSWORD}@127.0.0.1:1/tappy"
 )
 TAPPY_COMMAND = (sys.executable, "-m", "tappy")
+TOKEN_IN_LINK = re.compile(r"#token=(\S+)")
 IDENTITY_COMMAND = (sys.executable, "-m", "tappy.identity")
 
 
@@ -129,3 +134,20 @@ class MovableClock:
 
     def advance(self, delta: timedelta) -> None:
         self.current += delta
+
+
+class RecordingTransport:
+    def __init__(self) -> None:
+        self.sent: list[Envelope] = []
+
+    def send(self, envelope: Envelope) -> None:
+        self.sent.append(envelope)
+
+
+def recovery_token(client: TestClient, settings: Settings, email: str) -> str:
+    client.post("/auth/password-reset/request", json={"email": email})
+    transport = RecordingTransport()
+    deliver_pending(settings, transport)
+    match = TOKEN_IN_LINK.search(transport.sent[-1].body)
+    assert match is not None
+    return match.group(1)
