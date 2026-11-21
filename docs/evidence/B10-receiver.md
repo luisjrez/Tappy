@@ -5,17 +5,18 @@ Ticket: [#18](https://github.com/luisjrez/Tappy/issues/18) · Historia: [H3 #3](
 ## Revisiones y escenario
 
 - Ticket, UC/AC/TC y comprobación: B10-UC01–UC03, B10-AC01–AC03, B10-TC01–TC03, B10-VC01.
-- Modalidad: **resultado inicial** (API de receptor y sección «Receiving account» del panel nuevas). Contratos existentes sin diferencias; nuevos `receiver-unauthenticated` e `issuance-check-unauthenticated` (401) aprobados en `f14bf51`.
-- Base: rama B09 `7b756c7` (PR #63) en el stack principal #54. Revisión evaluada: candidato `f14bf51`.
-- Entorno: macOS, Colima + Compose, Python 3.14.8; Chrome (DevTools MCP), 1280×800 (capturas de página completa). Fecha: 2026-11-21. Ejecutor: sesión local de desarrollo del autor del PR.
+- Modalidad: **resultado inicial** para la API de receptor y la sección «Receiving account» del panel (nuevas); **antes/después** para el cambio transversal en las respuestas 422 (ver abajo). Contratos existentes sin diferencias; nuevos `receiver-unauthenticated` e `issuance-check-unauthenticated` (401) aprobados en `f14bf51`.
+- Base: rama B09 `7b756c7` (PR #63) en el stack principal #54. Revisión evaluada: candidato `f14bf51`; correcciones de review en `c1cdfaf` (revisión final; VC01 de API re-ejecutada sobre ella).
+- Entorno: macOS, Colima + Compose, Python 3.14.8; Chrome (DevTools MCP), 1280×800, tema claro, escala de texto 100 % (capturas de página completa). Fecha: 2026-11-21. Ejecutor: sesión local de desarrollo del autor del PR.
 - Datos: comercios «Tienda Demo A/B», operadores sintéticos, referencias de proveedor `bank-account-demo-*` y CLABE ficticias con dígito verificador válido (no corresponden a cuentas reales). Ninguna integración bancaria real: el receptor se registra como referencia ya autorizada; su activación real con el proveedor queda fuera de B10 (requisito externo).
 
 ## Diseño
 
 - `ReceivingAccount` (migración `0006_receiving_accounts`): a lo sumo uno por comercio (`merchant_id` único) y una referencia de proveedor no compartible entre comercios (`provider_account_id` único → `409`).
-- La CLABE se valida (18 dígitos + dígito verificador 3-7-1) y solo se guardan sus últimos 4 dígitos; la lectura expone `masked_account` (`**************1234`). La CLABE entra como `SecretStr`, así que un error de validación no la refleja. El `provider_account_id` no se expone en la API (sí al admin en el panel).
+- La CLABE se valida (18 dígitos + dígito verificador 3-7-1) y solo se guardan sus últimos 4 dígitos; la lectura expone `masked_account` (`**************1234`). La CLABE entra como `SecretStr` y, además, ningún error de validación de la API refleja valores enviados (handler global, ver abajo). El `provider_account_id` no se expone en la API (sí al admin en el panel).
 - API: `PUT /merchants/{id}/receiver` (solo admin, crea o reemplaza; bloquea la fila del comercio `FOR NO KEY UPDATE` para serializar configuraciones), `GET /merchants/{id}/receiver` (acotado por pertenencia; `404` si no hay receptor), `POST /merchants/{id}/issuance-check` (acotado; cuerpo sin campos → un destinatario enviado por el cliente es `422`; `409` con explicación si no hay receptor o está deshabilitado).
-- Regla única de habilitación (`issuance_block` / `issuing_receiver` en `tappy.merchants.receivers`): la usan la lectura, la comprobación previa y el panel, y la reutilizarán los canales de emisión (B11+). Deshabilitar es un cambio de estado: no borra el receptor ni datos del comercio.
+- Regla única de habilitación (`issuance_block(receiver | None)` / `issuing_receiver` en `tappy.merchants.receivers`), incluido el caso «sin receptor»: la usan la lectura, la comprobación previa y el panel (también el texto de «sin receptor»), y la reutilizarán los canales de emisión (B11+). Deshabilitar es un cambio de estado: no borra el receptor ni datos del comercio.
+- Restricción única de la referencia del proveedor con nombre explícito (`uq_receiving_accounts_provider_account_id`, constante compartida por modelo, migración y mapeo a `409`).
 - Panel: cada comercio muestra beneficiario, cuenta enmascarada, referencia del proveedor, estado y motivo de bloqueo; formulario para configurar/actualizar con CSRF y POST→redirect→GET.
 
 ## Trazabilidad UC → AC → TC → test
@@ -26,9 +27,19 @@ Ticket: [#18](https://github.com/luisjrez/Tappy/issues/18) · Historia: [H3 #3](
 | B10-UC02 | B10-AC02 | B10-TC02 | `test_disabled_receiver_blocks_issuance_with_an_explanation`; `test_merchant_without_receiver_cannot_issue`; `test_requests_cannot_choose_a_foreign_receiver` (receptor de B en el cuerpo → 422; comprobación/lectura de B → 404; reutilizar la referencia de B → 409; A sin cambios) | PASS |
 | B10-UC03 | B10-AC03 | B10-TC03 | `test_disabling_keeps_the_receiver_and_merchant_records` (mismo registro y miembros tras deshabilitar; comprobación 409 con explicación; reactivar vuelve a permitir); `test_admin_configures_and_disables_receiver_from_panel` (explicación visible en el panel) | PASS |
 
+### Cambio transversal: errores de validación sin valores enviados (antes/después)
+
+La review de B10 detectó que el 422 por defecto de FastAPI incluye `input`: con un campo faltante devuelve el cuerpo completo (la CLABE en `PUT /merchants/{id}/receiver`, y también la contraseña en `POST /auth/login`, defecto previo a B10). `create_app` registra `validation_error_response` (`tappy.platform.validation`), que solo devuelve `type`, `loc` y `msg` de cada error. Afecta a todas las rutas con cuerpo validado; ningún contrato aprobado contenía un 422, así que no cambia ninguna base.
+
+| Petición | Antes (`f14bf51`) | Después (`c1cdfaf`) |
+| --- | --- | --- |
+| POST /auth/login sin email | `{"detail": [{"type": "missing", "loc": ["body", "email"], "msg": "Field required", "input": {"password": "frase sintetica privada 2026"}}]}` | `{"detail": [{"type": "missing", "loc": ["body", "email"], "msg": "Field required"}]}` |
+
+Tests: `tests/test_validation_errors.py::test_validation_errors_do_not_echo_submitted_values` y `test_malformed_bodies_never_echo_the_account` (campo faltante, CLABE numérica, `enabled` inválido).
+
 ### Alcance de TC03 en la frontera de B10
 
-B10 depende solo de B09: todavía no existen cobros (B11) ni historial (B27). «Historial permanece» se verifica aquí como lo que B10 controla: deshabilitar el receptor no borra ni altera el receptor, el comercio ni sus membresías, y los nuevos cobros quedan bloqueados con explicación por la regla compartida. Arrastre obligatorio: B11 debe emitir solo a través de `issuing_receiver` (con bloqueo de la fila del receptor frente a la deshabilitación) y B27 debe comprobar que el historial confirmado sigue visible con el receptor deshabilitado.
+B10 depende solo de B09: todavía no existen cobros (B11) ni historial (B27). «Historial permanece» se verifica aquí como lo que B10 controla: deshabilitar el receptor no borra ni altera el receptor, el comercio ni sus membresías, y los nuevos cobros quedan bloqueados con explicación por la regla compartida. Arrastre obligatorio, registrado en los propios tickets: [#19 (B11)](https://github.com/luisjrez/Tappy/issues/19#issuecomment-7060992239) — emitir solo por `issuing_receiver`, bloquear la fila del receptor frente a una deshabilitación concurrente, test de cobro con receptor deshabilitado e instantánea de beneficiario/cuenta en el cobro; [#35 (B27)](https://github.com/luisjrez/Tappy/issues/35#issuecomment-7060992476) — historial confirmado visible con el receptor deshabilitado.
 
 ## TDD
 
@@ -37,13 +48,14 @@ B10 depende solo de B09: todavía no existen cobros (B11) ni historial (B27). «
 | Configurar, leer enmascarado y comprobación previa | 13 de 14 tests fallan: `assert 404 == 200/409/422/403` (rutas inexistentes) | Modelo, migración, `receivers.py`, rutas |
 | Panel del receptor | `assert 404 == 303` (ruta del panel inexistente) | `submit_receiver` + plantilla |
 | Configuraciones simultáneas | Mutación sin bloqueo del comercio: `UniqueViolation receiving_accounts_merchant_id_key` (500). El test abre una transacción que configura primero y espera en `pg_stat_activity` a que la petición quede bloqueada | `with_for_update(key_share=True)` sobre el comercio |
+| Errores 422 con valores enviados (review) | `assert 'frase sinte...privada 2026' not in ...` (login) y `assert '12180000123456782' not in ...` (receptor: campo faltante y CLABE numérica) | `validation_error_response` registrado en `create_app` |
 | Destinatario arbitrario | Sin Red propio: el cuerpo estricto del Green ya lo rechaza; mutación `extra="ignore"` → falla TC02 | `IssuanceCheckRequest` con `extra="forbid"` |
 
-Refactor con suite verde: `issuance_block` como regla única usada por la lectura, la comprobación previa y el panel; helper de tests `configure` con un payload base.
+Refactor con suite verde: `issuance_block` como regla única usada por la lectura, la comprobación previa y el panel; helper de tests `configure` con un payload base. Tras la review: `collapsed_text` compartido con `clean_name` de B09, `accessible_receiver` único y el caso «sin receptor» dentro de `issuance_block`.
 
 ## B10-VC01 — Resultado inicial de API y panel
 
-API (proceso real `python -m tappy` sobre `f14bf51`, DB en `0006_receiving_accounts`; UUIDs normalizados como `<uuid>`):
+API (proceso real `python -m tappy` sobre `c1cdfaf`, DB en `0006_receiving_accounts`; UUIDs normalizados como `<uuid>`). Única diferencia frente a la primera ejecución sobre `f14bf51`: el 422 del destinatario arbitrario ya no incluye `input`.
 
 | Petición | Status | Respuesta |
 | --- | --- | --- |
@@ -53,7 +65,7 @@ API (proceso real `python -m tappy` sobre `f14bf51`, DB en `0006_receiving_accou
 | `PUT /merchants/{A}/receiver` (admin, activo) | 200 | `{"beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "enabled": true, "can_issue": true, "blocked_reason": null}` |
 | `GET /merchants/{A}/receiver` (operador A) | 200 | `{"beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "enabled": true, "can_issue": true, "blocked_reason": null}` |
 | `POST /merchants/{A}/issuance-check {}` (operador A, activo) | 200 | `{"beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "enabled": true, "can_issue": true, "blocked_reason": null}` |
-| `POST /merchants/{A}/issuance-check {"provider_account_id": "bank-account-demo-b"}` (operador A) | 422 | `{"detail": [{"type": "extra_forbidden", "loc": ["body", "provider_account_id"], "msg": "Extra inputs are not permitted", "input": "bank-account-demo-b"}]}` |
+| `POST /merchants/{A}/issuance-check {"provider_account_id": "bank-account-demo-b"}` (operador A) | 422 | `{"detail": [{"type": "extra_forbidden", "loc": ["body", "provider_account_id"], "msg": "Extra inputs are not permitted"}]}` |
 | `POST /merchants/{B}/issuance-check {}` (operador A) | 404 | `{"detail": "Merchant not found"}` |
 | `GET /merchants/{B}/receiver` (operador A) | 404 | `{"detail": "Merchant not found"}` |
 | `PUT /merchants/{A}/receiver` (admin, cuenta del proveedor de B) | 409 | `{"detail": "That receiving account belongs to another merchant"}` |
@@ -69,11 +81,11 @@ Panel (`/admin/merchants`):
 | Reactivar A desde el formulario | ![Activo](B10/01-receptor-activo.png) | «Receiving account saved»; A «Enabled», misma cuenta enmascarada |
 | CLABE con dígito verificador inválido para B | ![Inválida](B10/03-clabe-invalida.png) | Mensaje de error sin reflejar la CLABE; B sin cambios |
 
-Datos de prueba eliminados al terminar (identidades, comercios, membresías, sesiones y receptores en 0). Estado VC01: **PASS** (resultado inicial).
+Capturas tomadas sobre `f14bf51`; siguen vigentes en `c1cdfaf`: entre ambas revisiones la plantilla solo cambia el texto del comercio sin receptor (`missing_receiver_reason`), que no aparece en ninguna captura. Datos de prueba eliminados al terminar (identidades, comercios, membresías, sesiones y receptores en 0). Estado VC01: **PASS** (resultado inicial).
 
 ## Checks
 
-Pendiente de registrar sobre la revisión final.
+`uv run python -m quality.check` sobre `c1cdfaf`: PASS format, lint, types (mypy strict, 88 archivos), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (176 passed, 0 fallos, Postgres real aislado), api (11 contratos sin diferencias). `evidence` queda en FAIL solo por la review pendiente. Mutaciones comprobadas: sin bloqueo del comercio → falla la carrera; `extra="ignore"` → falla TC02.
 
 ## Supresiones
 

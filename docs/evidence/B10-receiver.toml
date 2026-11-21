@@ -1,5 +1,5 @@
 ticket = "B10"
-revision = "f14bf51"
+revision = "c1cdfaf"
 
 [vc01]
 status = "PASS"
@@ -28,6 +28,8 @@ tests = [
     "tests/merchants/test_receivers_api.py::test_racing_first_configurations_keep_one_receiver",
     "tests/backoffice/test_merchants_panel.py::test_admin_configures_and_disables_receiver_from_panel",
     "tests/backoffice/test_merchants_panel.py::test_panel_rejects_invalid_receiver_without_echoing_the_account",
+    "tests/merchants/test_receivers_api.py::test_malformed_bodies_never_echo_the_account",
+    "tests/test_validation_errors.py::test_validation_errors_do_not_echo_submitted_values",
 ]
 
 [[criteria]]
