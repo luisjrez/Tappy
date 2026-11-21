@@ -86,6 +86,9 @@ def claim_next(context: DeliveryContext, now: datetime) -> ClaimedEmail | None:
         )
         if email is None:
             return None
+        if email.attempts >= context.max_attempts:
+            finish(email, DeliveryStatus.FAILED, email.last_error or "MaxAttemptsExceeded")
+            return ClaimedEmail(email.id, None, exhausted=True)
         email.attempts += 1
         email.next_attempt_at = now + retry_delay(email.attempts)
         try:

@@ -1,11 +1,13 @@
 import hashlib
 import hmac
 import secrets
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from cryptography.fernet import InvalidToken
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from tappy.identity.errors import InvalidEmailError
@@ -163,5 +165,7 @@ def process_recovery_jobs(
             )
         )
         for job in jobs:
-            resolve_job(db, job, now, policy, sealer)
+            with suppress(SQLAlchemyError), db.begin_nested():
+                resolve_job(db, job, now, policy, sealer)
+        db.execute(delete(RecoveryAttempt).where(RecoveryAttempt.created_at <= now - policy.window))
         return len(jobs)

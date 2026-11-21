@@ -404,3 +404,37 @@ def test_undecryptable_email_fails_alone_without_blocking_the_queue(
         )
         == "failed"
     )
+
+
+def test_exhausted_email_is_not_sent_again_after_repeated_crashes(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    request_recovery(client, OPERATOR_EMAIL)
+    deliver_pending(settings, FailingTransport())
+    execute(
+        migrated_database_url,
+        "UPDATE outbound_emails SET attempts = :attempts, "
+        "next_attempt_at = now() - interval '1 hour'",
+        {"attempts": settings.delivery_max_attempts},
+    )
+    transport = RecordingTransport()
+
+    report = deliver_pending(settings, transport)
+
+    assert transport.sent == []
+    assert report.failed == 1
+    assert scalar(migrated_database_url, "SELECT status FROM outbound_emails") == "failed"
+
+
+def test_worker_discards_attempts_outside_the_window(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    request_recovery(client, OPERATOR_EMAIL)
+    execute(
+        migrated_database_url,
+        "UPDATE recovery_attempts SET created_at = now() - interval '2 hours'",
+    )
+
+    deliver_pending(settings, RecordingTransport())
+
+    assert scalar(migrated_database_url, "SELECT count(*) FROM recovery_attempts") == 0
