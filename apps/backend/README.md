@@ -70,6 +70,20 @@ Administrator bearer token required (`401` without a valid token, `403` for oper
 | `GET /operators` · `GET /operators/{reference}` | Operator identities only (`404` for administrators or unknown references) |
 | `POST /operators/{reference}/deactivate` | Marks the operator inactive and revokes all its sessions |
 
+## Password recovery
+
+`POST /auth/password-reset/request {"email": …}` (also the "Forgot your password?" form at `/admin/forgot-password`, linked from the panel login) always answers `202` with the same generic message, and the request does the same work for every account: it records rate-limit attempts and queues an encrypted recovery job. The worker later checks whether the account exists and is active and only then issues a token and an email, so neither the response nor its timing reveals which emails are registered.
+
+- The link is `TAPPY_PUBLIC_BASE_URL/password-reset#token=…`: its origin comes from configuration, never from the request `Host`, and the token travels in the URL fragment so it never reaches server logs. Tokens are random, valid for `TAPPY_PASSWORD_RESET_TTL_SECONDS` (default 1800) and stored only as SHA-256 digests.
+- Requests are limited per email (`TAPPY_RECOVERY_LIMIT_PER_EMAIL`, default 3) and per client origin (`TAPPY_RECOVERY_LIMIT_PER_ORIGIN`, default 10) within `TAPPY_RECOVERY_WINDOW_SECONDS` (default 3600). Limits are stored in Postgres as keyed HMAC digests (no plain email addresses), survive restarts, apply across processes and never block sign-in.
+- Recovery jobs and outbound emails keep their payload encrypted with a key derived from `TAPPY_SECRET_KEY` and purge it once processed or sent. Each email is claimed and counted in its own transaction before sending, retried with exponential backoff up to `TAPPY_DELIVERY_MAX_ATTEMPTS` (default 5); an undecryptable payload fails alone without blocking the queue. Delivery is at least once: an ambiguous SMTP failure is retried. Run the worker periodically:
+
+```sh
+uv run python -m tappy.notifications deliver
+```
+
+- SMTP: `TAPPY_SMTP_HOST`, `TAPPY_SMTP_PORT`, `TAPPY_SMTP_USERNAME`, `TAPPY_SMTP_PASSWORD`, `TAPPY_SMTP_STARTTLS`, `TAPPY_MAIL_FROM`. Locally Compose runs Mailpit (SMTP `127.0.0.1:1025`, inbox `http://127.0.0.1:8025`). Real delivery needs a provider and an authorized sender; it is not exercised in CI. The `/password-reset` page that consumes the token arrives with B42.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.

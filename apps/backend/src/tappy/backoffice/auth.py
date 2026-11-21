@@ -3,10 +3,14 @@ from contextlib import suppress
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.routing import Route
+from starlette.templating import Jinja2Templates
 from starlette_admin.auth import AdminUser, AuthProvider
 from starlette_admin.exceptions import LoginFailed
+from starlette_admin.helpers import wrap_endpoint_with_kwargs
 
 from tappy.identity.models import Role
+from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoveryService, RecoverySubmission
 from tappy.identity.sessions import (
     InvalidAccessTokenError,
     InvalidCredentialsError,
@@ -23,6 +27,7 @@ from tappy.identity.sessions import (
 )
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
+from tappy.platform.requests import client_origin
 
 ACCESS_KEY = "access_token"
 REFRESH_KEY = "refresh_token"
@@ -41,12 +46,45 @@ def store_tokens(request: Request, tokens: SessionTokens) -> None:
     request.session[REFRESH_KEY] = tokens.refresh_token
 
 
+RECOVERY_ROUTE = "forgot_password"
+
+
 class AdminAuthProvider(AuthProvider):
-    def __init__(self, database: Database, clock: Clock, policy: SessionPolicy) -> None:
-        super().__init__()
+    def __init__(
+        self, database: Database, clock: Clock, policy: SessionPolicy, recovery: RecoveryService
+    ) -> None:
+        super().__init__(allow_routes=[RECOVERY_ROUTE])
         self.database = database
         self.clock = clock
         self.policy = policy
+        self.recovery = recovery
+
+    def get_routes(self, templates: Jinja2Templates) -> list[Route]:
+        return [
+            *super().get_routes(templates),
+            Route(
+                "/forgot-password",
+                wrap_endpoint_with_kwargs(self.render_password_reset, templates=templates),
+                methods=["GET", "POST"],
+                name=RECOVERY_ROUTE,
+            ),
+        ]
+
+    def request_reset(self, email: str, origin: str) -> None:
+        with self.database.transaction() as db:
+            self.recovery.submit(db, RecoverySubmission(email, origin), self.clock.now())
+
+    async def render_password_reset(self, request: Request, templates: Jinja2Templates) -> Response:
+        accepted = ""
+        if request.method == "POST":
+            form = await request.form()
+            email = form.get("email")
+            submitted = email if isinstance(email, str) else ""
+            await run_in_threadpool(self.request_reset, submitted, client_origin(request))
+            accepted = RECOVERY_ACCEPTED
+        return templates.TemplateResponse(
+            request=request, name="password_reset.html", context={"accepted": accepted}
+        )
 
     def start_session(self, email: str, password: str) -> SessionTokens:
         with self.database.transaction() as db:

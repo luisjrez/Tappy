@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     access_token_ttl_seconds: int = Field(default=900, ge=60)
     session_max_lifetime_seconds: int = Field(default=30 * 24 * 3600, ge=3600)
     admin_secure_cookies: bool = True
+    public_base_url: str = Field(default="http://127.0.0.1:8000", pattern=r"^https?://[^/?#]+$")
+    password_reset_ttl_seconds: int = Field(default=1800, ge=300)
+    recovery_limit_per_email: int = Field(default=3, ge=1)
+    recovery_limit_per_origin: int = Field(default=10, ge=1)
+    recovery_window_seconds: int = Field(default=3600, ge=60)
+    smtp_host: str = "127.0.0.1"
+    smtp_port: int = Field(default=1025, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_starttls: bool = False
+    mail_from: str = "Tappy <no-reply@tappy.example>"
+    delivery_max_attempts: int = Field(default=5, ge=1)
 
 
 class ConfigurationError(Exception):

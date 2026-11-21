@@ -8,6 +8,7 @@ from starlette_admin.base import BaseAdmin
 
 from tappy.backoffice.auth import AdminAuthProvider
 from tappy.backoffice.operators import OperatorsView
+from tappy.identity.recovery import RecoveryService
 from tappy.identity.sessions import SessionPolicy
 from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
@@ -18,7 +19,9 @@ ADMIN_BASE_URL = "/admin"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
-def mount_admin(app: FastAPI, settings: Settings, database: Database, clock: Clock) -> None:
+def mount_admin(
+    app: FastAPI, settings: Settings, database: Database, clock: Clock, recovery: RecoveryService
+) -> None:
     logging.getLogger("starlette_admin").setLevel(logging.ERROR)
     policy = SessionPolicy.from_settings(settings)
     secret = settings.secret_key.get_secret_value()
@@ -26,7 +29,7 @@ def mount_admin(app: FastAPI, settings: Settings, database: Database, clock: Clo
         title="Tappy back office",
         base_url=ADMIN_BASE_URL,
         templates_dir=str(TEMPLATES_DIR),
-        auth_provider=AdminAuthProvider(database, clock, policy),
+        auth_provider=AdminAuthProvider(database, clock, policy, recovery),
         secret_key=secret,
         middlewares=[
             Middleware(
