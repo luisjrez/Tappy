@@ -150,11 +150,11 @@ def test_active_administrator_logs_in(client: TestClient, migrated_database_url:
         migrated_database_url, "admin@tappy.example", OPERATOR_PASSWORD, role=Role.ADMIN
     )
 
-    session = client.post(
+    login_response = client.post(
         "/auth/login", json={"email": "admin@tappy.example", "password": OPERATOR_PASSWORD}
     )
     identity = client.get(
-        "/auth/me", headers={"Authorization": f"Bearer {session.json()['access_token']}"}
+        "/auth/me", headers={"Authorization": f"Bearer {login_response.json()['access_token']}"}
     )
 
     assert identity.status_code == HTTPStatus.OK
@@ -170,6 +170,18 @@ def test_token_stops_working_when_identity_becomes_inactive(
     ).json()["access_token"]
 
     execute(migrated_database_url, "UPDATE identities SET status = 'inactive'")
+    response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_revoked_session_is_rejected(client: TestClient, migrated_database_url: str) -> None:
+    create_identity(migrated_database_url, OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    token = client.post(
+        "/auth/login", json={"email": OPERATOR_EMAIL, "password": OPERATOR_PASSWORD}
+    ).json()["access_token"]
+
+    execute(migrated_database_url, "UPDATE access_sessions SET revoked_at = now()")
     response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == HTTPStatus.UNAUTHORIZED
