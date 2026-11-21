@@ -54,6 +54,9 @@ def hash_password(password: str) -> str:
     return hasher.hash(normalized(password))
 
 
+UNKNOWN_IDENTITY_HASH = hasher.hash("timing equalizer for unknown identities")
+
+
 def verify_password(password_hash: str, password: str) -> bool:
     try:
         return hasher.verify(password_hash, normalized(password))

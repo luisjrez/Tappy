@@ -2,9 +2,13 @@ import os
 import socket
 import subprocess
 import sys
+from datetime import datetime, timedelta
 
 from pydantic import SecretStr
+from sqlalchemy import create_engine, text
 
+from tappy.identity.models import IdentityStatus, Role
+from tappy.identity.passwords import hash_password
 from tappy.platform.config import Settings
 
 VALID_SECRET = "synthetic-secret-key-for-tests-0123456789"
@@ -78,3 +82,50 @@ def run_identity(
         timeout=30,
         check=False,
     )
+
+
+def execute(database_url: str, sql: str, parameters: dict[str, object] | None = None) -> None:
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(sql), parameters or {})
+    finally:
+        engine.dispose()
+
+
+def scalar(database_url: str, sql: str, parameters: dict[str, object] | None = None) -> object:
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            return connection.execute(text(sql), parameters or {}).scalar_one()
+    finally:
+        engine.dispose()
+
+
+def create_identity(
+    database_url: str,
+    email: str,
+    password: str,
+    *,
+    role: Role = Role.OPERATOR,
+    status: IdentityStatus = IdentityStatus.ACTIVE,
+) -> str:
+    return str(
+        scalar(
+            database_url,
+            "INSERT INTO identities (id, email, password_hash, role, status) "
+            "VALUES (gen_random_uuid(), :email, :hash, :role, :status) RETURNING id",
+            {"email": email, "hash": hash_password(password), "role": role, "status": status},
+        )
+    )
+
+
+class MovableClock:
+    def __init__(self, start: datetime) -> None:
+        self.current = start
+
+    def now(self) -> datetime:
+        return self.current
+
+    def advance(self, delta: timedelta) -> None:
+        self.current += delta

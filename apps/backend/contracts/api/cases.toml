@@ -15,3 +15,16 @@ name = "ready-unreachable"
 method = "GET"
 path = "/ready"
 database = "unreachable"
+
+[[cases]]
+name = "login-rejected"
+method = "POST"
+path = "/auth/login"
+database = "migrated"
+body = { email = "nadie@tappy.example", password = "frase inexistente 2026" }
+
+[[cases]]
+name = "me-unauthenticated"
+method = "GET"
+path = "/auth/me"
+database = "migrated"
