@@ -1,5 +1,5 @@
 ticket = "B07"
-revision = "da2dd79"
+revision = "4071ff8"
 
 [vc01]
 status = "PASS"
@@ -19,7 +19,11 @@ mandatory = true
 [[criteria.cases]]
 id = "B07-TC01"
 mode = "automated"
-tests = ["tests/backoffice/test_admin_access.py::test_admin_enters_panel_and_logout_revokes_access"]
+tests = [
+    "tests/backoffice/test_admin_access.py::test_admin_enters_panel_and_logout_revokes_access",
+    "tests/backoffice/test_admin_access.py::test_panel_renews_expired_access_transparently",
+    "tests/backoffice/test_admin_access.py::test_concurrent_panel_request_with_stale_cookie_keeps_current_session",
+]
 
 [[criteria]]
 id = "B07-AC02"
@@ -34,6 +38,10 @@ tests = [
     "tests/backoffice/test_admin_access.py::test_operator_cannot_enter_panel",
     "tests/backoffice/test_admin_access.py::test_api_bearer_token_does_not_open_panel",
     "tests/backoffice/test_admin_access.py::test_revoked_panel_session_loses_access",
+    "tests/backoffice/test_admin_access.py::test_demoted_or_deactivated_admin_loses_panel",
+    "tests/backoffice/test_admin_access.py::test_replayed_panel_cookie_revokes_the_whole_session",
+    "tests/backoffice/test_admin_access.py::test_anonymous_logout_changes_nothing",
+    "tests/backoffice/test_admin_access.py::test_failed_panel_login_keeps_emails_out_of_logs",
 ]
 
 [[criteria]]
