@@ -115,6 +115,6 @@ Ronda 1 sobre `a5d7cb8`, sin bloqueantes; correcciones en `da6e33f`.
 | Standards | `enum_column` en el módulo de identidad | Movido a `platform/persistence` |
 | Standards | Tuplas posicionales y `dispose` sin `finally` en tests | `StoredIdentity` (NamedTuple) y `try/finally` |
 | Standards | `app_environment` no reutilizado | Reutilizado en `test_startup.py` |
-| Standards | `except A, B:` con apariencia de Python 2 | Reescrito con paréntesis |
+| Standards | `except A, B:` con apariencia de Python 2 | Se conserva: sintaxis válida en Python 3.14 (PEP 758) y es la forma que deja Ruff format |
 
 Re-revisión: pendiente.

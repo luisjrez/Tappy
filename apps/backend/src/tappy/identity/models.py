@@ -20,7 +20,6 @@ class IdentityStatus(StrEnum):
 
 class Identity(Base):
     __tablename__ = "identities"
-    __table_args__ = (Index("uq_identities_email_lower", func.lower("email"), unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(254))
@@ -28,3 +27,6 @@ class Identity(Base):
     role: Mapped[Role] = mapped_column(enum_column(Role, "identity_role"))
     status: Mapped[IdentityStatus] = mapped_column(enum_column(IdentityStatus, "identity_status"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+Index("uq_identities_email_lower", func.lower(Identity.email), unique=True)

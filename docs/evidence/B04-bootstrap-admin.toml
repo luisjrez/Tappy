@@ -54,4 +54,5 @@ tests = [
     "tests/identity/test_bootstrap_admin.py::test_repeating_bootstrap_keeps_single_identity_and_original_password",
     "tests/identity/test_bootstrap_admin.py::test_bootstrap_never_elevates_an_existing_operator",
     "tests/identity/test_bootstrap_admin.py::test_database_rejects_emails_differing_only_by_case",
+    "tests/identity/test_identity_model.py::test_model_schema_enforces_case_insensitive_unique_email",
 ]
