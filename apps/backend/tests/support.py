@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 
+from tappy.identity.models import IdentityStatus, Role
 from tappy.identity.passwords import hash_password
 from tappy.platform.config import Settings
 
@@ -83,28 +84,40 @@ def run_identity(
     )
 
 
-def create_identity(
-    database_url: str, email: str, password: str, *, role: str = "operator", status: str = "active"
-) -> str:
+def execute(database_url: str, sql: str, parameters: dict[str, object] | None = None) -> None:
     engine = create_engine(database_url)
     try:
         with engine.begin() as connection:
-            return str(
-                connection.execute(
-                    text(
-                        "INSERT INTO identities (id, email, password_hash, role, status) "
-                        "VALUES (gen_random_uuid(), :email, :hash, :role, :status) RETURNING id"
-                    ),
-                    {
-                        "email": email,
-                        "hash": hash_password(password),
-                        "role": role,
-                        "status": status,
-                    },
-                ).scalar_one()
-            )
+            connection.execute(text(sql), parameters or {})
     finally:
         engine.dispose()
+
+
+def scalar(database_url: str, sql: str, parameters: dict[str, object] | None = None) -> object:
+    engine = create_engine(database_url)
+    try:
+        with engine.begin() as connection:
+            return connection.execute(text(sql), parameters or {}).scalar_one()
+    finally:
+        engine.dispose()
+
+
+def create_identity(
+    database_url: str,
+    email: str,
+    password: str,
+    *,
+    role: Role = Role.OPERATOR,
+    status: IdentityStatus = IdentityStatus.ACTIVE,
+) -> str:
+    return str(
+        scalar(
+            database_url,
+            "INSERT INTO identities (id, email, password_hash, role, status) "
+            "VALUES (gen_random_uuid(), :email, :hash, :role, :status) RETURNING id",
+            {"email": email, "hash": hash_password(password), "role": role, "status": status},
+        )
+    )
 
 
 class MovableClock:

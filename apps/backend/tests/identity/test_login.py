@@ -5,10 +5,10 @@ from http import HTTPStatus
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
 
+from tappy.identity.models import IdentityStatus, Role
 from tappy.main import create_app
-from tests.support import MovableClock, build_settings, create_identity
+from tests.support import MovableClock, build_settings, create_identity, execute, scalar
 
 OPERATOR_EMAIL = "operadora@tappy.example"
 OPERATOR_PASSWORD = "mostrador seguro 2026"
@@ -45,28 +45,21 @@ def test_active_operator_logs_in_and_reads_own_identity(
     assert token not in identity.text
 
 
-def session_count(database_url: str) -> int:
-    engine = create_engine(database_url)
-    try:
-        with engine.connect() as connection:
-            return int(
-                connection.execute(text("SELECT count(*) FROM access_sessions")).scalar_one()
-            )
-    finally:
-        engine.dispose()
-
-
 @pytest.mark.parametrize(
     ("email", "password", "status"),
     [
-        (OPERATOR_EMAIL, "not the right passphrase", "active"),
-        (OPERATOR_EMAIL, OPERATOR_PASSWORD, "inactive"),
-        ("nadie@tappy.example", OPERATOR_PASSWORD, "active"),
-        ("not-an-email", OPERATOR_PASSWORD, "active"),
+        (OPERATOR_EMAIL, "not the right passphrase", IdentityStatus.ACTIVE),
+        (OPERATOR_EMAIL, OPERATOR_PASSWORD, IdentityStatus.INACTIVE),
+        ("nadie@tappy.example", OPERATOR_PASSWORD, IdentityStatus.ACTIVE),
+        ("not-an-email", OPERATOR_PASSWORD, IdentityStatus.ACTIVE),
     ],
 )
 def test_rejected_logins_share_one_generic_error_and_create_no_session(
-    client: TestClient, migrated_database_url: str, email: str, password: str, status: str
+    client: TestClient,
+    migrated_database_url: str,
+    email: str,
+    password: str,
+    status: IdentityStatus,
 ) -> None:
     create_identity(migrated_database_url, OPERATOR_EMAIL, OPERATOR_PASSWORD, status=status)
 
@@ -74,7 +67,7 @@ def test_rejected_logins_share_one_generic_error_and_create_no_session(
 
     assert response.status_code == HTTPStatus.UNAUTHORIZED
     assert response.json() == {"detail": "Invalid email or password"}
-    assert session_count(migrated_database_url) == 0
+    assert scalar(migrated_database_url, "SELECT count(*) FROM access_sessions") == 0
 
 
 def test_requests_without_valid_token_are_rejected(
@@ -146,14 +139,37 @@ def test_only_a_digest_of_the_token_is_stored(
         "/auth/login", json={"email": OPERATOR_EMAIL, "password": OPERATOR_PASSWORD}
     ).json()["access_token"]
 
-    engine = create_engine(migrated_database_url)
-    try:
-        with engine.connect() as connection:
-            stored = connection.execute(
-                text("SELECT token_digest FROM access_sessions")
-            ).scalar_one()
-    finally:
-        engine.dispose()
+    stored = scalar(migrated_database_url, "SELECT token_digest FROM access_sessions")
 
+    assert stored == hashlib.sha256(token.encode()).hexdigest()
     assert stored != token
-    assert len(stored) == len(hashlib.sha256().hexdigest())
+
+
+def test_active_administrator_logs_in(client: TestClient, migrated_database_url: str) -> None:
+    create_identity(
+        migrated_database_url, "admin@tappy.example", OPERATOR_PASSWORD, role=Role.ADMIN
+    )
+
+    session = client.post(
+        "/auth/login", json={"email": "admin@tappy.example", "password": OPERATOR_PASSWORD}
+    )
+    identity = client.get(
+        "/auth/me", headers={"Authorization": f"Bearer {session.json()['access_token']}"}
+    )
+
+    assert identity.status_code == HTTPStatus.OK
+    assert identity.json()["role"] == "admin"
+
+
+def test_token_stops_working_when_identity_becomes_inactive(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    create_identity(migrated_database_url, OPERATOR_EMAIL, OPERATOR_PASSWORD)
+    token = client.post(
+        "/auth/login", json={"email": OPERATOR_EMAIL, "password": OPERATOR_PASSWORD}
+    ).json()["access_token"]
+
+    execute(migrated_database_url, "UPDATE identities SET status = 'inactive'")
+    response = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED

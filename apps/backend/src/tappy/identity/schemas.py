@@ -20,6 +20,8 @@ class SessionResponse(BaseModel):
 
 
 class IdentityResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     reference: str
     email: str
     role: Role

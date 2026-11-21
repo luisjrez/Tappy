@@ -48,7 +48,15 @@ Passwords are normalized with Unicode NFKC, need 12 to 128 characters and are re
 
 ## Session policy
 
-Agreed before identity work and implemented by the session tickets (B05/B06): opaque access tokens valid for 15 minutes, renewal with atomic rotation, and an absolute session lifetime of 30 days. All three values will be configurable through environment variables; logout and identity deactivation revoke access immediately.
+`POST /auth/login` returns an opaque bearer token; only its SHA-256 digest is stored. `GET /auth/me` returns the identity that owns the token. Every rejected login (unknown email, wrong password, inactive identity) gets the same `401 Invalid email or password`.
+
+| Setting | Default | Ticket |
+| --- | --- | --- |
+| `TAPPY_ACCESS_TOKEN_TTL_SECONDS` | `900` (15 minutes, minimum 60) | B05 |
+| Renewal with atomic rotation | — | B06 |
+| Absolute session lifetime | 30 days | B06 |
+
+Logout and identity deactivation revoke access immediately (B06); a token of an inactive identity is already rejected.
 
 ## Checks
 
