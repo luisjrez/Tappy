@@ -4,6 +4,7 @@ from http import HTTPStatus
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx2 import Response
 
 from tappy.identity.models import Role
 from tappy.main import create_app
@@ -117,3 +118,80 @@ def test_panel_rejects_blank_or_overlong_names_without_creating(
     assert response.status_code == HTTPStatus.SEE_OTHER
     assert "Merchant name must have between 1 and 120 characters" in listing.text
     assert scalar(migrated_database_url, "SELECT count(*) FROM merchants") == 0
+
+
+CLABE = "012180000123456782"
+
+
+def configure_receiver(client: TestClient, merchant_id: object, form: dict[str, str]) -> Response:
+    return client.post(
+        f"/admin/merchants/{merchant_id}/receiver",
+        data={**form, "csrftoken": csrf_token(client, "/admin/merchants")},
+        follow_redirects=False,
+    )
+
+
+def test_admin_configures_and_disables_receiver_from_panel(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sign_in(client)
+    client.post(
+        "/admin/merchants/create",
+        data={"name": "Tienda Demo A", "csrftoken": csrf_token(client, "/admin/merchants")},
+    )
+    merchant_id = scalar(migrated_database_url, "SELECT id FROM merchants")
+    receiver = {
+        "provider_account_id": "bank-account-demo-a",
+        "beneficiary_name": "Tienda Demo A SA de CV",
+        "clabe": CLABE,
+    }
+
+    enabled = configure_receiver(client, merchant_id, {**receiver, "enabled": "on"})
+    enabled_page = client.get("/admin/merchants").text
+    disabled = configure_receiver(client, merchant_id, receiver)
+    disabled_page = client.get("/admin/merchants").text
+
+    assert enabled.status_code == HTTPStatus.SEE_OTHER
+    assert "Receiving account saved" in enabled_page
+    assert "Tienda Demo A SA de CV" in enabled_page
+    assert "**************6782" in enabled_page
+    assert 'bg-green-lt">Enabled' in enabled_page
+    assert "new charges are blocked" not in enabled_page
+    assert CLABE not in enabled_page
+    assert disabled.status_code == HTTPStatus.SEE_OTHER
+    assert "new charges are blocked until it is enabled" in disabled_page
+    assert scalar(migrated_database_url, "SELECT enabled FROM receiving_accounts") is False
+
+
+def test_panel_rejects_invalid_receiver_without_echoing_the_account(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sign_in(client)
+    client.post(
+        "/admin/merchants/create",
+        data={"name": "Tienda Demo A", "csrftoken": csrf_token(client, "/admin/merchants")},
+    )
+    merchant_id = scalar(migrated_database_url, "SELECT id FROM merchants")
+    invalid_clabe = "012180000123456781"
+
+    response = configure_receiver(
+        client,
+        merchant_id,
+        {
+            "provider_account_id": "bank-account-demo-a",
+            "beneficiary_name": "Tienda Demo A SA de CV",
+            "clabe": invalid_clabe,
+        },
+    )
+    page = client.get("/admin/merchants").text
+    without_csrf = client.post(
+        f"/admin/merchants/{merchant_id}/receiver",
+        data={"provider_account_id": "x", "beneficiary_name": "x", "clabe": CLABE},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert "CLABE must have 18 digits and a valid check digit" in page
+    assert invalid_clabe not in page
+    assert without_csrf.status_code == HTTPStatus.FORBIDDEN
+    assert scalar(migrated_database_url, "SELECT count(*) FROM receiving_accounts") == 0
