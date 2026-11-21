@@ -51,3 +51,10 @@ class PasswordResetRequestBody(BaseModel):
 
 class AcceptedResponse(BaseModel):
     detail: str
+
+
+class PasswordResetConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=1024)

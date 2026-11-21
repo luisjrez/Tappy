@@ -7,10 +7,9 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
-from sqlalchemy import text
 
-from tappy.identity.lifecycle import lock_identity
-from tappy.identity.sessions import SessionPolicy, log_out, renew
+from tappy.identity.lifecycle import deactivate_identity
+from tappy.identity.sessions import InvalidRefreshTokenError, SessionPolicy, log_out, renew
 from tappy.main import create_app
 from tappy.platform.database import Database
 from tests.support import MovableClock, build_settings, create_identity, run_identity
@@ -189,21 +188,28 @@ def test_logout_racing_a_renewal_also_revokes_the_renewed_session(
     assert refresh(client, issued.refresh_token).status_code == HTTPStatus.UNAUTHORIZED
 
 
-def test_locking_an_identity_for_deactivation_does_not_block_new_sessions(
+def test_renewal_waits_for_a_concurrent_deactivation_and_then_fails(
     client: TestClient, migrated_database_url: str
 ) -> None:
     tokens = log_in(client)
     database = Database.from_settings(build_settings(database_url=migrated_database_url))
     deactivation = database.session_factory()
     deactivation.begin()
-    lock_identity(deactivation, EMAIL)
-    try:
-        with database.transaction() as renewal:
-            renewal.execute(text("SET LOCAL lock_timeout = '2s'"))
-            issued = renew(renewal, tokens["refresh_token"], START, POLICY)
-    finally:
-        deactivation.rollback()
-        deactivation.close()
-        database.dispose()
+    deactivate_identity(deactivation, EMAIL, START)
 
-    assert me_status(client, issued.access_token) == HTTPStatus.OK
+    def concurrent_renewal() -> None:
+        with database.transaction() as session:
+            renew(session, tokens["refresh_token"], START, POLICY)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        renewal = pool.submit(concurrent_renewal)
+        time.sleep(0.5)
+        still_waiting = not renewal.done()
+        deactivation.commit()
+        with pytest.raises(InvalidRefreshTokenError):
+            renewal.result(timeout=10)
+    deactivation.close()
+    database.dispose()
+
+    assert still_waiting
+    assert me_status(client, tokens["access_token"]) == HTTPStatus.UNAUTHORIZED

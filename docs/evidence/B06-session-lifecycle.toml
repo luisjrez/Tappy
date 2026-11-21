@@ -54,6 +54,6 @@ tests = [
     "tests/identity/test_session_lifecycle.py::test_deactivated_identity_loses_access_and_renewal",
     "tests/identity/test_session_lifecycle.py::test_logout_with_expired_access_token_still_revokes_the_session",
     "tests/identity/test_session_lifecycle.py::test_logout_racing_a_renewal_also_revokes_the_renewed_session",
-    "tests/identity/test_session_lifecycle.py::test_locking_an_identity_for_deactivation_does_not_block_new_sessions",
+    "tests/identity/test_session_lifecycle.py::test_renewal_waits_for_a_concurrent_deactivation_and_then_fails",
     "tests/identity/test_login.py::test_token_stops_working_when_identity_becomes_inactive",
 ]

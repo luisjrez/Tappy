@@ -81,3 +81,16 @@ def test_startup_failure_does_not_expose_secret_values(environment: dict[str, st
     assert "TAPPY_SECRET_KEY" in result.stderr
     assert SENSITIVE_SHORT_SECRET not in output
     assert str(len(SENSITIVE_SHORT_SECRET)) not in output
+
+
+def test_password_length_bounds_must_be_consistent() -> None:
+    result = run_tappy(
+        {
+            **app_environment(UNREACHABLE_DATABASE_URL),
+            "TAPPY_PASSWORD_MIN_LENGTH": "64",
+            "TAPPY_PASSWORD_MAX_LENGTH": "32",
+        }
+    )
+
+    assert result.returncode != 0
+    assert "TAPPY_PASSWORD_MAX_LENGTH" in result.stderr
