@@ -174,4 +174,6 @@ def test_there_is_no_public_sign_up_route(client: TestClient) -> None:
         "/auth/logout",
         "/operators",
         "/operators/{reference}/deactivate",
+        "/merchants",
+        "/merchants/{merchant_id}/members",
     }

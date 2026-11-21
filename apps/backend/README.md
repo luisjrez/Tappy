@@ -70,6 +70,18 @@ Administrator bearer token required (`401` without a valid token, `403` for oper
 | `GET /operators` · `GET /operators/{reference}` | Operator identities only (`404` for administrators or unknown references) |
 | `POST /operators/{reference}/deactivate` | Marks the operator inactive and revokes all its sessions |
 
+## Merchants
+
+Every merchant query is scoped by membership: administrators see every merchant, operators only the merchants they belong to. A merchant outside the caller's scope answers `404` (its existence is not revealed).
+
+| Method and path | Who | Result |
+| --- | --- | --- |
+| `GET /merchants` · `GET /merchants/{id}` | Any active identity | Merchants within scope, with their operators |
+| `POST /merchants {"name"}` | Administrators | Create a merchant |
+| `POST /merchants/{id}/members {"operator_reference"}` | Administrators | `201` assigns an active operator; repeating it answers `200` and keeps the original membership |
+
+The back office has a **Merchants** page to create merchants and assign operators.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.
