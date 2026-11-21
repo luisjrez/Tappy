@@ -1,5 +1,5 @@
 ticket = "B09"
-revision = "f3bf054"
+revision = "e57ec60"
 
 [vc01]
 status = "PASS"
@@ -36,6 +36,8 @@ mode = "automated"
 tests = [
     "tests/merchants/test_merchants_api.py::test_operator_cannot_read_or_modify_a_foreign_merchant",
     "tests/backoffice/test_merchants_panel.py::test_merchant_form_requires_csrf_and_an_admin",
+    "tests/merchants/test_merchants_api.py::test_blank_or_overlong_names_are_rejected",
+    "tests/backoffice/test_merchants_panel.py::test_panel_rejects_blank_or_overlong_names_without_creating",
 ]
 
 [[criteria]]
