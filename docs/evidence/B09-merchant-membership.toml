@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B09-merchant-membership.md#b09-vc01--resultado-inicial-de-api-y-panel"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -23,6 +23,8 @@ tests = [
     "tests/merchants/test_merchants_api.py::test_operator_sees_only_the_merchant_it_belongs_to",
     "tests/merchants/test_merchants_api.py::test_own_merchant_is_readable_and_anonymous_gets_nothing",
     "tests/backoffice/test_merchants_panel.py::test_admin_creates_merchant_and_assigns_operator_from_panel",
+    "tests/merchants/test_merchants_api.py::test_blank_or_overlong_names_are_rejected",
+    "tests/backoffice/test_merchants_panel.py::test_panel_rejects_blank_or_overlong_names_without_creating",
 ]
 
 [[criteria]]
@@ -36,8 +38,6 @@ mode = "automated"
 tests = [
     "tests/merchants/test_merchants_api.py::test_operator_cannot_read_or_modify_a_foreign_merchant",
     "tests/backoffice/test_merchants_panel.py::test_merchant_form_requires_csrf_and_an_admin",
-    "tests/merchants/test_merchants_api.py::test_blank_or_overlong_names_are_rejected",
-    "tests/backoffice/test_merchants_panel.py::test_panel_rejects_blank_or_overlong_names_without_creating",
 ]
 
 [[criteria]]

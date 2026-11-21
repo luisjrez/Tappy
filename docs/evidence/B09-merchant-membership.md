@@ -7,7 +7,7 @@ Ticket: [#17](https://github.com/luisjrez/Tappy/issues/17) · Historia: [H3 #3](
 - Ticket, UC/AC/TC y comprobación: B09-UC01–UC03, B09-AC01–AC03, B09-TC01–TC03, B09-VC01.
 - Modalidad: **resultado inicial** (API `/merchants` y vista «Merchants» nuevas). Contratos existentes sin diferencias; nuevo `merchants-unauthenticated` (401) aprobado en `7758b73`. El menú del panel suma «Merchants» (cambio esperado de navegación).
 - Base: rama B08 `8610294` (PR #59) en el stack principal #54. Revisión evaluada: candidato `7758b73`; correcciones de review en `f3bf054` y `e57ec60` (revisión final evaluada; VC01 re-ejecutada sobre ella).
-- Entorno: macOS, Colima + Compose, Python 3.14.8; Chrome (DevTools MCP), 1280×800 (capturas de página completa). Fecha: 2026-11-20. Ejecutor: sesión local de desarrollo del autor del PR.
+- Entorno: macOS, Colima + Compose, Python 3.14.8; Chrome (DevTools MCP), 1280×800 (capturas de página completa). Fecha: 2026-11-20 (candidato) y 2026-11-21 (correcciones, VC01 re-ejecutada). Ejecutor: sesión local de desarrollo del autor del PR.
 - Datos: comercios «Tienda Demo A/B» y operadores sintéticos.
 
 ## Diseño
@@ -21,8 +21,8 @@ Ticket: [#17](https://github.com/luisjrez/Tappy/issues/17) · Historia: [H3 #3](
 
 | UC | AC | TC | Test real | Resultado |
 | --- | --- | --- | --- | --- |
-| B09-UC01 | B09-AC01 | B09-TC01 | `test_operator_sees_only_the_merchant_it_belongs_to` (con dos comercios, la operadora A solo ve A con su membresía una vez); `test_own_merchant_is_readable_and_anonymous_gets_nothing`; `test_admin_creates_merchant_and_assigns_operator_from_panel` | PASS |
-| B09-UC02 | B09-AC02 | B09-TC02 | `test_operator_cannot_read_or_modify_a_foreign_merchant` (GET B → 404, unirse a B → 403, `merchant_id` extra en el cuerpo → 422, `?merchant_id=B` no amplía; B sin cambios); `test_merchant_form_requires_csrf_and_an_admin`; `test_blank_or_overlong_names_are_rejected` (API) y `test_panel_rejects_blank_or_overlong_names_without_creating` (panel: 303 + mensaje, sin filas) | PASS |
+| B09-UC01 | B09-AC01 | B09-TC01 | `test_operator_sees_only_the_merchant_it_belongs_to` (con dos comercios, la operadora A solo ve A con su membresía una vez); `test_own_merchant_is_readable_and_anonymous_gets_nothing`; `test_admin_creates_merchant_and_assigns_operator_from_panel`; `test_blank_or_overlong_names_are_rejected` (API) y `test_panel_rejects_blank_or_overlong_names_without_creating` (panel: 303 + mensaje, sin filas) | PASS |
+| B09-UC02 | B09-AC02 | B09-TC02 | `test_operator_cannot_read_or_modify_a_foreign_merchant` (GET B → 404, unirse a B → 403, `merchant_id` extra en el cuerpo → 422, `?merchant_id=B` no amplía; B sin cambios); `test_merchant_form_requires_csrf_and_an_admin` | PASS |
 | B09-UC03 | B09-AC03 | B09-TC03 | `test_repeated_assignment_keeps_one_original_membership` (201 → 200, una fila, `created_at` original); `test_only_active_operators_can_be_assigned`; `test_concurrent_assignments_keep_a_single_membership`; `test_assignment_racing_a_deactivation_never_links_an_inactive_operator` | PASS |
 
 ## TDD
@@ -66,7 +66,7 @@ Capturas re-tomadas sobre `e57ec60` (Chrome DevTools, 1280×800, página complet
 
 ## Checks
 
-`uv run python -m quality.check` sobre `e57ec60`: PASS format, lint, types (mypy strict, 83 archivos), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (155 passed, 0 fallos, Postgres real aislado), api (contratos sin diferencias). Los tests de concurrencia se repitieron 3 veces seguidas en verde. `evidence` queda en FAIL solo por la review pendiente.
+`uv run python -m quality.check` sobre `e57ec60`: PASS format, lint, types (mypy strict, 83 archivos), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (155 passed, 0 fallos, Postgres real aislado), api (contratos sin diferencias). Los tests de concurrencia se repitieron 3 veces seguidas en verde. `evidence` en PASS tras registrar la review aprobada.
 
 ## Supresiones
 
@@ -78,4 +78,10 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `7758b73` | CHANGES_REQUESTED | CHANGES_REQUESTED | Hard: asignación sin bloqueo podía vincular a un operador en desactivación. Spec: `PATCH` fuera de alcance; faltaban tests de campo extra, operador inactivo, concurrencia y carrera. Smells: búsquedas/orden duplicados, regla «asignable» en el panel, nombres poco claros, `except` amplio, N+1 |
+| 2 | `f3bf054` + `41599f5`→`e57ec60` | CHANGES_REQUESTED | CHANGES_REQUESTED | Hard: nombre >120 desde el panel → 500. Smells: `sleep` fijo en el test de carrera, doble camino de idempotencia. Spec: VC01 no re-ejecutada sobre la revisión final |
+| 3 | `e57ec60` + evidencia | APPROVE | APPROVE | Nits de Spec (trazar los tests de nombre en TC01, fecha) corregidos en este documento |
+
+Hallazgos pendientes: 0.
