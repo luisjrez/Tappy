@@ -33,7 +33,13 @@ def test_active_operator_logs_in_and_reads_own_identity(
 
     assert session.status_code == HTTPStatus.OK
     assert session.json()["token_type"] == "bearer"
-    assert set(session.json()) == {"access_token", "token_type", "expires_at"}
+    assert set(session.json()) == {
+        "access_token",
+        "token_type",
+        "expires_at",
+        "refresh_token",
+        "refresh_expires_at",
+    }
     assert identity.status_code == HTTPStatus.OK
     assert identity.json() == {
         "reference": reference,

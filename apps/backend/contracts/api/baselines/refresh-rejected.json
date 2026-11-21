@@ -1,0 +1,10 @@
+{
+  "revision": "eff5ce6",
+  "status": 401,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "detail": "Invalid refresh token"
+  }
+}

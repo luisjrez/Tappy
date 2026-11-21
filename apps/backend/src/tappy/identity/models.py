@@ -37,7 +37,11 @@ class AccessSession(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     identity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identities.id"), index=True)
+    family_id: Mapped[uuid.UUID] = mapped_column(index=True)
     token_digest: Mapped[str] = mapped_column(String(64), unique=True)
+    refresh_digest: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    family_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
