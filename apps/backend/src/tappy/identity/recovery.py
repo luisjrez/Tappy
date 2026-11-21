@@ -16,7 +16,7 @@ from tappy.notifications.transport import Envelope
 from tappy.platform.config import Settings
 
 RESET_PATH = "/password-reset"
-SUBJECT = "Restablece tu contraseña de Tappy"
+SUBJECT = "Reset your Tappy password"
 RECOVERY_ACCEPTED = "If the account exists, a recovery email will be sent"
 
 
@@ -80,9 +80,9 @@ def reset_link(policy: RecoveryPolicy, token: str) -> str:
 def recovery_message(link: str, lifetime: timedelta) -> str:
     minutes = int(lifetime.total_seconds() // 60)
     return (
-        "Recibimos una solicitud para restablecer tu contraseña de Tappy.\n\n"
-        f"Abre este enlace en los próximos {minutes} minutos:\n{link}\n\n"
-        "Si no la pediste, ignora este correo; tu contraseña no cambia."
+        "We received a request to reset your Tappy password.\n\n"
+        f"Open this link within the next {minutes} minutes:\n{link}\n\n"
+        "If you did not ask for it, ignore this email; your password stays the same."
     )
 
 
