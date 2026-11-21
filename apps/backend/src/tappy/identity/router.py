@@ -16,6 +16,7 @@ from tappy.identity.sessions import (
     InvalidCredentialsError,
     InvalidRefreshTokenError,
     IssuedSession,
+    LoginCredentials,
     RefreshTokenReuseError,
     SessionPolicy,
     log_in,
@@ -54,7 +55,8 @@ def login(
 ) -> SessionResponse:
     policy = SessionPolicy.from_settings(settings)
     try:
-        issued = log_in(db, payload.email, payload.password, clock.now(), policy)
+        credentials = LoginCredentials(payload.email, payload.password)
+        issued = log_in(db, credentials, clock.now(), policy)
     except InvalidCredentialsError as error:
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail=str(error)) from None
     return session_response(issued)

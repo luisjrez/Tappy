@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, ge=1, le=65535)
     access_token_ttl_seconds: int = Field(default=900, ge=60)
     session_max_lifetime_seconds: int = Field(default=30 * 24 * 3600, ge=3600)
+    admin_secure_cookies: bool = True
 
 
 class ConfigurationError(Exception):

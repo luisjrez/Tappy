@@ -8,7 +8,7 @@ from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.orm import Session
 
 from tappy.identity.errors import IdentityError, InvalidEmailError
-from tappy.identity.models import AccessSession, Identity, IdentityStatus
+from tappy.identity.models import AccessSession, Identity, IdentityStatus, Role
 from tappy.identity.passwords import UNKNOWN_IDENTITY_HASH, verify_password
 from tappy.identity.provisioning import IdentitySummary, by_email
 from tappy.platform.config import Settings
@@ -52,6 +52,12 @@ class SessionPolicy:
 
 
 @dataclass(frozen=True)
+class LoginCredentials:
+    email: str
+    password: str
+
+
+@dataclass(frozen=True)
 class SessionFamily:
     identity_id: uuid.UUID
     family_id: uuid.UUID
@@ -70,7 +76,9 @@ def digest(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def find_active_identity(db: Session, email: str, password: str) -> Identity:
+def find_active_identity(
+    db: Session, email: str, password: str, required_role: Role | None = None
+) -> Identity:
     try:
         identity = db.scalar(select(Identity).where(by_email(email)))
     except InvalidEmailError:
@@ -78,6 +86,8 @@ def find_active_identity(db: Session, email: str, password: str) -> Identity:
     password_hash = UNKNOWN_IDENTITY_HASH if identity is None else identity.password_hash
     password_matches = verify_password(password_hash, password)
     if identity is None or not password_matches or identity.status is not IdentityStatus.ACTIVE:
+        raise InvalidCredentialsError
+    if required_role is not None and identity.role is not required_role:
         raise InvalidCredentialsError
     return identity
 
@@ -102,9 +112,13 @@ def issue_session(
 
 
 def log_in(
-    db: Session, email: str, password: str, now: datetime, policy: SessionPolicy
+    db: Session,
+    credentials: LoginCredentials,
+    now: datetime,
+    policy: SessionPolicy,
+    required_role: Role | None = None,
 ) -> IssuedSession:
-    identity = find_active_identity(db, email, password)
+    identity = find_active_identity(db, credentials.email, credentials.password, required_role)
     family = SessionFamily(identity.id, uuid.uuid4(), now + policy.max_lifetime)
     return issue_session(db, family, now, policy)
 
