@@ -1,0 +1,96 @@
+# Evidencia — B41 Solicitar recuperación de contraseña por correo
+
+Ticket: [#49](https://github.com/luisjrez/Tappy/issues/49) · Historia: [H2 #2](https://github.com/luisjrez/Tappy/issues/2) · Protocolo: [TICKET_QUALITY_PROTOCOL](../planning/TICKET_QUALITY_PROTOCOL.md) · Manifiesto: [B41-password-recovery-request.toml](B41-password-recovery-request.toml)
+
+> **Estado: BLOCKED por B41-TC06.** La entrega real a un buzón controlado requiere proveedor SMTP y remitente autorizados que aún no existen. El resto del ticket está implementado y verificado con Mailpit (SMTP de prueba). Por decisión del usuario (2026-11-20), B41/B42 viven en un stack lateral con base B08 para no bloquear el stack principal.
+
+## Revisiones y escenario
+
+- Ticket, UC/AC/TC y comprobación: B41-UC01–UC05, B41-AC01–AC05, B41-TC01–TC06, B41-VC01.
+- Modalidad: **resultado inicial** (endpoint, worker, formulario del panel y plantilla de login nuevos). La vista de login de B07 cambia solo por el enlace «Forgot your password?» (cambio esperado). Contratos existentes sin diferencias; nuevo `password-reset-request` (202) aprobado en `658901e`.
+- Base: rama B08 `8610294` (PR #59). Revisión evaluada: candidato `f30a5a5`.
+- Entorno: macOS, Colima + Compose (Postgres 18.6, Mailpit v1.33.0), Python 3.14.8, cryptography 50.0.2; Chrome (DevTools MCP), 1280×800. Fecha: 2026-11-20. Ejecutor: sesión local de desarrollo del autor del PR.
+- Datos: identidades sintéticas `@tappy.example`; tokens redactados en esta página.
+
+## Diseño
+
+- Política (configurable): vida del token `TAPPY_PASSWORD_RESET_TTL_SECONDS` (1800), límites por correo (3) y por origen (10) en una ventana de 3600 s, origen del enlace `TAPPY_PUBLIC_BASE_URL` (validado como esquema+host, sin ruta).
+- `tappy.identity.recovery`: `request_password_reset` normaliza el correo (inválido → nada), registra intentos persistentes por digest de correo y de origen (`recovery_attempts`; nunca se guarda el correo de quien no es usuario), y solo si ambos están dentro del límite y la identidad existe y está activa crea `password_reset_requests` (digest SHA-256 del token, `expires_at`) y encola el correo. La respuesta (`202`, mensaje genérico) es idéntica en todos los casos y no espera al SMTP; el token se genera y su digest se calcula siempre, para un trabajo comparable.
+- `tappy.notifications`: outbox durable `outbound_emails`; el cuerpo (contiene el enlace) se cifra con Fernet derivado de `TAPPY_SECRET_KEY` y se purga al enviarse o al agotar intentos. `deliver_due` toma lotes con `FOR UPDATE SKIP LOCKED`, reintenta con backoff exponencial ante `SMTPException`/`OSError` (incluida respuesta ambigua) hasta `TAPPY_DELIVERY_MAX_ATTEMPTS` y guarda solo el tipo de error. Worker: `python -m tappy.notifications deliver`. Transporte SMTP configurable; Mailpit en Compose para desarrollo, tests y CI.
+- Panel: ruta pública `/admin/password-reset` registrada por el `AuthProvider` (en `allow_routes`), con CSRF, enlazada desde el login; mismo mensaje genérico y mismo caso de uso.
+- Fuera de alcance (ticket): el consumo del token y el cambio de contraseña son B42; sin alta pública, invitaciones ni cambio de correo.
+
+## Trazabilidad UC → AC → TC → test
+
+| UC | AC | TC | Prueba real | Resultado |
+| --- | --- | --- | --- | --- |
+| B41-UC01 | B41-AC01 | B41-TC01 | `test_active_identity_receives_link_with_configured_origin` (SMTP real a Mailpit: destinatario, enlace con origen configurado, token ausente de la respuesta); `test_deliver_command_sends_pending_email`; formulario del panel: `test_login_page_links_to_public_recovery_form`, `test_recovery_form_answers_generically_and_queues_only_for_real_accounts`, `test_recovery_form_requires_csrf` | PASS |
+| B41-UC01 | B41-AC01 | B41-TC06 | Entrega real a buzón controlado con remitente configurado | **BLOCKED** (sin proveedor) |
+| B41-UC02 | B41-AC02 | B41-TC02 | `test_unknown_or_inactive_accounts_get_the_same_answer_and_nothing_else` (mismo 202 y cuerpo; sin filas de outbox ni de reset; la inactiva sigue inactiva) | PASS |
+| B41-UC03 | B41-AC03 | B41-TC03 | `test_limits_persist_across_processes_and_never_touch_credentials` (5 solicitudes en un proceso + 1 en otro → solo 3 correos; login intacto); `test_origin_limit_applies_across_different_accounts` | PASS |
+| B41-UC04 | B41-AC04 | B41-TC04 | `test_provider_failure_is_retried_after_restart_without_changing_credentials` (fallo 451 → reintento programado → nuevo proceso entrega; login intacto); `test_delivery_gives_up_after_bounded_attempts`; `test_deliver_command_requires_known_subcommand` | PASS |
+| B41-UC05 | B41-AC05 | B41-TC05 | `test_link_origin_ignores_host_headers_and_raw_token_is_never_stored` (`Host`/`X-Forwarded-Host` manipulados; digest = SHA-256 del token; cuerpo cifrado sin token y purgado tras enviar; token fuera de respuesta y logs) | PASS |
+
+## TDD
+
+| Comportamiento | Red | Green |
+| --- | --- | --- |
+| Correo entregado con enlace configurado | Stub del worker: `not enough values to unpack (expected 1, got 0)` (Mailpit vacío) | Outbox, sellado, SMTP, caso de uso, endpoint, migración `0005` |
+| Formulario del panel | 3 fallos (sin enlace en login, 404 en `/admin/password-reset`) | Ruta pública del `AuthProvider`, plantillas `login.html`/`password_reset.html` |
+| Subcomando `deliver` explícito | `python -m tappy.notifications` sin subcomando salía 0 | `argparse` con subcomando obligatorio |
+| Respuesta genérica, límites, reintento, origen, token | Sin Red propio (cubiertos por el Green de TC01). Mutaciones detectadas y revertidas: sin límites → fallan los 2 tests de TC03; cuentas inactivas reciben correo → falla TC02[inactive]; token bruto persistido → falla TC05; cuerpo no purgado → fallan TC04 y TC05; sin reintentos → fallan los 2 de TC04; cuerpo en claro → fallan 4 tests | — |
+
+Hallazgo durante TDD: un test que marcaba `next_attempt_at = now()` en Postgres no quedaba vencido para el reloj del host; los tests lo fijan una hora atrás (el worker usa el reloj del proceso).
+
+## B41-VC01 — Resultado inicial
+
+API (proceso real, DB en `0005`):
+
+```text
+POST /auth/password-reset/request {"email":"vc01-admin@tappy.example"} → 202 {"detail":"If the account exists, a recovery email will be sent"}
+POST /auth/password-reset/request {"email":"nadie@tappy.example"}      → 202 {"detail":"If the account exists, a recovery email will be sent"}
+POST … con Host: evil.example                                          → 202
+outbox antes del worker: pending|0|gAAAAABrAPRK…  (cuerpo cifrado)
+$ python -m tappy.notifications deliver → sent=2 retried=0 failed=0 (exit 0)
+outbox después: sent|1|cuerpo_purgado=t
+password_reset_requests: length(token_digest)=64, vigencia 00:30:00
+```
+
+Correo recibido en Mailpit (token redactado; el enlace usa el origen configurado aunque una solicitud llevara `Host: evil.example`):
+
+```text
+To: ['vc01-admin@tappy.example'] | From: no-reply@tappy.example | Subject: Reset your Tappy password
+We received a request to reset your Tappy password.
+
+Open this link within the next 30 minutes:
+http://127.0.0.1:8000/password-reset?token=<redactado>
+
+If you did not ask for it, ignore this email; your password stays the same.
+```
+
+(La primera captura de la API se hizo con el texto del correo en español; se cambió a inglés en `f30a5a5` por la convención de copy en inglés y se recapturó.)
+
+Panel:
+
+| Vista | Captura | Comprobación |
+| --- | --- | --- |
+| Login con enlace (B07 modificado) | ![Login con enlace](B41/01-login-con-enlace-de-recuperacion.png) | Único cambio respecto a la evidencia de B07: enlace «Forgot your password?» bajo el formulario |
+| Solicitud enviada desde el panel | ![Solicitud aceptada](B41/02-solicitud-aceptada-generica.png) | Mensaje genérico con `role=status`; sin indicar si la cuenta existe |
+
+Logs del servidor sin `token=` (0 coincidencias). Datos de prueba y buzón limpiados al terminar. Estado VC01: **PASS** (resultado inicial; la entrega real se cubre en TC06, BLOCKED).
+
+## Checks
+
+Pendiente de registrar sobre la revisión final.
+
+## Supresiones
+
+`tests/identity/test_password_recovery.py` → `S310` (API HTTP local de Mailpit) y `S603` (ejecuta el worker como subproceso).
+
+## Umbral
+
+AC PASS / AC aplicables = 4/5 = **80%** (B41-AC01 BLOCKED por TC06). No alcanza el 97% y AC01 es obligatorio: **el gate de evidencia bloquea B41** hasta ejecutar TC06 con un proveedor real.
+
+## Review Standards/Spec
+
+Pendiente.
