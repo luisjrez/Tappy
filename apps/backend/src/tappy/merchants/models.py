@@ -7,6 +7,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from tappy.platform.persistence import Base
 
 MERCHANT_NAME_MAX_LENGTH = 120
+BENEFICIARY_NAME_MAX_LENGTH = 120
+PROVIDER_ACCOUNT_ID_MAX_LENGTH = 64
 
 
 class Merchant(Base):
@@ -25,3 +27,18 @@ class Membership(Base):
     merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), index=True)
     identity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identities.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ReceivingAccount(Base):
+    __tablename__ = "receiving_accounts"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    merchant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("merchants.id"), unique=True)
+    provider_account_id: Mapped[str] = mapped_column(
+        String(PROVIDER_ACCOUNT_ID_MAX_LENGTH), unique=True
+    )
+    beneficiary_name: Mapped[str] = mapped_column(String(BENEFICIARY_NAME_MAX_LENGTH))
+    account_last4: Mapped[str] = mapped_column(String(4))
+    enabled: Mapped[bool]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

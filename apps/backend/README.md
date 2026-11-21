@@ -82,6 +82,18 @@ Every merchant query is scoped by membership: administrators see every merchant,
 
 The back office has a **Merchants** page to create merchants and assign operators.
 
+### Receiving accounts
+
+Each merchant has at most one receiving account: an account already authorized at the provider, registered by an administrator. Tappy never opens bank accounts and offers no public sign-up for them.
+
+| Method and path | Who | Result |
+| --- | --- | --- |
+| `PUT /merchants/{id}/receiver {"provider_account_id", "beneficiary_name", "clabe", "enabled"}` | Administrators | Creates or replaces the receiving account. The CLABE needs 18 digits and a valid check digit; only its last 4 digits are stored. A provider account ID used by another merchant answers `409` |
+| `GET /merchants/{id}/receiver` | Any active identity within scope | Beneficiary, masked account (`**************1234`), `enabled`, `can_issue` and `blocked_reason`; `404` when none is configured |
+| `POST /merchants/{id}/issuance-check {}` | Any active identity within scope | `200` with the receiver new charges will use, or `409` with the reason they are blocked (no receiver, or receiver disabled). The body accepts no fields: callers cannot choose a receiver |
+
+Disabling a receiving account only blocks new charges; the account and the merchant's records stay. The same rule decides availability in the API, the issuance check and the back office, where the **Merchants** page shows and edits each receiving account.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.

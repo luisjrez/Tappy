@@ -6,10 +6,27 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from tappy.identity.dependencies import CurrentIdentity, current_admin
 from tappy.merchants.errors import (
     InvalidMerchantNameError,
+    InvalidReceiverError,
+    IssuanceBlockedError,
     MerchantNotFoundError,
     OperatorNotAssignableError,
+    ReceiverAccountTakenError,
+    ReceiverNotConfiguredError,
 )
-from tappy.merchants.schemas import MembershipRequest, MerchantCreateRequest, MerchantResponse
+from tappy.merchants.receivers import (
+    ReceiverSettings,
+    configure_receiver,
+    issuing_receiver,
+    read_receiver,
+)
+from tappy.merchants.schemas import (
+    IssuanceCheckRequest,
+    MembershipRequest,
+    MerchantCreateRequest,
+    MerchantResponse,
+    ReceiverRequest,
+    ReceiverResponse,
+)
 from tappy.merchants.service import (
     assign_operator,
     create_merchant,
@@ -80,3 +97,57 @@ def assign(
     if not result.created:
         response.status_code = HTTPStatus.OK
     return MerchantResponse.model_validate(result.merchant)
+
+
+@router.put("/{merchant_id}/receiver", dependencies=ADMIN_ONLY, responses=NOT_FOUND)
+def configure(
+    merchant_id: uuid.UUID,
+    payload: ReceiverRequest,
+    db: SessionDependency,
+    clock: ClockDependency,
+) -> ReceiverResponse:
+    settings = ReceiverSettings(
+        provider_account_id=payload.provider_account_id,
+        beneficiary_name=payload.beneficiary_name,
+        clabe=payload.clabe.get_secret_value(),
+        enabled=payload.enabled,
+    )
+    try:
+        view = configure_receiver(db, merchant_id, settings, clock.now())
+    except MerchantNotFoundError:
+        raise not_found() from None
+    except InvalidReceiverError as error:
+        raise unprocessable(error) from None
+    except ReceiverAccountTakenError as error:
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(error)) from None
+    return ReceiverResponse.model_validate(view)
+
+
+@router.get("/{merchant_id}/receiver", responses=NOT_FOUND)
+def read_receiver_of(
+    merchant_id: uuid.UUID, actor: CurrentIdentity, db: SessionDependency
+) -> ReceiverResponse:
+    try:
+        return ReceiverResponse.model_validate(read_receiver(db, actor, merchant_id))
+    except MerchantNotFoundError:
+        raise not_found() from None
+    except ReceiverNotConfiguredError as error:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from None
+
+
+@router.post(
+    "/{merchant_id}/issuance-check",
+    responses={**NOT_FOUND, HTTPStatus.CONFLICT: {"description": "New charges are blocked"}},
+)
+def check_issuance(
+    merchant_id: uuid.UUID,
+    payload: IssuanceCheckRequest,
+    actor: CurrentIdentity,
+    db: SessionDependency,
+) -> ReceiverResponse:
+    try:
+        return ReceiverResponse.model_validate(issuing_receiver(db, actor, merchant_id))
+    except MerchantNotFoundError:
+        raise not_found() from None
+    except IssuanceBlockedError as error:
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(error)) from None
