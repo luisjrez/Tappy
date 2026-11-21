@@ -1,4 +1,6 @@
+import argparse
 import sys
+from collections.abc import Sequence
 
 from tappy.notifications.outbox import DeliveryReport, deliver_due
 from tappy.notifications.sealing import Sealer
@@ -22,7 +24,11 @@ def deliver_pending(settings: Settings, transport: MailTransport | None = None) 
         database.dispose()
 
 
-def main() -> int:
+def main(arguments: Sequence[str]) -> int:
+    parser = argparse.ArgumentParser(prog="python -m tappy.notifications")
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("deliver", help="Send due emails from the outbox")
+    parser.parse_args(arguments)
     try:
         settings = load_settings()
     except ConfigurationError as error:

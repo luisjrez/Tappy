@@ -3,6 +3,8 @@ import json
 import logging
 import re
 import smtplib
+import subprocess
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -17,7 +19,14 @@ from tappy.main import create_app
 from tappy.notifications.cli import deliver_pending
 from tappy.notifications.transport import Envelope
 from tappy.platform.config import Settings
-from tests.support import build_settings, create_identity, execute, scalar
+from tests.support import (
+    app_environment,
+    build_settings,
+    create_identity,
+    execute,
+    isolated_environment,
+    scalar,
+)
 
 MAILPIT_API = "http://127.0.0.1:8025/api/v1"
 OPERATOR_EMAIL = "operadora@tappy.example"
@@ -237,3 +246,35 @@ def test_link_origin_ignores_host_headers_and_raw_token_is_never_stored(
         hashlib.sha256(token.encode()).hexdigest()
     )
     assert scalar(migrated_database_url, "SELECT sealed_body FROM outbound_emails") is None
+
+
+def test_deliver_command_sends_pending_email(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    request_recovery(client, OPERATOR_EMAIL)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "tappy.notifications", "deliver"],
+        env=isolated_environment(app_environment(migrated_database_url)),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "sent=1 retried=0 failed=0"
+    assert [message.recipients for message in delivered_messages()] == [[OPERATOR_EMAIL]]
+
+
+def test_deliver_command_requires_known_subcommand(migrated_database_url: str) -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "tappy.notifications"],
+        env=isolated_environment(app_environment(migrated_database_url)),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode != 0
