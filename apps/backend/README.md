@@ -60,6 +60,16 @@ Passwords are normalized with Unicode NFKC, need 12 to 128 characters and are re
 - `POST /auth/logout` with the bearer token (also accepted once expired, never once rotated or revoked) revokes the whole session: neither its access token nor its refresh token work afterwards.
 - `uv run python -m tappy.identity deactivate --email …` marks the identity inactive and revokes all its sessions.
 
+## Operators API
+
+Administrator bearer token required (`401` without a valid token, `403` for operators). There is no public sign-up.
+
+| Method and path | Result |
+| --- | --- |
+| `POST /operators {"email", "initial_password"}` | `201` with `reference`, `email`, `role`, `status`; `409` if the email exists (case-insensitive); `422` for an invalid email or password policy. The password is never echoed. |
+| `GET /operators` · `GET /operators/{reference}` | Operator identities only (`404` for administrators or unknown references) |
+| `POST /operators/{reference}/deactivate` | Marks the operator inactive and revokes all its sessions |
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.
@@ -67,6 +77,7 @@ Starlette Admin is mounted at `/admin`. Only active administrators can sign in; 
 - The browser session lives in the `tappy_admin_session` cookie: `HttpOnly`, `SameSite=Strict`, and `Secure` unless `TAPPY_ADMIN_SECURE_COOKIES=false` (only for local HTTP development).
 - Every mutating request (sign-in and sign-out included) needs the signed CSRF token rendered in the form; requests without it get `403`. Starlette Admin marks its CSRF cookie `Secure` when the request scheme is HTTPS, so behind a TLS-terminating proxy run Uvicorn with forwarded headers (`--proxy-headers` and `--forwarded-allow-ips`).
 - Replaying an old panel cookie whose refresh token was already rotated revokes the whole session, exactly like the API.
+- **Operators** page (`/admin/operators`): create an operator with an initial password that the administrator delivers in person (never emailed, never shown again) and deactivate operators; deactivation revokes their sessions immediately. There is no generic CRUD over identities.
 - Starlette Admin's own logger is limited to errors so sign-in attempts do not write emails to the logs.
 
 ## Checks
