@@ -17,12 +17,10 @@ from tappy.identity.sessions import (
     InvalidRefreshTokenError,
     IssuedSession,
     LoginCredentials,
-    RefreshTokenReuseError,
     SessionPolicy,
     log_in,
     log_out,
-    renew,
-    revoke_family,
+    renew_session,
 )
 from tappy.platform.dependencies import (
     ClockDependency,
@@ -68,18 +66,13 @@ def login(
 )
 def refresh(
     payload: RefreshRequest,
-    db: SessionDependency,
     database: DatabaseDependency,
     clock: ClockDependency,
     settings: SettingsDependency,
 ) -> SessionResponse:
     policy = SessionPolicy.from_settings(settings)
     try:
-        issued = renew(db, payload.refresh_token, clock.now(), policy)
-    except RefreshTokenReuseError as reuse:
-        with database.transaction() as revocation:
-            revoke_family(revocation, reuse.family_id, clock.now())
-        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail=str(reuse)) from None
+        issued = renew_session(database, payload.refresh_token, clock.now(), policy)
     except InvalidRefreshTokenError as error:
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail=str(error)) from None
     return session_response(issued)

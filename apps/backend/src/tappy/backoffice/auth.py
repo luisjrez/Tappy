@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import Response
@@ -10,11 +12,13 @@ from tappy.identity.sessions import (
     InvalidCredentialsError,
     InvalidRefreshTokenError,
     LoginCredentials,
+    RefreshTokenReuseError,
+    ResumedSession,
     SessionPolicy,
-    find_access,
+    SessionTokens,
     log_in,
     log_out,
-    renew,
+    resume_session,
 )
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
@@ -23,22 +27,17 @@ ACCESS_KEY = "access_token"
 REFRESH_KEY = "refresh_token"
 
 
-class PanelCredentials:
-    def __init__(self, access_token: str, refresh_token: str) -> None:
-        self.access_token = access_token
-        self.refresh_token = refresh_token
+def stored_tokens(request: Request) -> SessionTokens | None:
+    access_token = request.session.get(ACCESS_KEY)
+    refresh_token = request.session.get(REFRESH_KEY)
+    if not isinstance(access_token, str) or not isinstance(refresh_token, str):
+        return None
+    return SessionTokens(access_token, refresh_token)
 
-    @classmethod
-    def from_session(cls, request: Request) -> PanelCredentials | None:
-        access_token = request.session.get(ACCESS_KEY)
-        refresh_token = request.session.get(REFRESH_KEY)
-        if not isinstance(access_token, str) or not isinstance(refresh_token, str):
-            return None
-        return cls(access_token, refresh_token)
 
-    def store(self, request: Request) -> None:
-        request.session[ACCESS_KEY] = self.access_token
-        request.session[REFRESH_KEY] = self.refresh_token
+def store_tokens(request: Request, tokens: SessionTokens) -> None:
+    request.session[ACCESS_KEY] = tokens.access_token
+    request.session[REFRESH_KEY] = tokens.refresh_token
 
 
 class AdminAuthProvider(AuthProvider):
@@ -48,56 +47,47 @@ class AdminAuthProvider(AuthProvider):
         self.clock = clock
         self.policy = policy
 
-    def start_session(self, email: str, password: str) -> PanelCredentials:
+    def start_session(self, email: str, password: str) -> SessionTokens:
         with self.database.transaction() as db:
             attempt = LoginCredentials(email, password)
             issued = log_in(db, attempt, self.clock.now(), self.policy, Role.ADMIN)
-        return PanelCredentials(issued.access_token, issued.refresh_token)
+        return issued.tokens
 
-    def current_admin(self, credentials: PanelCredentials) -> tuple[str, PanelCredentials]:
-        with self.database.transaction() as db:
-            try:
-                identity, _ = find_access(db, credentials.access_token, self.clock.now())
-            except InvalidAccessTokenError:
-                issued = renew(db, credentials.refresh_token, self.clock.now(), self.policy)
-                credentials = PanelCredentials(issued.access_token, issued.refresh_token)
-                identity, _ = find_access(db, credentials.access_token, self.clock.now())
-            if identity.role is not Role.ADMIN:
-                raise InvalidAccessTokenError
-            return identity.email, credentials
+    def resume(self, tokens: SessionTokens) -> ResumedSession:
+        return resume_session(self.database, tokens, self.clock.now(), self.policy, Role.ADMIN)
 
-    def end_session(self, credentials: PanelCredentials) -> None:
+    def end_session(self, tokens: SessionTokens) -> None:
         with self.database.transaction() as db:
-            log_out(db, credentials.access_token, self.clock.now())
+            log_out(db, tokens.access_token, self.clock.now())
 
     async def login(
         self, username: str, password: str, remember_me: bool, request: Request
     ) -> Response | None:
         try:
-            credentials = await run_in_threadpool(self.start_session, username, password)
+            tokens = await run_in_threadpool(self.start_session, username, password)
         except InvalidCredentialsError as error:
             raise LoginFailed(str(error)) from None
-        credentials.store(request)
+        store_tokens(request, tokens)
         return None
 
     async def authenticate(self, request: Request) -> AdminUser | None:
-        credentials = PanelCredentials.from_session(request)
-        if credentials is None:
+        tokens = stored_tokens(request)
+        if tokens is None:
             return None
         try:
-            email, current = await run_in_threadpool(self.current_admin, credentials)
-        except InvalidAccessTokenError, InvalidRefreshTokenError:
+            resumed = await run_in_threadpool(self.resume, tokens)
+        except InvalidAccessTokenError, RefreshTokenReuseError:
             request.session.clear()
             return None
-        current.store(request)
-        return AdminUser(username=email)
+        except InvalidRefreshTokenError:
+            return None
+        store_tokens(request, resumed.tokens)
+        return AdminUser(username=resumed.identity.email)
 
     async def logout(self, request: Request) -> Response | None:
-        credentials = PanelCredentials.from_session(request)
+        tokens = stored_tokens(request)
         request.session.clear()
-        if credentials is not None:
-            try:
-                await run_in_threadpool(self.end_session, credentials)
-            except InvalidAccessTokenError:
-                return None
+        if tokens is not None:
+            with suppress(InvalidAccessTokenError):
+                await run_in_threadpool(self.end_session, tokens)
         return None
