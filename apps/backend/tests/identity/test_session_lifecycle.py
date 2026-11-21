@@ -46,7 +46,7 @@ def me_status(client: TestClient, access_token: str) -> int:
 def test_renewal_issues_working_tokens_and_retires_the_previous_pair(client: TestClient) -> None:
     first = log_in(client)
 
-    renewed = client.post("/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    renewed = refresh(client, first["refresh_token"])
     second = renewed.json()
 
     assert renewed.status_code == HTTPStatus.OK
@@ -83,11 +83,15 @@ def test_session_cannot_be_renewed_past_its_absolute_lifetime(
 
     assert expired.status_code == HTTPStatus.UNAUTHORIZED
     assert expired.json() == {"detail": "Invalid refresh token"}
+    assert me_status(client, tokens["access_token"]) == HTTPStatus.UNAUTHORIZED
 
 
-def test_reused_refresh_token_fails_and_revokes_the_whole_session(client: TestClient) -> None:
+def test_reused_refresh_token_fails_and_revokes_the_whole_session(
+    client: TestClient, clock: MovableClock
+) -> None:
     first = log_in(client)
     second = refresh(client, first["refresh_token"]).json()
+    clock.advance(timedelta(minutes=1))
 
     reused = refresh(client, first["refresh_token"])
 
@@ -107,17 +111,20 @@ def test_logged_out_session_is_not_revived_by_renewal(client: TestClient) -> Non
     assert refresh(client, tokens["refresh_token"]).status_code == HTTPStatus.UNAUTHORIZED
 
 
-def test_concurrent_renewals_issue_at_most_one_session(client: TestClient) -> None:
+def test_concurrent_renewals_keep_exactly_one_working_session(client: TestClient) -> None:
     tokens = log_in(client)
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         responses = list(pool.map(lambda _: refresh(client, tokens["refresh_token"]), range(4)))
 
     successes = [response for response in responses if response.status_code == HTTPStatus.OK]
-    assert len(successes) <= 1
+    assert len(successes) == 1
     assert all(
         response.status_code in {HTTPStatus.OK, HTTPStatus.UNAUTHORIZED} for response in responses
     )
+    winner = successes[0].json()
+    assert me_status(client, winner["access_token"]) == HTTPStatus.OK
+    assert refresh(client, winner["refresh_token"]).status_code == HTTPStatus.OK
 
 
 def test_deactivated_identity_loses_access_and_renewal(
@@ -133,3 +140,17 @@ def test_deactivated_identity_loses_access_and_renewal(
     assert refresh(client, tokens["refresh_token"]).status_code == HTTPStatus.UNAUTHORIZED
     relogin = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
     assert relogin.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_logout_with_expired_access_token_still_revokes_the_session(
+    client: TestClient, clock: MovableClock
+) -> None:
+    tokens = log_in(client)
+    clock.advance(timedelta(minutes=20))
+
+    logout = client.post(
+        "/auth/logout", headers={"Authorization": f"Bearer {tokens['access_token']}"}
+    )
+
+    assert logout.status_code == HTTPStatus.NO_CONTENT
+    assert refresh(client, tokens["refresh_token"]).status_code == HTTPStatus.UNAUTHORIZED

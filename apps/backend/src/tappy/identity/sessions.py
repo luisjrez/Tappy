@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, select, update
 from sqlalchemy.orm import Session
 
 from tappy.identity.errors import IdentityError, InvalidEmailError
@@ -24,10 +24,22 @@ class InvalidAccessTokenError(IdentityError):
         super().__init__("Invalid access token")
 
 
+class InvalidRefreshTokenError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Invalid refresh token")
+
+
+class RefreshTokenReuseError(InvalidRefreshTokenError):
+    def __init__(self, family_id: uuid.UUID) -> None:
+        super().__init__()
+        self.family_id = family_id
+
+
 @dataclass(frozen=True)
 class SessionPolicy:
     access_lifetime: timedelta
     max_lifetime: timedelta
+    reuse_grace: timedelta = timedelta(seconds=10)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> SessionPolicy:
@@ -68,7 +80,7 @@ def find_active_identity(db: Session, email: str, password: str) -> Identity:
     return identity
 
 
-def issue(
+def issue_session(
     db: Session, family: SessionFamily, now: datetime, policy: SessionPolicy
 ) -> IssuedSession:
     access_token = secrets.token_urlsafe(32)
@@ -92,20 +104,26 @@ def log_in(
 ) -> IssuedSession:
     identity = find_active_identity(db, email, password)
     family = SessionFamily(identity.id, uuid.uuid4(), now + policy.max_lifetime)
-    return issue(db, family, now, policy)
+    return issue_session(db, family, now, policy)
 
 
-def revoke_family(db: Session, family_id: uuid.UUID, now: datetime) -> None:
+def revoke_sessions(db: Session, scope: ColumnElement[bool], now: datetime) -> None:
     db.execute(
         update(AccessSession)
-        .where(AccessSession.family_id == family_id, AccessSession.revoked_at.is_(None))
+        .where(scope, AccessSession.revoked_at.is_(None))
         .values(revoked_at=now)
     )
 
 
-def renew(
-    db: Session, refresh_token: str, now: datetime, policy: SessionPolicy
-) -> IssuedSession | None:
+def revoke_family(db: Session, family_id: uuid.UUID, now: datetime) -> None:
+    revoke_sessions(db, AccessSession.family_id == family_id, now)
+
+
+def revoke_identity_sessions(db: Session, identity_id: uuid.UUID, now: datetime) -> None:
+    revoke_sessions(db, AccessSession.identity_id == identity_id, now)
+
+
+def renew(db: Session, refresh_token: str, now: datetime, policy: SessionPolicy) -> IssuedSession:
     refresh_digest = digest(refresh_token)
     claimed = db.execute(
         update(AccessSession)
@@ -123,33 +141,39 @@ def renew(
             AccessSession.identity_id, AccessSession.family_id, AccessSession.family_expires_at
         )
     ).one_or_none()
-    if claimed is None:
-        presented = db.scalar(
-            select(AccessSession.family_id).where(AccessSession.refresh_digest == refresh_digest)
+    if claimed is not None:
+        family = SessionFamily(claimed.identity_id, claimed.family_id, claimed.family_expires_at)
+        return issue_session(db, family, now, policy)
+    presented = db.execute(
+        select(AccessSession.family_id, AccessSession.rotated_at).where(
+            AccessSession.refresh_digest == refresh_digest
         )
-        if presented is not None:
-            revoke_family(db, presented, now)
-        return None
-    family = SessionFamily(claimed.identity_id, claimed.family_id, claimed.family_expires_at)
-    return issue(db, family, now, policy)
+    ).one_or_none()
+    rotated_at = None if presented is None else presented.rotated_at
+    if presented is not None and rotated_at is not None and rotated_at <= now - policy.reuse_grace:
+        raise RefreshTokenReuseError(presented.family_id)
+    raise InvalidRefreshTokenError
 
 
-def is_usable(identity: Identity, access: AccessSession, now: datetime) -> bool:
+def is_current(identity: Identity, access: AccessSession) -> bool:
     return (
         access.revoked_at is None
         and access.rotated_at is None
-        and access.expires_at > now
         and identity.status is IdentityStatus.ACTIVE
     )
 
 
-def find_access(db: Session, token: str, now: datetime) -> tuple[Identity, AccessSession]:
+def find_access(
+    db: Session, token: str, now: datetime, *, allow_expired: bool = False
+) -> tuple[Identity, AccessSession]:
     row = db.execute(
         select(Identity, AccessSession)
         .join(AccessSession, AccessSession.identity_id == Identity.id)
         .where(AccessSession.token_digest == digest(token))
     ).one_or_none()
-    if row is None or not is_usable(row.Identity, row.AccessSession, now):
+    if row is None or not is_current(row.Identity, row.AccessSession):
+        raise InvalidAccessTokenError
+    if not allow_expired and row.AccessSession.expires_at <= now:
         raise InvalidAccessTokenError
     return row.Identity, row.AccessSession
 
@@ -160,13 +184,5 @@ def resolve_identity(db: Session, token: str, now: datetime) -> IdentitySummary:
 
 
 def log_out(db: Session, token: str, now: datetime) -> None:
-    _, access = find_access(db, token, now)
+    _, access = find_access(db, token, now, allow_expired=True)
     revoke_family(db, access.family_id, now)
-
-
-def revoke_identity_sessions(db: Session, identity_id: uuid.UUID, now: datetime) -> None:
-    db.execute(
-        update(AccessSession)
-        .where(AccessSession.identity_id == identity_id, AccessSession.revoked_at.is_(None))
-        .values(revoked_at=now)
-    )

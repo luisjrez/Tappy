@@ -56,8 +56,8 @@ Passwords are normalized with Unicode NFKC, need 12 to 128 characters and are re
 | `TAPPY_SESSION_MAX_LIFETIME_SECONDS` | `2592000` (30 days, minimum 3600) |
 
 - `POST /auth/refresh {"refresh_token": …}` rotates atomically: it returns a new pair and the previous access and refresh tokens stop working. Renewal never extends the session beyond its absolute lifetime, counted from login.
-- Presenting a refresh token that was already rotated (reuse) fails and revokes the whole session.
-- `POST /auth/logout` with the bearer token revokes the whole session: neither its access token nor its refresh token work afterwards.
+- Presenting a refresh token that was rotated more than 10 seconds earlier (reuse) fails and revokes the whole session; a concurrent duplicate renewal within that window only fails, so the winning renewal keeps working.
+- `POST /auth/logout` with the bearer token (also accepted once expired, never once rotated or revoked) revokes the whole session: neither its access token nor its refresh token work afterwards.
 - `uv run python -m tappy.identity deactivate --email …` marks the identity inactive and revokes all its sessions.
 
 ## Checks
