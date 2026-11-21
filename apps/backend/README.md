@@ -77,7 +77,7 @@ Every merchant query is scoped by membership: administrators see every merchant,
 | Method and path | Who | Result |
 | --- | --- | --- |
 | `GET /merchants` · `GET /merchants/{id}` | Any active identity | Merchants within scope, with their operators |
-| `POST /merchants {"name"}` · `PATCH /merchants/{id}` | Administrators | Create or rename |
+| `POST /merchants {"name"}` | Administrators | Create a merchant |
 | `POST /merchants/{id}/members {"operator_reference"}` | Administrators | `201` assigns an active operator; repeating it answers `200` and keeps the original membership |
 
 The back office has a **Merchants** page to create merchants and assign operators.

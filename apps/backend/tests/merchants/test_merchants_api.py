@@ -1,4 +1,8 @@
+import time
+import uuid
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from http import HTTPStatus
 
 import pytest
@@ -6,8 +10,10 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 
 from tappy.identity.models import Role
+from tappy.identity.operators import deactivate_operator
 from tappy.main import create_app
-from tests.support import build_settings, create_identity, scalar
+from tappy.platform.database import Database
+from tests.support import build_settings, create_identity, execute, scalar
 
 ADMIN = "admin@tappy.example"
 OPERATOR_A = "operadora.a@tappy.example"
@@ -74,15 +80,20 @@ def test_operator_cannot_read_or_modify_a_foreign_merchant(
     operator_a = bearer(client, OPERATOR_A)
 
     read_b = client.get(f"/merchants/{merchant_b}", headers=operator_a)
-    rename_b = client.patch(
-        f"/merchants/{merchant_b}", json={"name": "Hackeado"}, headers=operator_a
-    )
     join_b = assign(client, operator_a, merchant_b, reference(migrated_database_url, OPERATOR_A))
+    smuggled = client.post(
+        f"/merchants/{merchant_a}/members",
+        json={
+            "operator_reference": reference(migrated_database_url, OPERATOR_A),
+            "merchant_id": merchant_b,
+        },
+        headers=bearer(client, ADMIN),
+    )
     listing = client.get("/merchants", params={"merchant_id": merchant_b}, headers=operator_a)
 
     assert read_b.status_code == HTTPStatus.NOT_FOUND
-    assert rename_b.status_code == HTTPStatus.FORBIDDEN
     assert join_b.status_code == HTTPStatus.FORBIDDEN
+    assert smuggled.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
     assert [merchant["id"] for merchant in listing.json()] == [merchant_a]
     assert (
         scalar(
@@ -149,6 +160,55 @@ def test_only_active_operators_can_be_assigned(
     merchant_a = create_merchant(client, admin, "Tienda Demo A")
 
     admin_member = assign(client, admin, merchant_a, reference(migrated_database_url, ADMIN))
+    execute(
+        migrated_database_url,
+        "UPDATE identities SET status = 'inactive' WHERE email = :e",
+        {"e": OPERATOR_B},
+    )
+    inactive_member = assign(
+        client, admin, merchant_a, reference(migrated_database_url, OPERATOR_B)
+    )
 
     assert admin_member.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert inactive_member.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert scalar(migrated_database_url, "SELECT count(*) FROM memberships") == 0
+
+
+def test_concurrent_assignments_keep_a_single_membership(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    admin = bearer(client, ADMIN)
+    merchant_a = create_merchant(client, admin, "Tienda Demo A")
+    operator = reference(migrated_database_url, OPERATOR_A)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        statuses = list(
+            pool.map(lambda _: assign(client, admin, merchant_a, operator).status_code, range(4))
+        )
+
+    assert statuses.count(HTTPStatus.CREATED) == 1
+    assert statuses.count(HTTPStatus.OK) == len(statuses) - 1
+    assert scalar(migrated_database_url, "SELECT count(*) FROM memberships") == 1
+
+
+def test_assignment_racing_a_deactivation_never_links_an_inactive_operator(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    admin = bearer(client, ADMIN)
+    merchant_a = create_merchant(client, admin, "Tienda Demo A")
+    operator = reference(migrated_database_url, OPERATOR_A)
+    database = Database.from_settings(build_settings(database_url=migrated_database_url))
+    deactivation = database.session_factory()
+    deactivation.begin()
+    deactivate_operator(deactivation, uuid.UUID(operator), datetime.now(UTC))
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        attempt = pool.submit(assign, client, admin, merchant_a, operator)
+        time.sleep(0.5)
+        deactivation.commit()
+        status = attempt.result(timeout=10).status_code
+    deactivation.close()
+    database.dispose()
+
+    assert status == HTTPStatus.UNPROCESSABLE_CONTENT
     assert scalar(migrated_database_url, "SELECT count(*) FROM memberships") == 0

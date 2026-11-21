@@ -8,13 +8,12 @@ from starlette_admin.flash import flash, get_flashed_messages
 from starlette_admin.routing import route
 from starlette_admin.views import CustomView
 
-from tappy.identity.models import IdentityStatus
-from tappy.identity.operators import list_operators
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.errors import MerchantError
 from tappy.merchants.service import (
     MerchantView,
     assign_operator,
+    assignable_operators,
     create_merchant,
     list_all_merchants,
 )
@@ -35,22 +34,17 @@ class MerchantsView(CustomView):
         self.clock = clock
         self.merchants_url = f"{admin_base_url}{MERCHANTS_PATH}"
 
-    def overview(self) -> tuple[list[MerchantView], list[IdentitySummary]]:
+    def load_page(self) -> tuple[list[MerchantView], list[IdentitySummary]]:
         with self.database.transaction() as db:
-            operators = [
-                operator
-                for operator in list_operators(db)
-                if operator.status is IdentityStatus.ACTIVE
-            ]
-            return list_all_merchants(db), operators
+            return list_all_merchants(db), assignable_operators(db)
 
-    def register(self, name: str) -> MerchantView:
+    def create(self, name: str) -> MerchantView:
         with self.database.transaction() as db:
             return create_merchant(db, name, self.clock.now())
 
-    def link(self, merchant_id: uuid.UUID, operator_id: uuid.UUID) -> bool:
+    def assign(self, merchant_id: uuid.UUID, operator_reference: uuid.UUID) -> bool:
         with self.database.transaction() as db:
-            return assign_operator(db, merchant_id, operator_id, self.clock.now()).created
+            return assign_operator(db, merchant_id, operator_reference, self.clock.now()).created
 
     def back_to_list(self) -> Response:
         return RedirectResponse(self.merchants_url, status_code=HTTPStatus.SEE_OTHER)
@@ -59,7 +53,7 @@ class MerchantsView(CustomView):
     async def index(self, request: Request) -> Response:
         if self.templates is None:
             raise RuntimeError("MerchantsView must be mounted before rendering")
-        merchants, operators = await run_in_threadpool(self.overview)
+        merchants, operators = await run_in_threadpool(self.load_page)
         return self.templates.TemplateResponse(
             request=request,
             name="merchants.html",
@@ -75,9 +69,8 @@ class MerchantsView(CustomView):
     @route("/create", methods=["POST"])
     async def submit_creation(self, request: Request) -> Response:
         form = await request.form()
-        name = form.get("name")
         try:
-            created = await run_in_threadpool(self.register, name if isinstance(name, str) else "")
+            created = await run_in_threadpool(self.create, str(form.get("name") or ""))
         except MerchantError as error:
             flash(request, str(error), "error")
         else:
@@ -89,10 +82,12 @@ class MerchantsView(CustomView):
         merchant_id: uuid.UUID = request.path_params["merchant_id"]
         form = await request.form()
         try:
-            operator_id = uuid.UUID(str(form.get("operator_reference") or ""))
-            created = await run_in_threadpool(self.link, merchant_id, operator_id)
+            operator_reference = uuid.UUID(str(form.get("operator_reference") or ""))
         except ValueError:
             flash(request, "Choose a valid operator", "error")
+            return self.back_to_list()
+        try:
+            created = await run_in_threadpool(self.assign, merchant_id, operator_reference)
         except MerchantError as error:
             flash(request, str(error), "error")
         else:

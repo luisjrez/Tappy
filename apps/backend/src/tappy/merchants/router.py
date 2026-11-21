@@ -15,7 +15,6 @@ from tappy.merchants.service import (
     create_merchant,
     list_merchants,
     read_merchant,
-    rename_merchant,
 )
 from tappy.platform.dependencies import ClockDependency, SessionDependency
 
@@ -55,18 +54,6 @@ def create(
 ) -> MerchantResponse:
     try:
         return MerchantResponse.model_validate(create_merchant(db, payload.name, clock.now()))
-    except InvalidMerchantNameError as error:
-        raise unprocessable(error) from None
-
-
-@router.patch("/{merchant_id}", dependencies=ADMIN_ONLY, responses=NOT_FOUND)
-def rename(
-    merchant_id: uuid.UUID, payload: MerchantCreateRequest, db: SessionDependency
-) -> MerchantResponse:
-    try:
-        return MerchantResponse.model_validate(rename_merchant(db, merchant_id, payload.name))
-    except MerchantNotFoundError:
-        raise not_found() from None
     except InvalidMerchantNameError as error:
         raise unprocessable(error) from None
 
