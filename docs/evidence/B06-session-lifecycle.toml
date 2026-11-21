@@ -1,5 +1,5 @@
 ticket = "B06"
-revision = "eff5ce6"
+revision = "1093101"
 
 [vc01]
 status = "PASS"
@@ -36,7 +36,7 @@ tests = [
     "tests/identity/test_session_lifecycle.py::test_session_cannot_be_renewed_past_its_absolute_lifetime",
     "tests/identity/test_session_lifecycle.py::test_reused_refresh_token_fails_and_revokes_the_whole_session",
     "tests/identity/test_session_lifecycle.py::test_logged_out_session_is_not_revived_by_renewal",
-    "tests/identity/test_session_lifecycle.py::test_concurrent_renewals_issue_at_most_one_session",
+    "tests/identity/test_session_lifecycle.py::test_concurrent_renewals_keep_exactly_one_working_session",
     "tests/identity/test_login.py::test_expired_token_is_rejected",
     "tests/identity/test_login.py::test_revoked_session_is_rejected",
 ]
@@ -52,5 +52,6 @@ mode = "automated"
 tests = [
     "tests/identity/test_session_lifecycle.py::test_logged_out_session_is_not_revived_by_renewal",
     "tests/identity/test_session_lifecycle.py::test_deactivated_identity_loses_access_and_renewal",
+    "tests/identity/test_session_lifecycle.py::test_logout_with_expired_access_token_still_revokes_the_session",
     "tests/identity/test_login.py::test_token_stops_working_when_identity_becomes_inactive",
 ]
