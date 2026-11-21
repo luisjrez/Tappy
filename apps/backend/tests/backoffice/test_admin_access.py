@@ -221,7 +221,7 @@ def test_demoted_or_deactivated_admin_loses_panel(
     panel_login(client, ADMIN_EMAIL)
     assert panel_status(client) == HTTPStatus.OK
 
-    execute(migrated_database_url, f"{change} WHERE email = '{ADMIN_EMAIL}'")
+    execute(migrated_database_url, f"{change} WHERE email = :email", {"email": ADMIN_EMAIL})
 
     assert panel_status(client) == HTTPStatus.SEE_OTHER
 
@@ -260,3 +260,25 @@ def test_concurrent_panel_request_with_stale_cookie_keeps_current_session(
 
     assert duplicate.status_code == HTTPStatus.SEE_OTHER
     assert panel_status(timed_client) == HTTPStatus.OK
+
+
+def test_demoted_admin_session_is_revoked_without_renewal(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    panel_login(client, ADMIN_EMAIL)
+
+    execute(
+        migrated_database_url,
+        "UPDATE identities SET role = 'operator' WHERE email = :email",
+        {"email": ADMIN_EMAIL},
+    )
+
+    assert panel_status(client) == HTTPStatus.SEE_OTHER
+    assert active_sessions(migrated_database_url) == 0
+    assert (
+        scalar(
+            migrated_database_url,
+            "SELECT count(*) FROM access_sessions WHERE rotated_at IS NOT NULL",
+        )
+        == 0
+    )

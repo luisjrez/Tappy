@@ -14,6 +14,7 @@ from tappy.identity.sessions import (
     LoginCredentials,
     RefreshTokenReuseError,
     ResumedSession,
+    RoleNotAllowedError,
     SessionPolicy,
     SessionTokens,
     log_in,
@@ -76,6 +77,11 @@ class AdminAuthProvider(AuthProvider):
             return None
         try:
             resumed = await run_in_threadpool(self.resume, tokens)
+        except RoleNotAllowedError:
+            request.session.clear()
+            with suppress(InvalidAccessTokenError):
+                await run_in_threadpool(self.end_session, tokens)
+            return None
         except InvalidAccessTokenError, RefreshTokenReuseError:
             request.session.clear()
             return None

@@ -27,6 +27,11 @@ class InvalidAccessTokenError(IdentityError):
         super().__init__("Invalid access token")
 
 
+class RoleNotAllowedError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Role not allowed")
+
+
 class InvalidRefreshTokenError(IdentityError):
     def __init__(self) -> None:
         super().__init__("Invalid refresh token")
@@ -246,7 +251,7 @@ def current_summary(
     with database.transaction() as db:
         identity, _ = find_access(db, access_token, now)
         if required_role is not None and identity.role is not required_role:
-            raise InvalidAccessTokenError
+            raise RoleNotAllowedError
         return IdentitySummary.of(identity)
 
 
