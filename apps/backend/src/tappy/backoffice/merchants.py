@@ -19,6 +19,7 @@ from tappy.merchants.receivers import (
     ReceiverSettings,
     ReceiverView,
     configure_receiver,
+    issuance_block,
     list_receivers,
 )
 from tappy.merchants.service import (
@@ -79,6 +80,7 @@ class MerchantsView(CustomView):
                 "merchants": merchants,
                 "operators": operators,
                 "receivers": {str(merchant_id): view for merchant_id, view in receivers.items()},
+                "missing_receiver_reason": issuance_block(None),
                 "beneficiary_max_length": BENEFICIARY_NAME_MAX_LENGTH,
                 "provider_account_max_length": PROVIDER_ACCOUNT_ID_MAX_LENGTH,
                 "name_max_length": MERCHANT_NAME_MAX_LENGTH,

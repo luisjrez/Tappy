@@ -39,11 +39,17 @@ class AssignmentResult:
     created: bool
 
 
-def clean_name(name: str) -> str:
-    cleaned = " ".join(name.split())
-    if not 1 <= len(cleaned) <= MERCHANT_NAME_MAX_LENGTH:
-        raise InvalidMerchantNameError(MERCHANT_NAME_MAX_LENGTH)
+def collapsed_text(value: str, max_length: int, error: Exception) -> str:
+    cleaned = " ".join(value.split())
+    if not 1 <= len(cleaned) <= max_length:
+        raise error
     return cleaned
+
+
+def clean_name(name: str) -> str:
+    return collapsed_text(
+        name, MERCHANT_NAME_MAX_LENGTH, InvalidMerchantNameError(MERCHANT_NAME_MAX_LENGTH)
+    )
 
 
 def ordered_merchants() -> Select[Merchant]:

@@ -39,7 +39,7 @@
                         </dd>
                     </dl>
                 {% else %}
-                    <p>No receiving account configured; new charges are blocked.</p>
+                    <p>{{ missing_receiver_reason }}</p>
                 {% endif %}
                 <details class="mb-3">
                     <summary>{{ "Update receiving account" if receiver else "Configure receiving account" }}</summary>

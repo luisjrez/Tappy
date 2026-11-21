@@ -329,3 +329,26 @@ def test_racing_first_configurations_keep_one_receiver(
     assert response.status_code == HTTPStatus.OK
     assert response.json()["beneficiary_name"] == "Tienda Demo A SA de CV"
     assert scalar(migrated_database_url, "SELECT count(*) FROM receiving_accounts") == 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"provider_account_id": "bank-account-demo-a", "beneficiary_name": "A", "clabe": CLABE_A},
+        {**RECEIVER_A, "clabe": int(CLABE_A)},
+        {**RECEIVER_A, "enabled": "maybe"},
+    ],
+)
+def test_malformed_bodies_never_echo_the_account(
+    client: TestClient, migrated_database_url: str, payload: dict[str, object]
+) -> None:
+    admin = bearer(client, ADMIN)
+    merchant_a = merchant_with_operator(
+        client, migrated_database_url, admin, "Tienda Demo A", OPERATOR_A
+    )
+
+    response = client.put(f"/merchants/{merchant_a}/receiver", json=payload, headers=admin)
+
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
+    assert CLABE_A.lstrip("0") not in response.text
+    assert all(set(issue) == {"type", "loc", "msg"} for issue in response.json()["detail"])

@@ -23,7 +23,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["merchant_id"], ["merchants.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("merchant_id"),
-        sa.UniqueConstraint("provider_account_id"),
+        sa.UniqueConstraint(
+            "provider_account_id", name="uq_receiving_accounts_provider_account_id"
+        ),
     )
 
 

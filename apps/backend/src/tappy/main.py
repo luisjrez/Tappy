@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from tappy.backoffice.admin import mount_admin
 from tappy.identity import operators_router
@@ -11,6 +12,7 @@ from tappy.platform import health
 from tappy.platform.clock import Clock, SystemClock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
+from tappy.platform.validation import validation_error_response
 
 
 def create_app(settings: Settings, clock: Clock | None = None) -> FastAPI:
@@ -27,6 +29,7 @@ def create_app(settings: Settings, clock: Clock | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock or SystemClock()
+    app.add_exception_handler(RequestValidationError, validation_error_response)
     app.include_router(health.router)
     app.include_router(identity_router.router)
     app.include_router(operators_router.router)

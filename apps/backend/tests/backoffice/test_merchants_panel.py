@@ -155,7 +155,8 @@ def test_admin_configures_and_disables_receiver_from_panel(
     assert "Receiving account saved" in enabled_page
     assert "Tienda Demo A SA de CV" in enabled_page
     assert "**************6782" in enabled_page
-    assert "Enabled" in enabled_page
+    assert 'bg-green-lt">Enabled' in enabled_page
+    assert "new charges are blocked" not in enabled_page
     assert CLABE not in enabled_page
     assert disabled.status_code == HTTPStatus.SEE_OTHER
     assert "new charges are blocked until it is enabled" in disabled_page

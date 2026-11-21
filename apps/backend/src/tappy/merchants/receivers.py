@@ -18,11 +18,12 @@ from tappy.merchants.errors import (
 )
 from tappy.merchants.models import (
     BENEFICIARY_NAME_MAX_LENGTH,
+    PROVIDER_ACCOUNT_CONSTRAINT,
     PROVIDER_ACCOUNT_ID_MAX_LENGTH,
     Merchant,
     ReceivingAccount,
 )
-from tappy.merchants.service import accessible_merchant
+from tappy.merchants.service import accessible_merchant, collapsed_text
 
 CLABE = re.compile(r"\d{18}")
 CLABE_WEIGHTS = (3, 7, 1)
@@ -30,7 +31,6 @@ PROVIDER_ACCOUNT_ID = re.compile(rf"[A-Za-z0-9_-]{{1,{PROVIDER_ACCOUNT_ID_MAX_LE
 MASKED_DIGITS = 14
 DISABLED_REASON = "The receiving account is disabled; new charges are blocked until it is enabled"
 MISSING_REASON = "No receiving account is configured; new charges are blocked"
-PROVIDER_ACCOUNT_CONSTRAINT = "receiving_accounts_provider_account_id_key"
 
 
 @dataclass(frozen=True)
@@ -63,11 +63,13 @@ def has_valid_check_digit(clabe: str) -> bool:
 
 
 def validated(settings: ReceiverSettings) -> ReceiverSettings:
-    beneficiary_name = " ".join(settings.beneficiary_name.split())
-    if not 1 <= len(beneficiary_name) <= BENEFICIARY_NAME_MAX_LENGTH:
-        raise InvalidReceiverError(
+    beneficiary_name = collapsed_text(
+        settings.beneficiary_name,
+        BENEFICIARY_NAME_MAX_LENGTH,
+        InvalidReceiverError(
             f"Beneficiary name must have between 1 and {BENEFICIARY_NAME_MAX_LENGTH} characters"
-        )
+        ),
+    )
     if not PROVIDER_ACCOUNT_ID.fullmatch(settings.provider_account_id):
         raise InvalidReceiverError(
             "Provider account ID must use letters, digits, '-' or '_' "
@@ -80,7 +82,9 @@ def validated(settings: ReceiverSettings) -> ReceiverSettings:
     )
 
 
-def issuance_block(receiver: ReceivingAccount) -> str | None:
+def issuance_block(receiver: ReceivingAccount | None) -> str | None:
+    if receiver is None:
+        return MISSING_REASON
     return None if receiver.enabled else DISABLED_REASON
 
 
@@ -128,21 +132,25 @@ def configure_receiver(
     return describe_receiver(receiver)
 
 
+def accessible_receiver(
+    db: Session, actor: IdentitySummary, merchant_id: uuid.UUID
+) -> ReceivingAccount | None:
+    return receiver_of(db, accessible_merchant(db, actor, merchant_id).id)
+
+
 def read_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -> ReceiverView:
-    receiver = receiver_of(db, accessible_merchant(db, actor, merchant_id).id)
+    receiver = accessible_receiver(db, actor, merchant_id)
     if receiver is None:
         raise ReceiverNotConfiguredError
     return describe_receiver(receiver)
 
 
 def issuing_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -> ReceiverView:
-    receiver = receiver_of(db, accessible_merchant(db, actor, merchant_id).id)
-    if receiver is None:
-        raise IssuanceBlockedError(MISSING_REASON)
-    view = describe_receiver(receiver)
-    if view.blocked_reason is not None:
-        raise IssuanceBlockedError(view.blocked_reason)
-    return view
+    receiver = accessible_receiver(db, actor, merchant_id)
+    reason = issuance_block(receiver)
+    if reason is not None or receiver is None:
+        raise IssuanceBlockedError(reason)
+    return describe_receiver(receiver)
 
 
 def list_receivers(db: Session) -> dict[uuid.UUID, ReceiverView]:
