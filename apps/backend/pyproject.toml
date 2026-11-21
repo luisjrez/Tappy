@@ -5,6 +5,7 @@ requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.16",
     "argon2-cffi>=25.1",
+    "cryptography>=46",
     "email-validator>=2.2",
     "fastapi>=0.165",
     "psycopg[binary]>=3.2",
@@ -45,6 +46,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "PT", "RUF", "N", "S", "AS
 "tests/**" = ["S101", "S105", "S106"]
 "tests/support.py" = ["S603"]
 "tests/test_startup.py" = ["S310"]
+"tests/identity/test_password_recovery.py" = ["S310"]
 "tests/test_persistence.py" = ["S603", "S607"]
 "tests/quality/*" = ["S603"]
 

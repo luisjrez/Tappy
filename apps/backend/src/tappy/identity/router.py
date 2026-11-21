@@ -1,13 +1,16 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 
 from tappy.identity.dependencies import CurrentIdentity, bearer, unauthorized
+from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoveryRequest, RecoveryService
 from tappy.identity.schemas import (
+    AcceptedResponse,
     IdentityResponse,
     LoginRequest,
+    PasswordResetRequestBody,
     RefreshRequest,
     SessionResponse,
 )
@@ -91,6 +94,21 @@ def logout(
     except InvalidAccessTokenError:
         raise unauthorized() from None
     return Response(status_code=HTTPStatus.NO_CONTENT)
+
+
+@router.post("/password-reset/request", status_code=HTTPStatus.ACCEPTED)
+def request_reset(
+    payload: PasswordResetRequestBody,
+    request: Request,
+    db: SessionDependency,
+    clock: ClockDependency,
+    settings: SettingsDependency,
+) -> AcceptedResponse:
+    origin = request.client.host if request.client else "unknown"
+    RecoveryService.from_settings(settings).request(
+        db, RecoveryRequest(payload.email, origin), clock.now()
+    )
+    return AcceptedResponse(detail=RECOVERY_ACCEPTED)
 
 
 @router.get("/me", responses={HTTPStatus.UNAUTHORIZED: {"description": "Not authenticated"}})
