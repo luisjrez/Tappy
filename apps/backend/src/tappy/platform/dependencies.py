@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
 
@@ -22,7 +23,13 @@ def get_database(request: Request) -> Database:
     return database
 
 
+def get_clock(request: Request) -> Clock:
+    clock: Clock = request.app.state.clock
+    return clock
+
+
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
+ClockDependency = Annotated[Clock, Depends(get_clock)]
 DatabaseDependency = Annotated[Database, Depends(get_database)]
 
 
