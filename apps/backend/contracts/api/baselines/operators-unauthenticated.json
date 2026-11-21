@@ -1,0 +1,10 @@
+{
+  "revision": "c3d72c4",
+  "status": 401,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "detail": "Not authenticated"
+  }
+}

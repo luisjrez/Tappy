@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block header %}
+    <h2 class="page-title">Operators</h2>
+{% endblock %}
+{% block content %}
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Create operator</h3></div>
+        <form class="card-body" method="post" action="{{ operators_url }}/create">
+            {{ csrf_input(request) }}
+            <div class="mb-3">
+                <label class="form-label" for="email">Email</label>
+                <input class="form-control" id="email" name="email" type="email" autocomplete="off" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="initial_password">Initial password</label>
+                <input class="form-control" id="initial_password" name="initial_password" type="password"
+                       autocomplete="new-password" minlength="12" maxlength="128" required>
+                <small class="form-hint">Deliver it to the operator in person; it is never shown again or emailed.</small>
+            </div>
+            <button class="btn btn-primary" type="submit">Create operator</button>
+        </form>
+    </div>
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table card-table">
+                <thead><tr><th>Email</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                {% for operator in operators %}
+                    <tr>
+                        <td>{{ operator.email }}</td>
+                        <td>{{ operator.status }}</td>
+                        <td>
+                            {% if operator.status == "active" %}
+                                <form method="post" action="{{ operators_url }}/{{ operator.reference }}/deactivate">
+                                    {{ csrf_input(request) }}
+                                    <button class="btn btn-outline-danger btn-sm" type="submit">Deactivate</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="3">No operators yet.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

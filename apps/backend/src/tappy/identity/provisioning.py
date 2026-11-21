@@ -46,13 +46,17 @@ def find_identity(session: Session, email: str) -> IdentitySummary:
 
 
 def provision_admin(session: Session, email: str, password: str) -> IdentitySummary:
+    return provision_identity(session, email, password, Role.ADMIN)
+
+
+def provision_identity(session: Session, email: str, password: str, role: Role) -> IdentitySummary:
     normalized_email = normalize_email(email)
     if session.scalar(select(Identity.id).where(by_email(normalized_email))) is not None:
         raise IdentityAlreadyExistsError
     identity = Identity(
         email=normalized_email,
         password_hash=hash_password(password),
-        role=Role.ADMIN,
+        role=role,
         status=IdentityStatus.ACTIVE,
     )
     session.add(identity)

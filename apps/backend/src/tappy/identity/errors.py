@@ -17,4 +17,4 @@ class IdentityAlreadyExistsError(IdentityError):
 
 class IdentityNotFoundError(IdentityError):
     def __init__(self) -> None:
-        super().__init__("No identity with this email")
+        super().__init__("Identity not found")

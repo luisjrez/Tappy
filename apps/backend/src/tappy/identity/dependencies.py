@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from tappy.identity.models import Role
 from tappy.identity.provisioning import IdentitySummary
 from tappy.identity.sessions import InvalidAccessTokenError, resolve_identity
 from tappy.platform.dependencies import ClockDependency, SessionDependency
@@ -33,3 +34,12 @@ def current_identity(
 
 
 CurrentIdentity = Annotated[IdentitySummary, Depends(current_identity)]
+
+
+def current_admin(identity: CurrentIdentity) -> IdentitySummary:
+    if identity.role is not Role.ADMIN:
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Administrator role required")
+    return identity
+
+
+CurrentAdmin = Annotated[IdentitySummary, Depends(current_admin)]
