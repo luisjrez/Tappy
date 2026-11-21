@@ -1,0 +1,51 @@
+ticket = "B07"
+revision = "da2dd79"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B07-admin-panel.md#b07-vc01--resultado-inicial-del-panel"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B07-AC01"
+use_cases = ["B07-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B07-TC01"
+mode = "automated"
+tests = ["tests/backoffice/test_admin_access.py::test_admin_enters_panel_and_logout_revokes_access"]
+
+[[criteria]]
+id = "B07-AC02"
+use_cases = ["B07-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B07-TC02"
+mode = "automated"
+tests = [
+    "tests/backoffice/test_admin_access.py::test_anonymous_visitor_is_sent_to_login",
+    "tests/backoffice/test_admin_access.py::test_operator_cannot_enter_panel",
+    "tests/backoffice/test_admin_access.py::test_api_bearer_token_does_not_open_panel",
+    "tests/backoffice/test_admin_access.py::test_revoked_panel_session_loses_access",
+]
+
+[[criteria]]
+id = "B07-AC03"
+use_cases = ["B07-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B07-TC03"
+mode = "automated"
+tests = [
+    "tests/backoffice/test_admin_access.py::test_logout_without_valid_csrf_is_rejected_without_changes",
+    "tests/backoffice/test_admin_access.py::test_login_without_csrf_is_rejected",
+    "tests/backoffice/test_admin_access.py::test_panel_cookie_flags_follow_environment",
+]
