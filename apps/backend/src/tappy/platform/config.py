@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     environment: str = Field(min_length=1)
     secret_key: SecretStr = Field(min_length=32)
+    database_url: SecretStr = Field(min_length=1)
     host: str = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535)
 

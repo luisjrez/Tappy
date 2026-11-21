@@ -1,5 +1,4 @@
 import json
-import socket
 import time
 from collections.abc import Iterator
 from urllib.error import URLError
@@ -7,16 +6,16 @@ from urllib.request import urlopen
 
 import pytest
 
-from tests.support import VALID_SECRET, run_tappy, spawn_tappy
+from tests.support import (
+    UNREACHABLE_DATABASE_PASSWORD,
+    UNREACHABLE_DATABASE_URL,
+    VALID_SECRET,
+    free_port,
+    run_tappy,
+    spawn_tappy,
+)
 
 SENSITIVE_SHORT_SECRET = "leaked-if-printed"
-
-
-def free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port: int = probe.getsockname()[1]
-        return port
 
 
 def wait_for_json(url: str, deadline_seconds: float) -> object:
@@ -35,7 +34,12 @@ def wait_for_json(url: str, deadline_seconds: float) -> object:
 def running_api() -> Iterator[int]:
     port = free_port()
     process = spawn_tappy(
-        {"TAPPY_ENVIRONMENT": "local", "TAPPY_SECRET_KEY": VALID_SECRET, "TAPPY_PORT": str(port)}
+        {
+            "TAPPY_ENVIRONMENT": "local",
+            "TAPPY_SECRET_KEY": VALID_SECRET,
+            "TAPPY_DATABASE_URL": UNREACHABLE_DATABASE_URL,
+            "TAPPY_PORT": str(port),
+        }
     )
     try:
         yield port
@@ -51,12 +55,15 @@ def test_started_api_answers_health(running_api: int) -> None:
 
 
 def test_startup_fails_when_required_variable_is_missing() -> None:
-    result = run_tappy({"TAPPY_SECRET_KEY": VALID_SECRET})
+    result = run_tappy(
+        {"TAPPY_SECRET_KEY": VALID_SECRET, "TAPPY_DATABASE_URL": UNREACHABLE_DATABASE_URL}
+    )
 
     assert result.returncode != 0
     assert "TAPPY_ENVIRONMENT" in result.stderr
     assert "Traceback" not in result.stderr
     assert VALID_SECRET not in result.stderr + result.stdout
+    assert UNREACHABLE_DATABASE_PASSWORD not in result.stderr + result.stdout
 
 
 @pytest.mark.parametrize(

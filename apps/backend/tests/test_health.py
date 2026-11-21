@@ -1,15 +1,9 @@
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
 
 from tappy.main import create_app
-from tappy.platform.config import Settings
-from tests.support import VALID_SECRET
-
-
-def build_settings(environment: str) -> Settings:
-    return Settings(environment=environment, secret_key=SecretStr(VALID_SECRET))
+from tests.support import build_settings
 
 
 def test_health_reports_healthy_status() -> None:
