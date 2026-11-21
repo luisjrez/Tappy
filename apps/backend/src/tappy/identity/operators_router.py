@@ -1,9 +1,9 @@
 import uuid
 from http import HTTPStatus
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from tappy.identity.dependencies import CurrentAdmin
+from tappy.identity.dependencies import current_admin
 from tappy.identity.errors import (
     IdentityAlreadyExistsError,
     IdentityNotFoundError,
@@ -19,10 +19,22 @@ from tappy.identity.operators import (
 from tappy.identity.schemas import IdentityResponse, OperatorCreateRequest
 from tappy.platform.dependencies import ClockDependency, SessionDependency
 
-router = APIRouter(prefix="/operators", tags=["operators"])
+router = APIRouter(
+    prefix="/operators",
+    tags=["operators"],
+    dependencies=[Depends(current_admin)],
+    responses={
+        HTTPStatus.UNAUTHORIZED: {"description": "Not authenticated"},
+        HTTPStatus.FORBIDDEN: {"description": "Administrator role required"},
+    },
+)
 NOT_FOUND: dict[int | str, dict[str, object]] = {
     HTTPStatus.NOT_FOUND: {"description": "Operator not found"}
 }
+
+
+def not_found(error: IdentityNotFoundError) -> HTTPException:
+    return HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error))
 
 
 @router.post(
@@ -33,9 +45,7 @@ NOT_FOUND: dict[int | str, dict[str, object]] = {
         HTTPStatus.UNPROCESSABLE_CONTENT: {"description": "Invalid email or password policy"},
     },
 )
-def create(
-    payload: OperatorCreateRequest, admin: CurrentAdmin, db: SessionDependency
-) -> IdentityResponse:
+def create(payload: OperatorCreateRequest, db: SessionDependency) -> IdentityResponse:
     try:
         operator = create_operator(db, payload.email, payload.initial_password)
     except IdentityAlreadyExistsError as error:
@@ -48,23 +58,23 @@ def create(
 
 
 @router.get("")
-def read_all(admin: CurrentAdmin, db: SessionDependency) -> list[IdentityResponse]:
+def read_all(db: SessionDependency) -> list[IdentityResponse]:
     return [IdentityResponse.model_validate(operator) for operator in list_operators(db)]
 
 
 @router.get("/{reference}", responses=NOT_FOUND)
-def read_one(reference: uuid.UUID, admin: CurrentAdmin, db: SessionDependency) -> IdentityResponse:
+def read_one(reference: uuid.UUID, db: SessionDependency) -> IdentityResponse:
     try:
         return IdentityResponse.model_validate(find_operator(db, reference))
     except IdentityNotFoundError as error:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from None
+        raise not_found(error) from None
 
 
 @router.post("/{reference}/deactivate", responses=NOT_FOUND)
 def deactivate(
-    reference: uuid.UUID, admin: CurrentAdmin, db: SessionDependency, clock: ClockDependency
+    reference: uuid.UUID, db: SessionDependency, clock: ClockDependency
 ) -> IdentityResponse:
     try:
         return IdentityResponse.model_validate(deactivate_operator(db, reference, clock.now()))
     except IdentityNotFoundError as error:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(error)) from None
+        raise not_found(error) from None

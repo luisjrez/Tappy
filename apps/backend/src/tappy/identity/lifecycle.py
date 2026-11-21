@@ -17,10 +17,10 @@ def lock_identity(db: Session, email: str) -> Identity:
 
 
 def deactivate_identity(db: Session, email: str, now: datetime) -> IdentitySummary:
-    return deactivate(db, lock_identity(db, email), now)
+    return deactivate_and_revoke(db, lock_identity(db, email), now)
 
 
-def deactivate(db: Session, identity: Identity, now: datetime) -> IdentitySummary:
+def deactivate_and_revoke(db: Session, identity: Identity, now: datetime) -> IdentitySummary:
     identity.status = IdentityStatus.INACTIVE
     revoke_identity_sessions(db, identity.id, now)
     db.flush()

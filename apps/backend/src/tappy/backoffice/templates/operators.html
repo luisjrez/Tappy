@@ -3,9 +3,6 @@
     <h2 class="page-title">Operators</h2>
 {% endblock %}
 {% block content %}
-    {% if message %}
-        <div class="alert {{ 'alert-danger' if failed else 'alert-success' }}" role="alert">{{ message }}</div>
-    {% endif %}
     <div class="card mb-3">
         <div class="card-header"><h3 class="card-title">Create operator</h3></div>
         <form class="card-body" method="post" action="{{ operators_url }}/create">

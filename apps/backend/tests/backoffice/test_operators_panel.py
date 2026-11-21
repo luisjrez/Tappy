@@ -66,11 +66,12 @@ def test_admin_creates_operator_from_form_and_sees_it_listed(
     sign_in(client)
 
     created = create_from_form(client, NEW_OPERATOR)
-    listing = client.get("/admin/operators")
+    listing = client.get(created.headers["location"])
 
-    assert created.status_code == HTTPStatus.CREATED
-    assert INITIAL_PASSWORD not in created.text
-    assert NEW_OPERATOR in listing.text
+    assert created.status_code == HTTPStatus.SEE_OTHER
+    assert created.headers["location"].endswith("/admin/operators")
+    assert f"Operator {NEW_OPERATOR} created" in listing.text
+    assert INITIAL_PASSWORD not in listing.text
     assert (
         scalar(
             migrated_database_url,
@@ -119,10 +120,11 @@ def test_repeated_email_in_form_is_rejected_without_duplicate(
     before = identity_count(migrated_database_url)
 
     response = create_from_form(client, OPERATOR_EMAIL.upper())
+    listing = client.get(response.headers["location"])
 
-    assert response.status_code == HTTPStatus.UNPROCESSABLE_CONTENT
-    assert "already exists" in response.text
-    assert INITIAL_PASSWORD not in response.text
+    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert "already exists" in listing.text
+    assert INITIAL_PASSWORD not in listing.text
     assert identity_count(migrated_database_url) == before
 
 
@@ -145,9 +147,47 @@ def test_deactivation_from_panel_revokes_operator_session(
         follow_redirects=False,
     )
 
-    assert response.status_code == HTTPStatus.OK
-    assert "deactivated" in response.text
+    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert "deactivated" in client.get(response.headers["location"]).text
     assert (
         client.get("/auth/me", headers={"Authorization": f"Bearer {operator_token}"}).status_code
         == HTTPStatus.UNAUTHORIZED
     )
+
+
+def test_anonymous_deactivation_changes_nothing(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    reference = scalar(
+        migrated_database_url,
+        "SELECT id FROM identities WHERE email = :email",
+        {"email": OPERATOR_EMAIL},
+    )
+
+    response = client.post(
+        f"/admin/operators/{reference}/deactivate",
+        data={"csrftoken": csrf_token(client, "/admin/login")},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == HTTPStatus.SEE_OTHER
+    assert "/admin/login" in response.headers["location"]
+    assert (
+        scalar(
+            migrated_database_url,
+            "SELECT status FROM identities WHERE email = :email",
+            {"email": OPERATOR_EMAIL},
+        )
+        == "active"
+    )
+
+
+def test_reloading_after_creation_does_not_resubmit(client: TestClient) -> None:
+    sign_in(client)
+    created = create_from_form(client, NEW_OPERATOR)
+
+    reloaded = client.get(created.headers["location"])
+    reloaded_again = client.get(created.headers["location"])
+
+    assert reloaded.status_code == HTTPStatus.OK
+    assert "already exists" not in reloaded_again.text

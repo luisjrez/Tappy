@@ -81,10 +81,12 @@ def test_non_admins_cannot_create_or_deactivate_operators(
     )
     deactivated = client.post(f"/operators/{target}/deactivate", headers=headers)
     listed = client.get("/operators", headers=headers)
+    fetched = client.get(f"/operators/{target}", headers=headers)
 
     assert created.status_code == expected
     assert deactivated.status_code == expected
     assert listed.status_code == expected
+    assert fetched.status_code == expected
     assert identity_count(migrated_database_url) == before
     assert (
         scalar(
@@ -142,6 +144,7 @@ def test_admin_identities_are_not_managed_as_operators(
     response = client.post(f"/operators/{admin_reference}/deactivate", headers=admin)
 
     assert response.status_code == HTTPStatus.NOT_FOUND
+    assert response.json() == {"detail": "Identity not found"}
     assert client.get("/auth/me", headers=admin).status_code == HTTPStatus.OK
 
 

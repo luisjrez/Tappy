@@ -3,7 +3,8 @@ from http import HTTPStatus
 
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import RedirectResponse, Response
+from starlette_admin.flash import flash, get_flashed_messages
 from starlette_admin.routing import route
 from starlette_admin.views import CustomView
 
@@ -31,17 +32,19 @@ class OperatorsView(CustomView):
         with self.database.transaction() as db:
             return list_operators(db)
 
-    def create(self, email: str, initial_password: str) -> IdentitySummary:
+    def register(self, email: str, initial_password: str) -> IdentitySummary:
         with self.database.transaction() as db:
             return create_operator(db, email, initial_password)
 
-    def deactivate(self, reference: uuid.UUID) -> IdentitySummary:
+    def retire(self, reference: uuid.UUID) -> IdentitySummary:
         with self.database.transaction() as db:
             return deactivate_operator(db, reference, self.clock.now())
 
-    async def page(
-        self, request: Request, message: str = "", status_code: int = HTTPStatus.OK
-    ) -> Response:
+    def back_to_list(self) -> Response:
+        return RedirectResponse(self.operators_url, status_code=HTTPStatus.SEE_OTHER)
+
+    @route("")
+    async def index(self, request: Request) -> Response:
         if self.templates is None:
             raise RuntimeError("OperatorsView must be mounted before rendering")
         return self.templates.TemplateResponse(
@@ -51,32 +54,30 @@ class OperatorsView(CustomView):
                 "title": self.menu_label,
                 "operators": await run_in_threadpool(self.operators),
                 "operators_url": self.operators_url,
-                "message": message,
-                "failed": status_code >= HTTPStatus.BAD_REQUEST,
+                "flashed_messages": get_flashed_messages(request),
             },
-            status_code=status_code,
         )
 
-    @route("")
-    async def index(self, request: Request) -> Response:
-        return await self.page(request)
-
     @route("/create", methods=["POST"])
-    async def create_operator(self, request: Request) -> Response:
+    async def submit_creation(self, request: Request) -> Response:
         form = await request.form()
         email = str(form.get("email") or "")
         initial_password = str(form.get("initial_password") or "")
         try:
-            created = await run_in_threadpool(self.create, email, initial_password)
+            created = await run_in_threadpool(self.register, email, initial_password)
         except IdentityError as error:
-            return await self.page(request, str(error), HTTPStatus.UNPROCESSABLE_CONTENT)
-        return await self.page(request, f"Operator {created.email} created", HTTPStatus.CREATED)
+            flash(request, str(error), "error")
+        else:
+            flash(request, f"Operator {created.email} created", "success")
+        return self.back_to_list()
 
     @route("/{reference:uuid}/deactivate", methods=["POST"])
-    async def deactivate_operator(self, request: Request) -> Response:
+    async def submit_deactivation(self, request: Request) -> Response:
         reference: uuid.UUID = request.path_params["reference"]
         try:
-            operator = await run_in_threadpool(self.deactivate, reference)
+            operator = await run_in_threadpool(self.retire, reference)
         except IdentityError as error:
-            return await self.page(request, str(error), HTTPStatus.NOT_FOUND)
-        return await self.page(request, f"Operator {operator.email} deactivated")
+            flash(request, str(error), "error")
+        else:
+            flash(request, f"Operator {operator.email} deactivated", "success")
+        return self.back_to_list()
