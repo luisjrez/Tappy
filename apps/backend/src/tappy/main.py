@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from tappy.backoffice.admin import mount_admin
 from tappy.identity import router as identity_router
 from tappy.platform import health
 from tappy.platform.clock import Clock, SystemClock
@@ -26,4 +27,5 @@ def create_app(settings: Settings, clock: Clock | None = None) -> FastAPI:
     app.state.clock = clock or SystemClock()
     app.include_router(health.router)
     app.include_router(identity_router.router)
+    mount_admin(app, settings, database, app.state.clock)
     return app

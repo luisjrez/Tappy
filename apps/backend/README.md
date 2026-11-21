@@ -60,6 +60,15 @@ Passwords are normalized with Unicode NFKC, need 12 to 128 characters and are re
 - `POST /auth/logout` with the bearer token (also accepted once expired, never once rotated or revoked) revokes the whole session: neither its access token nor its refresh token work afterwards.
 - `uv run python -m tappy.identity deactivate --email …` marks the identity inactive and revokes all its sessions.
 
+## Back office
+
+Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.
+
+- The browser session lives in the `tappy_admin_session` cookie: `HttpOnly`, `SameSite=Strict`, and `Secure` unless `TAPPY_ADMIN_SECURE_COOKIES=false` (only for local HTTP development).
+- Every mutating request (sign-in and sign-out included) needs the signed CSRF token rendered in the form; requests without it get `403`. Starlette Admin marks its CSRF cookie `Secure` when the request scheme is HTTPS, so behind a TLS-terminating proxy run Uvicorn with forwarded headers (`--proxy-headers` and `--forwarded-allow-ips`).
+- Replaying an old panel cookie whose refresh token was already rotated revokes the whole session, exactly like the API.
+- Starlette Admin's own logger is limited to errors so sign-in attempts do not write emails to the logs.
+
 ## Checks
 
 One command runs the whole battery locally and in CI (`.github/workflows/backend.yml`). It needs the Compose services running and the variables from `.env` exported:

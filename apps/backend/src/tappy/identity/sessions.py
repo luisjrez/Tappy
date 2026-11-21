@@ -8,10 +8,11 @@ from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.orm import Session
 
 from tappy.identity.errors import IdentityError, InvalidEmailError
-from tappy.identity.models import AccessSession, Identity, IdentityStatus
+from tappy.identity.models import AccessSession, Identity, IdentityStatus, Role
 from tappy.identity.passwords import UNKNOWN_IDENTITY_HASH, verify_password
 from tappy.identity.provisioning import IdentitySummary, by_email
 from tappy.platform.config import Settings
+from tappy.platform.database import Database
 
 ADVISORY_KEY_MASK = (1 << 63) - 1
 
@@ -24,6 +25,11 @@ class InvalidCredentialsError(IdentityError):
 class InvalidAccessTokenError(IdentityError):
     def __init__(self) -> None:
         super().__init__("Invalid access token")
+
+
+class RoleNotAllowedError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("Role not allowed")
 
 
 class InvalidRefreshTokenError(IdentityError):
@@ -52,6 +58,24 @@ class SessionPolicy:
 
 
 @dataclass(frozen=True)
+class LoginCredentials:
+    email: str
+    password: str
+
+
+@dataclass(frozen=True)
+class SessionTokens:
+    access_token: str
+    refresh_token: str
+
+
+@dataclass(frozen=True)
+class ResumedSession:
+    identity: IdentitySummary
+    tokens: SessionTokens
+
+
+@dataclass(frozen=True)
 class SessionFamily:
     identity_id: uuid.UUID
     family_id: uuid.UUID
@@ -65,19 +89,27 @@ class IssuedSession:
     expires_at: datetime
     refresh_expires_at: datetime
 
+    @property
+    def tokens(self) -> SessionTokens:
+        return SessionTokens(self.access_token, self.refresh_token)
+
 
 def digest(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def find_active_identity(db: Session, email: str, password: str) -> Identity:
+def find_active_identity(
+    db: Session, credentials: LoginCredentials, required_role: Role | None = None
+) -> Identity:
     try:
-        identity = db.scalar(select(Identity).where(by_email(email)))
+        identity = db.scalar(select(Identity).where(by_email(credentials.email)))
     except InvalidEmailError:
         identity = None
     password_hash = UNKNOWN_IDENTITY_HASH if identity is None else identity.password_hash
-    password_matches = verify_password(password_hash, password)
+    password_matches = verify_password(password_hash, credentials.password)
     if identity is None or not password_matches or identity.status is not IdentityStatus.ACTIVE:
+        raise InvalidCredentialsError
+    if required_role is not None and identity.role is not required_role:
         raise InvalidCredentialsError
     return identity
 
@@ -102,9 +134,13 @@ def issue_session(
 
 
 def log_in(
-    db: Session, email: str, password: str, now: datetime, policy: SessionPolicy
+    db: Session,
+    credentials: LoginCredentials,
+    now: datetime,
+    policy: SessionPolicy,
+    required_role: Role | None = None,
 ) -> IssuedSession:
-    identity = find_active_identity(db, email, password)
+    identity = find_active_identity(db, credentials, required_role)
     family = SessionFamily(identity.id, uuid.uuid4(), now + policy.max_lifetime)
     return issue_session(db, family, now, policy)
 
@@ -195,3 +231,43 @@ def resolve_identity(db: Session, token: str, now: datetime) -> IdentitySummary:
 def log_out(db: Session, token: str, now: datetime) -> None:
     _, access = find_access(db, token, now, allow_expired=True)
     revoke_family(db, access.family_id, now)
+
+
+def renew_session(
+    database: Database, refresh_token: str, now: datetime, policy: SessionPolicy
+) -> IssuedSession:
+    try:
+        with database.transaction() as db:
+            return renew(db, refresh_token, now, policy)
+    except RefreshTokenReuseError as reuse:
+        with database.transaction() as db:
+            revoke_family(db, reuse.family_id, now)
+        raise
+
+
+def current_summary(
+    database: Database, access_token: str, now: datetime, required_role: Role | None
+) -> IdentitySummary:
+    with database.transaction() as db:
+        identity, _ = find_access(db, access_token, now)
+        if required_role is not None and identity.role is not required_role:
+            raise RoleNotAllowedError
+        return IdentitySummary.of(identity)
+
+
+def resume_session(
+    database: Database,
+    tokens: SessionTokens,
+    now: datetime,
+    policy: SessionPolicy,
+    required_role: Role | None = None,
+) -> ResumedSession:
+    try:
+        return ResumedSession(
+            current_summary(database, tokens.access_token, now, required_role), tokens
+        )
+    except InvalidAccessTokenError:
+        renewed = renew_session(database, tokens.refresh_token, now, policy).tokens
+    return ResumedSession(
+        current_summary(database, renewed.access_token, now, required_role), renewed
+    )
