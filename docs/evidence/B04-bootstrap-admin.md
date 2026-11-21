@@ -120,4 +120,4 @@ Ronda 1 sobre `a5d7cb8`, sin bloqueantes; correcciones en `da6e33f`.
 
 Re-revisión 1 sobre `bba374f`: bloqueante — el índice del modelo compilaba `lower('email')` (constante) y `alembic check` no compara índices de expresión; corregido en `961ff31` con Red/Green. No bloqueante: fila de `except A, B:` corregida a «se conserva».
 
-Re-revisión 2: pendiente.
+Re-revisión 2 sobre `961ff31`: sin hallazgos pendientes en ambos ejes (índice compila a `lower(email)`, único índice, modelo y migración coinciden). Manifiesto aprobado.

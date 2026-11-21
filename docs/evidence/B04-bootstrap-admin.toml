@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B04-bootstrap-admin.md#b04-vc01--resultado-inicial-del-comando"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
