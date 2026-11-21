@@ -356,3 +356,36 @@ def test_renewal_racing_a_reset_does_not_survive_it(
     assert status == HTTPStatus.NO_CONTENT
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {issued.access_token}"})
     assert me.status_code == HTTPStatus.UNAUTHORIZED
+
+
+def test_login_with_old_password_during_a_reset_gets_no_surviving_session(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    reset_token = recovery_token(client, settings)
+    database = Database.from_settings(settings)
+    reset = database.session_factory()
+    reset.begin()
+    change = PasswordChange(reset_token, NEW_PASSWORD, PasswordPolicy())
+    confirm_password_reset(reset, change, datetime.now(UTC), ignore_notice)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        login = pool.submit(
+            client.post, "/auth/login", json={"email": OPERATOR_EMAIL, "password": OLD_PASSWORD}
+        )
+        time.sleep(0.5)
+        reset.commit()
+        response = login.result(timeout=10)
+    reset.close()
+    database.dispose()
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert (
+        scalar(
+            migrated_database_url, "SELECT count(*) FROM access_sessions WHERE revoked_at IS NULL"
+        )
+        == 0
+    )
+
+
+def ignore_notice(db: Session, identity: Identity, now: datetime) -> None:
+    return None

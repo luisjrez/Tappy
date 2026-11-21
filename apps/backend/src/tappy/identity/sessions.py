@@ -98,7 +98,9 @@ def find_active_identity(
     db: Session, credentials: LoginCredentials, required_role: Role | None = None
 ) -> Identity:
     try:
-        identity = db.scalar(select(Identity).where(by_email(credentials.email)))
+        identity = db.scalar(
+            select(Identity).where(by_email(credentials.email)).with_for_update(read=True)
+        )
     except InvalidEmailError:
         identity = None
     password_hash = UNKNOWN_IDENTITY_HASH if identity is None else identity.password_hash
