@@ -47,7 +47,7 @@ Ticket: [#14](https://github.com/luisjrez/Tappy/issues/14) · Historia: [H2 #2](
 | Logout concurrente con renovación (re-revisión) | El access de la sesión renovada seguía respondiendo 200 tras el logout: `assert 200 == 401` | `lock_family` en `renew` y `revoke_family`; sin el lock en `revoke_family` el test vuelve a fallar |
 | Desactivación concurrente con renovación (re-revisión 2) | Con el lock de desactivación retenido, insertar la sesión renovada esperaba: `LockNotAvailable … lock timeout`; reproducción del revisor: `{'deact': 'DeadlockDetected', 'renew': 'ok'}` | `FOR NO KEY UPDATE`; reproducción: `{'renew': 'ok', 'deact': 'ok'}` |
 
-En las cuatro primeras filas el Red se observó retirando temporalmente el comportamiento ya implementado (el test falla por la ausencia del comportamiento, no por instalación ni sintaxis) y restaurándolo después; las dos últimas tuvieron Red antes de implementar.
+En las filas «Vida máxima», «Access anterior inválido tras rotar», «Reutilización revoca la sesión» y «Logout revoca» el Red se observó retirando temporalmente el comportamiento ya implementado (el test falla por la ausencia del comportamiento, no por instalación ni sintaxis) y restaurándolo después; el resto tuvo Red antes de implementar.
 
 Refactor con suite verde: `SessionPolicy` y `SessionFamily`; `find_access` compartido por `resolve_identity` y `log_out`; `revoke_sessions` común a familia e identidad; `issue_session`; errores homogéneos por excepción (`InvalidRefreshTokenError`, `RefreshTokenReuseError`).
 
@@ -111,4 +111,4 @@ Re-revisión 1 sobre `1093101`: Standards sin pendientes; Spec, hallazgo de baja
 
 Re-revisión 2 sobre `3a07302`: lock por familia correcto, sin auto-deadlock; Standards sin pendientes (nit: el test de carrera usa `sleep(0.5)` para ordenar hilos; si el orden falla pasa sin ejercitar la carrera, nunca falla en falso). Spec, baja severidad y previo: deadlock entre `deactivate` (`FOR UPDATE`) y la inserción de la sesión renovada (FK). Corregido en `4211fb9` con Red/Green.
 
-Re-revisión 3: pendiente.
+Re-revisión 3 sobre `4211fb9`: sin hallazgos pendientes en ambos ejes (desactivaciones concurrentes siguen serializadas; sin vía de reactivación; test significativo). Nit de redacción de la tabla TDD corregido. Manifiesto aprobado.

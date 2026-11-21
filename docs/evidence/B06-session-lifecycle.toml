@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B06-session-lifecycle.md#b06-vc01--api-inicial-y-comparación-de-login"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
