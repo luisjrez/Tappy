@@ -1,0 +1,50 @@
+{% extends "layout.html" %}
+{% block header %}
+    <h2 class="page-title">Merchants</h2>
+{% endblock %}
+{% block content %}
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Create merchant</h3></div>
+        <form class="card-body" method="post" action="{{ merchants_url }}/create">
+            {{ csrf_input(request) }}
+            <div class="mb-3">
+                <label class="form-label" for="name">Name</label>
+                <input class="form-control" id="name" name="name" maxlength="120" required>
+            </div>
+            <button class="btn btn-primary" type="submit">Create merchant</button>
+        </form>
+    </div>
+    {% for merchant in merchants %}
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title">{{ merchant.name }}</h3></div>
+            <div class="card-body">
+                <p class="text-secondary mb-2">Operators</p>
+                <ul>
+                    {% for member in merchant.members %}
+                        <li>{{ member.email }}</li>
+                    {% else %}
+                        <li>No operators assigned yet.</li>
+                    {% endfor %}
+                </ul>
+                {% if operators %}
+                    <form method="post" action="{{ merchants_url }}/{{ merchant.id }}/members" class="row g-2">
+                        {{ csrf_input(request) }}
+                        <div class="col-auto">
+                            <label class="visually-hidden" for="operator-{{ merchant.id }}">Operator</label>
+                            <select class="form-select" id="operator-{{ merchant.id }}" name="operator_reference" required>
+                                {% for operator in operators %}
+                                    <option value="{{ operator.reference }}">{{ operator.email }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-outline-primary" type="submit">Assign operator</button>
+                        </div>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <p>No merchants yet.</p>
+    {% endfor %}
+{% endblock %}

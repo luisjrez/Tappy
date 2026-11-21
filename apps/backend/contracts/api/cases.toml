@@ -48,3 +48,9 @@ method = "POST"
 path = "/operators"
 database = "migrated"
 body = { email = "nuevo@tappy.example", initial_password = "frase sintetica 2026" }
+
+[[cases]]
+name = "merchants-unauthenticated"
+method = "GET"
+path = "/merchants"
+database = "migrated"
