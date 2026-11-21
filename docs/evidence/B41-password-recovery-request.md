@@ -83,7 +83,7 @@ Logs del servidor sin `token=` (0 coincidencias). Datos y buzón limpiados al te
 
 ## Checks sobre `cbe0679`
 
-`uv run python -m quality.check`: format, lint, types, hygiene, migrations (`0005` sin drift), tests (`166 passed`), api (9 contratos sin diferencias) en PASS; `evidence`: B01–B08 APPROVED, B41 BLOCKED (80 %, TC06 + review).
+`uv run python -m quality.check`: format, lint, types, hygiene, migrations (`0005` sin drift), tests (`164 passed`), api (9 contratos sin diferencias) en PASS; `evidence`: B01–B08 APPROVED, B41 BLOCKED (80 %, TC06 + review).
 
 ## Supresiones
 
