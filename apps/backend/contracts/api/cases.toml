@@ -55,3 +55,10 @@ method = "POST"
 path = "/auth/password-reset/request"
 database = "migrated"
 body = { email = "nadie@tappy.example" }
+
+[[cases]]
+name = "password-reset-confirm-invalid"
+method = "POST"
+path = "/auth/password-reset/confirm"
+database = "migrated"
+body = { token = "unknown-token", new_password = "frase sintetica larga 2026" }

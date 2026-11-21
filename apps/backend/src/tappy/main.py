@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from tappy.backoffice.admin import mount_admin
-from tappy.identity import operators_router
+from tappy.identity import operators_router, reset_page
 from tappy.identity import router as identity_router
 from tappy.identity.recovery import RecoveryService
 from tappy.platform import health
@@ -31,5 +31,6 @@ def create_app(settings: Settings, clock: Clock | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(identity_router.router)
     app.include_router(operators_router.router)
+    app.include_router(reset_page.router)
     mount_admin(app, settings, database, app.state.clock, app.state.recovery)
     return app

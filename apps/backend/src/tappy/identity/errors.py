@@ -18,3 +18,8 @@ class IdentityAlreadyExistsError(IdentityError):
 class IdentityNotFoundError(IdentityError):
     def __init__(self) -> None:
         super().__init__("Identity not found")
+
+
+class InvalidResetLinkError(IdentityError):
+    def __init__(self) -> None:
+        super().__init__("This link is invalid or has expired")

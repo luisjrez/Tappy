@@ -5,11 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 
 from tappy.identity.dependencies import CurrentIdentity, RecoveryDependency, bearer, unauthorized
+from tappy.identity.errors import InvalidResetLinkError, PasswordPolicyError
 from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoverySubmission
 from tappy.identity.schemas import (
     AcceptedResponse,
     IdentityResponse,
     LoginRequest,
+    PasswordResetConfirmation,
     PasswordResetRequestBody,
     RefreshRequest,
     SessionResponse,
@@ -107,6 +109,31 @@ def request_reset(
 ) -> AcceptedResponse:
     recovery.submit(db, RecoverySubmission(payload.email, client_origin(request)), clock.now())
     return AcceptedResponse(detail=RECOVERY_ACCEPTED)
+
+
+@router.post(
+    "/password-reset/confirm",
+    status_code=HTTPStatus.NO_CONTENT,
+    responses={
+        HTTPStatus.BAD_REQUEST: {"description": "Invalid or expired link"},
+        HTTPStatus.UNPROCESSABLE_CONTENT: {"description": "Password policy not met"},
+    },
+)
+def confirm_reset(
+    payload: PasswordResetConfirmation,
+    db: SessionDependency,
+    clock: ClockDependency,
+    recovery: RecoveryDependency,
+) -> Response:
+    try:
+        recovery.confirm(db, payload.token, payload.new_password, clock.now())
+    except InvalidResetLinkError as error:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail=str(error)) from None
+    except PasswordPolicyError as error:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(error)
+        ) from None
+    return Response(status_code=HTTPStatus.NO_CONTENT)
 
 
 @router.get("/me", responses={HTTPStatus.UNAUTHORIZED: {"description": "Not authenticated"}})

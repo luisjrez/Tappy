@@ -82,7 +82,13 @@ Administrator bearer token required (`401` without a valid token, `403` for oper
 uv run python -m tappy.notifications deliver
 ```
 
-- SMTP: `TAPPY_SMTP_HOST`, `TAPPY_SMTP_PORT`, `TAPPY_SMTP_USERNAME`, `TAPPY_SMTP_PASSWORD`, `TAPPY_SMTP_STARTTLS`, `TAPPY_MAIL_FROM`. Locally Compose runs Mailpit (SMTP `127.0.0.1:1025`, inbox `http://127.0.0.1:8025`). Real delivery needs a provider and an authorized sender; it is not exercised in CI. The `/password-reset` page that consumes the token arrives with B42.
+- SMTP: `TAPPY_SMTP_HOST`, `TAPPY_SMTP_PORT`, `TAPPY_SMTP_USERNAME`, `TAPPY_SMTP_PASSWORD`, `TAPPY_SMTP_STARTTLS`, `TAPPY_MAIL_FROM`. Locally Compose runs Mailpit (SMTP `127.0.0.1:1025`, inbox `http://127.0.0.1:8025`). Real delivery needs a provider and an authorized sender; it is not exercised in CI.
+
+### Resetting the password
+
+- `GET /password-reset` serves a self-contained page (no third-party resources, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, strict nonce-based CSP). Opening it never consumes the link: a small script reads the token from the URL fragment, removes it from the address bar and fills the form.
+- The form (`POST /password-reset`) and the API for mobile (`POST /auth/password-reset/confirm {"token", "new_password"}` → `204`) share one atomic use case: the link must be unused, not invalidated, unexpired and belong to an active identity; the new password must pass the same policy as sign-in. Then, in one transaction, the password hash changes, the link is consumed, every other pending link is invalidated, all sessions (API and panel) are revoked and a "password changed" notice (without the password) is queued. Nothing is signed in automatically.
+- Invalid, expired or reused links answer `400` "This link is invalid or has expired"; a policy violation answers `422` and keeps the link usable. Extra fields such as `role` or `email` are rejected (`422`). Concurrent confirmations of the same link succeed at most once.
 
 ## Back office
 
