@@ -10,7 +10,7 @@ from tests.support import build_settings, create_identity, scalar
 
 OPERATOR_EMAIL = "operadora@tappy.example"
 PASSWORD = "mostrador seguro 2026"
-GENERIC = "If the account exists, a recovery email will be sent"
+GENERIC = "If the account exists, a recovery email may be sent"
 CSRF_FIELD = re.compile(r'name="csrftoken" value="([^"]+)"')
 
 
@@ -30,35 +30,34 @@ def csrf_token(client: TestClient, path: str) -> str:
 
 def test_login_page_links_to_public_recovery_form(client: TestClient) -> None:
     login = client.get("/admin/login")
-    form = client.get("/admin/password-reset", follow_redirects=False)
+    form = client.get("/admin/forgot-password", follow_redirects=False)
 
-    assert 'href="https://testserver/admin/password-reset"' in login.text
+    assert 'href="https://testserver/admin/forgot-password"' in login.text
     assert form.status_code == HTTPStatus.OK
     assert 'name="email"' in form.text
 
 
 @pytest.mark.parametrize("email", [OPERATOR_EMAIL, "nadie@tappy.example"])
-def test_recovery_form_answers_generically_and_queues_only_for_real_accounts(
+def test_recovery_form_answers_generically_for_any_account(
     client: TestClient, migrated_database_url: str, email: str
 ) -> None:
     response = client.post(
-        "/admin/password-reset",
-        data={"email": email, "csrftoken": csrf_token(client, "/admin/password-reset")},
+        "/admin/forgot-password",
+        data={"email": email, "csrftoken": csrf_token(client, "/admin/forgot-password")},
         follow_redirects=False,
     )
 
     assert response.status_code == HTTPStatus.OK
     assert GENERIC in response.text
-    queued = scalar(migrated_database_url, "SELECT count(*) FROM outbound_emails")
-    assert queued == (1 if email == OPERATOR_EMAIL else 0)
+    assert scalar(migrated_database_url, "SELECT count(*) FROM recovery_jobs") == 1
 
 
 def test_recovery_form_requires_csrf(client: TestClient, migrated_database_url: str) -> None:
-    client.get("/admin/password-reset")
+    client.get("/admin/forgot-password")
 
     response = client.post(
-        "/admin/password-reset", data={"email": OPERATOR_EMAIL}, follow_redirects=False
+        "/admin/forgot-password", data={"email": OPERATOR_EMAIL}, follow_redirects=False
     )
 
     assert response.status_code == HTTPStatus.FORBIDDEN
-    assert scalar(migrated_database_url, "SELECT count(*) FROM outbound_emails") == 0
+    assert scalar(migrated_database_url, "SELECT count(*) FROM recovery_jobs") == 0

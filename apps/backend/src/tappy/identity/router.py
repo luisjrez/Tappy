@@ -4,8 +4,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 
-from tappy.identity.dependencies import CurrentIdentity, bearer, unauthorized
-from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoveryRequest, RecoveryService
+from tappy.identity.dependencies import CurrentIdentity, RecoveryDependency, bearer, unauthorized
+from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoverySubmission
 from tappy.identity.schemas import (
     AcceptedResponse,
     IdentityResponse,
@@ -31,6 +31,7 @@ from tappy.platform.dependencies import (
     SessionDependency,
     SettingsDependency,
 )
+from tappy.platform.requests import client_origin
 
 router = APIRouter(prefix="/auth", tags=["identity"])
 
@@ -102,12 +103,9 @@ def request_reset(
     request: Request,
     db: SessionDependency,
     clock: ClockDependency,
-    settings: SettingsDependency,
+    recovery: RecoveryDependency,
 ) -> AcceptedResponse:
-    origin = request.client.host if request.client else "unknown"
-    RecoveryService.from_settings(settings).request(
-        db, RecoveryRequest(payload.email, origin), clock.now()
-    )
+    recovery.submit(db, RecoverySubmission(payload.email, client_origin(request)), clock.now())
     return AcceptedResponse(detail=RECOVERY_ACCEPTED)
 
 

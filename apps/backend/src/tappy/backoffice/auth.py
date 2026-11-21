@@ -10,7 +10,7 @@ from starlette_admin.exceptions import LoginFailed
 from starlette_admin.helpers import wrap_endpoint_with_kwargs
 
 from tappy.identity.models import Role
-from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoveryRequest, RecoveryService
+from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoveryService, RecoverySubmission
 from tappy.identity.sessions import (
     InvalidAccessTokenError,
     InvalidCredentialsError,
@@ -27,6 +27,7 @@ from tappy.identity.sessions import (
 )
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
+from tappy.platform.requests import client_origin
 
 ACCESS_KEY = "access_token"
 REFRESH_KEY = "refresh_token"
@@ -45,7 +46,7 @@ def store_tokens(request: Request, tokens: SessionTokens) -> None:
     request.session[REFRESH_KEY] = tokens.refresh_token
 
 
-RECOVERY_ROUTE = "password_reset"
+RECOVERY_ROUTE = "forgot_password"
 
 
 class AdminAuthProvider(AuthProvider):
@@ -62,7 +63,7 @@ class AdminAuthProvider(AuthProvider):
         return [
             *super().get_routes(templates),
             Route(
-                "/password-reset",
+                "/forgot-password",
                 wrap_endpoint_with_kwargs(self.render_password_reset, templates=templates),
                 methods=["GET", "POST"],
                 name=RECOVERY_ROUTE,
@@ -71,14 +72,15 @@ class AdminAuthProvider(AuthProvider):
 
     def request_reset(self, email: str, origin: str) -> None:
         with self.database.transaction() as db:
-            self.recovery.request(db, RecoveryRequest(email, origin), self.clock.now())
+            self.recovery.submit(db, RecoverySubmission(email, origin), self.clock.now())
 
     async def render_password_reset(self, request: Request, templates: Jinja2Templates) -> Response:
         accepted = ""
         if request.method == "POST":
             form = await request.form()
-            origin = request.client.host if request.client else "unknown"
-            await run_in_threadpool(self.request_reset, str(form.get("email") or ""), origin)
+            email = form.get("email")
+            submitted = email if isinstance(email, str) else ""
+            await run_in_threadpool(self.request_reset, submitted, client_origin(request))
             accepted = RECOVERY_ACCEPTED
         return templates.TemplateResponse(
             request=request, name="password_reset.html", context={"accepted": accepted}

@@ -3,11 +3,14 @@ import json
 import logging
 import re
 import smtplib
+import statistics
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from http import HTTPStatus
+from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 import pytest
@@ -24,14 +27,16 @@ from tests.support import (
     build_settings,
     create_identity,
     execute,
+    free_port,
     isolated_environment,
     scalar,
+    spawn_tappy,
 )
 
 MAILPIT_API = "http://127.0.0.1:8025/api/v1"
 OPERATOR_EMAIL = "operadora@tappy.example"
 PASSWORD = "mostrador seguro 2026"
-GENERIC_ACCEPTED = {"detail": "If the account exists, a recovery email will be sent"}
+GENERIC_ACCEPTED = {"detail": "If the account exists, a recovery email may be sent"}
 PUBLIC_BASE_URL = "https://admin.tappy.example"
 
 
@@ -91,7 +96,7 @@ def test_active_identity_receives_link_with_configured_origin(
     assert response.json() == GENERIC_ACCEPTED
     assert message.recipients == [OPERATOR_EMAIL]
     assert link is not None
-    assert link.group(0).startswith(f"{PUBLIC_BASE_URL}/password-reset?token=")
+    assert link.group(0).startswith(f"{PUBLIC_BASE_URL}/password-reset#token=")
     token = link.group(0).split("token=", 1)[1]
     assert token not in response.text
 
@@ -110,12 +115,15 @@ class FailingTransport:
 
 
 COUNTS = {
+    "recovery_jobs": "SELECT count(*) FROM recovery_jobs",
     "outbound_emails": "SELECT count(*) FROM outbound_emails",
     "password_reset_requests": "SELECT count(*) FROM password_reset_requests",
 }
 MAKE_DUE = "UPDATE outbound_emails SET next_attempt_at = now() - interval '1 hour'"
 ATTEMPTS_AFTER_RETRY = 2
 ORIGIN_LIMIT = 2
+TIMING_SAMPLES = 15
+TIMING_TOLERANCE_SECONDS = 0.02
 
 
 def count(database_url: str, table: str) -> object:
@@ -134,6 +142,8 @@ def test_unknown_or_inactive_accounts_get_the_same_answer_and_nothing_else(
 
     assert response.status_code == HTTPStatus.ACCEPTED
     assert response.json() == GENERIC_ACCEPTED
+    assert count(migrated_database_url, "recovery_jobs") == 1
+    deliver_pending(settings, RecordingTransport())
     assert count(migrated_database_url, "outbound_emails") == 0
     assert count(migrated_database_url, "password_reset_requests") == 0
     assert (
@@ -148,17 +158,18 @@ def test_limits_persist_across_processes_and_never_touch_credentials(
     create_identity(migrated_database_url, OPERATOR_EMAIL, PASSWORD)
     with TestClient(create_app(settings)) as first_process:
         first = [request_recovery(first_process, OPERATOR_EMAIL) for _ in range(5)]
-    with TestClient(create_app(settings)) as second_process:
-        second = request_recovery(second_process, OPERATOR_EMAIL)
-        login = second_process.post(
+    second_status, second_body = post_to_separate_process(
+        migrated_database_url, "/auth/password-reset/request", {"email": OPERATOR_EMAIL}
+    )
+    with TestClient(create_app(settings)) as third_process:
+        login = third_process.post(
             "/auth/login", json={"email": OPERATOR_EMAIL, "password": PASSWORD}
         )
 
-    assert {response.status_code for response in [*first, second]} == {HTTPStatus.ACCEPTED}
-    assert {response.text for response in [*first, second]} == {
-        json.dumps(GENERIC_ACCEPTED, separators=(",", ":"))
-    }
-    assert count(migrated_database_url, "outbound_emails") == settings.recovery_limit_per_email
+    assert {response.status_code for response in first} == {HTTPStatus.ACCEPTED}
+    assert {response.json()["detail"] for response in first} == {GENERIC_ACCEPTED["detail"]}
+    assert (second_status, second_body) == (HTTPStatus.ACCEPTED, GENERIC_ACCEPTED)
+    assert count(migrated_database_url, "recovery_jobs") == settings.recovery_limit_per_email
     assert login.status_code == HTTPStatus.OK
 
 
@@ -173,7 +184,7 @@ def test_origin_limit_applies_across_different_accounts(
         responses = [request_recovery(client, email) for email in emails]
 
     assert {response.status_code for response in responses} == {HTTPStatus.ACCEPTED}
-    assert count(migrated_database_url, "outbound_emails") == ORIGIN_LIMIT
+    assert count(migrated_database_url, "recovery_jobs") == ORIGIN_LIMIT
 
 
 def test_provider_failure_is_retried_after_restart_without_changing_credentials(
@@ -195,6 +206,7 @@ def test_provider_failure_is_retried_after_restart_without_changing_credentials(
         ATTEMPTS_AFTER_RETRY
     )
     assert scalar(migrated_database_url, "SELECT sealed_body FROM outbound_emails") is None
+    assert scalar(migrated_database_url, "SELECT sealed_email FROM recovery_jobs") is None
     login = client.post("/auth/login", json={"email": OPERATOR_EMAIL, "password": PASSWORD})
     assert login.status_code == HTTPStatus.OK
 
@@ -229,7 +241,7 @@ def test_link_origin_ignores_host_headers_and_raw_token_is_never_stored(
             json={"email": OPERATOR_EMAIL},
             headers={"Host": "evil.example", "X-Forwarded-Host": "evil.example"},
         )
-        sealed = str(scalar(migrated_database_url, "SELECT sealed_body FROM outbound_emails"))
+        sealed_job = str(scalar(migrated_database_url, "SELECT sealed_email FROM recovery_jobs"))
         transport = RecordingTransport()
         deliver_pending(settings, transport)
 
@@ -237,9 +249,9 @@ def test_link_origin_ignores_host_headers_and_raw_token_is_never_stored(
     link = re.search(r"https?://\S+", envelope.body)
     assert link is not None
     token = link.group(0).split("token=", 1)[1]
-    assert link.group(0).startswith(f"{PUBLIC_BASE_URL}/password-reset?token=")
+    assert link.group(0).startswith(f"{PUBLIC_BASE_URL}/password-reset#token=")
     assert "evil.example" not in envelope.body
-    assert token not in sealed
+    assert OPERATOR_EMAIL not in sealed_job
     assert token not in response.text
     assert token not in caplog.text
     assert scalar(migrated_database_url, "SELECT token_digest FROM password_reset_requests") == (
@@ -278,3 +290,117 @@ def test_deliver_command_requires_known_subcommand(migrated_database_url: str) -
     )
 
     assert result.returncode != 0
+
+
+def post_to_separate_process(
+    database_url: str, path: str, payload: dict[str, str]
+) -> tuple[int, object]:
+    port = free_port()
+    process = spawn_tappy({**app_environment(database_url), "TAPPY_PORT": str(port)})
+    try:
+        deadline = time.monotonic() + 10
+        while True:
+            try:
+                request = Request(
+                    f"http://127.0.0.1:{port}{path}",
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urlopen(request, timeout=2) as response:
+                    return response.status, json.loads(response.read())
+            except URLError:
+                if time.monotonic() > deadline:
+                    raise
+                time.sleep(0.1)
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
+
+
+@pytest.mark.parametrize("status", [IdentityStatus.ACTIVE, IdentityStatus.INACTIVE, None])
+def test_request_path_does_identical_work_for_every_account(
+    settings: Settings, migrated_database_url: str, status: IdentityStatus | None
+) -> None:
+    if status is not None:
+        create_identity(migrated_database_url, OPERATOR_EMAIL, PASSWORD, status=status)
+    with TestClient(create_app(settings)) as client:
+        response = request_recovery(client, OPERATOR_EMAIL)
+
+    assert response.json() == GENERIC_ACCEPTED
+    assert count(migrated_database_url, "recovery_jobs") == 1
+    assert count(migrated_database_url, "outbound_emails") == 0
+    assert count(migrated_database_url, "password_reset_requests") == 0
+
+
+def test_response_time_does_not_reveal_existing_accounts(
+    settings: Settings, migrated_database_url: str
+) -> None:
+    roomy = settings.model_copy(
+        update={"recovery_limit_per_email": 100, "recovery_limit_per_origin": 100}
+    )
+    create_identity(migrated_database_url, OPERATOR_EMAIL, PASSWORD)
+    with TestClient(create_app(roomy)) as client:
+        request_recovery(client, "calentamiento@tappy.example")
+        existing = median_seconds(client, OPERATOR_EMAIL)
+        unknown = median_seconds(client, "nadie@tappy.example")
+
+    assert abs(existing - unknown) < TIMING_TOLERANCE_SECONDS
+
+
+def median_seconds(client: TestClient, email: str) -> float:
+    samples = []
+    for _ in range(TIMING_SAMPLES):
+        started = time.perf_counter()
+        request_recovery(client, email)
+        samples.append(time.perf_counter() - started)
+    return statistics.median(samples)
+
+
+class AmbiguousTransport:
+    def send(self, envelope: Envelope) -> None:
+        raise smtplib.SMTPServerDisconnected("connection closed after DATA")
+
+
+def test_ambiguous_provider_response_is_retried_not_reported_as_delivered(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    request_recovery(client, OPERATOR_EMAIL)
+
+    report = deliver_pending(settings, AmbiguousTransport())
+
+    assert (report.sent, report.retried) == (0, 1)
+    assert scalar(migrated_database_url, "SELECT status FROM outbound_emails") == "pending"
+    assert (
+        scalar(migrated_database_url, "SELECT last_error FROM outbound_emails")
+        == "SMTPServerDisconnected"
+    )
+
+
+def test_undecryptable_email_fails_alone_without_blocking_the_queue(
+    client: TestClient, settings: Settings, migrated_database_url: str
+) -> None:
+    create_identity(migrated_database_url, "segunda@tappy.example", PASSWORD)
+    request_recovery(client, OPERATOR_EMAIL)
+    request_recovery(client, "segunda@tappy.example")
+    deliver_pending(settings, FailingTransport())
+    execute(
+        migrated_database_url,
+        "UPDATE outbound_emails SET sealed_body = 'corrupted' WHERE recipient = :email",
+        {"email": OPERATOR_EMAIL},
+    )
+    execute(migrated_database_url, MAKE_DUE)
+    transport = RecordingTransport()
+
+    report = deliver_pending(settings, transport)
+
+    assert (report.sent, report.failed) == (1, 1)
+    assert [envelope.recipient for envelope in transport.sent] == ["segunda@tappy.example"]
+    assert (
+        scalar(
+            migrated_database_url,
+            "SELECT status FROM outbound_emails WHERE recipient = :email",
+            {"email": OPERATOR_EMAIL},
+        )
+        == "failed"
+    )

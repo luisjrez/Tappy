@@ -17,8 +17,6 @@ def upgrade() -> None:
         sa.Column("token_digest", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("invalidated_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["identity_id"], ["identities.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("token_digest"),
@@ -35,6 +33,15 @@ def upgrade() -> None:
     )
     op.create_index("ix_recovery_attempts_subject_digest", "recovery_attempts", ["subject_digest"])
     op.create_index("ix_recovery_attempts_created_at", "recovery_attempts", ["created_at"])
+    op.create_table(
+        "recovery_jobs",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("sealed_email", sa.Text(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("processed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_recovery_jobs_created_at", "recovery_jobs", ["created_at"])
     op.create_table(
         "outbound_emails",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -67,6 +74,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_outbound_emails_due", table_name="outbound_emails")
     op.drop_table("outbound_emails")
+    op.drop_index("ix_recovery_jobs_created_at", table_name="recovery_jobs")
+    op.drop_table("recovery_jobs")
     op.drop_index("ix_recovery_attempts_created_at", table_name="recovery_attempts")
     op.drop_index("ix_recovery_attempts_subject_digest", table_name="recovery_attempts")
     op.drop_table("recovery_attempts")

@@ -1,11 +1,12 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from tappy.identity.models import Role
 from tappy.identity.provisioning import IdentitySummary
+from tappy.identity.recovery import RecoveryService
 from tappy.identity.sessions import InvalidAccessTokenError, resolve_identity
 from tappy.platform.dependencies import ClockDependency, SessionDependency
 
@@ -43,3 +44,13 @@ def current_admin(identity: CurrentIdentity) -> IdentitySummary:
 
 
 CurrentAdmin = Annotated[IdentitySummary, Depends(current_admin)]
+
+
+def get_recovery(request: Request) -> RecoveryService:
+    recovery = request.app.state.recovery
+    if not isinstance(recovery, RecoveryService):
+        raise TypeError("Recovery service is not configured")
+    return recovery
+
+
+RecoveryDependency = Annotated[RecoveryService, Depends(get_recovery)]

@@ -1,7 +1,10 @@
 import smtplib
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import StrEnum
 
+from cryptography.fernet import InvalidToken
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,11 +17,40 @@ BASE_RETRY_DELAY = timedelta(minutes=1)
 BATCH_SIZE = 20
 
 
+class DeliveryOutcome(StrEnum):
+    SENT = "sent"
+    RETRY = "retry"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class DeliveryReport:
     sent: int
     retried: int
     failed: int
+
+    @classmethod
+    def of(cls, outcomes: list[DeliveryOutcome]) -> DeliveryReport:
+        return cls(
+            sent=outcomes.count(DeliveryOutcome.SENT),
+            retried=outcomes.count(DeliveryOutcome.RETRY),
+            failed=outcomes.count(DeliveryOutcome.FAILED),
+        )
+
+
+@dataclass(frozen=True)
+class DeliveryContext:
+    database: Database
+    transport: MailTransport
+    sealer: Sealer
+    max_attempts: int
+
+
+@dataclass(frozen=True)
+class ClaimedEmail:
+    id: uuid.UUID
+    envelope: Envelope | None
+    exhausted: bool
 
 
 def enqueue_email(db: Session, envelope: Envelope, sealer: Sealer, now: datetime) -> OutboundEmail:
@@ -40,54 +72,69 @@ def retry_delay(attempts: int) -> timedelta:
     return BASE_RETRY_DELAY * (1 << (attempts - 1))
 
 
-def claim_due(db: Session, now: datetime) -> list[OutboundEmail]:
-    return list(
-        db.scalars(
+def claim_next(context: DeliveryContext, now: datetime) -> ClaimedEmail | None:
+    with context.database.transaction() as db:
+        email = db.scalar(
             select(OutboundEmail)
             .where(
                 OutboundEmail.status == DeliveryStatus.PENDING,
                 OutboundEmail.next_attempt_at <= now,
             )
             .order_by(OutboundEmail.next_attempt_at)
-            .limit(BATCH_SIZE)
+            .limit(1)
             .with_for_update(skip_locked=True)
         )
-    )
-
-
-def attempt(
-    email: OutboundEmail, transport: MailTransport, sealer: Sealer, now: datetime, max_attempts: int
-) -> DeliveryStatus | None:
-    if email.sealed_body is None:
-        email.status = DeliveryStatus.FAILED
-        return DeliveryStatus.FAILED
-    email.attempts += 1
-    try:
-        transport.send(Envelope(email.recipient, email.subject, sealer.open(email.sealed_body)))
-    except (smtplib.SMTPException, OSError) as error:
-        email.last_error = type(error).__name__
-        if email.attempts >= max_attempts:
-            email.status = DeliveryStatus.FAILED
-            email.sealed_body = None
-            return DeliveryStatus.FAILED
+        if email is None:
+            return None
+        email.attempts += 1
         email.next_attempt_at = now + retry_delay(email.attempts)
-        return None
-    email.status = DeliveryStatus.SENT
-    email.sent_at = now
-    email.sealed_body = None
-    email.last_error = None
-    return DeliveryStatus.SENT
+        try:
+            body = context.sealer.open(email.sealed_body or "")
+        except InvalidToken:
+            finish(email, DeliveryStatus.FAILED, "InvalidToken")
+            return ClaimedEmail(email.id, None, exhausted=True)
+        envelope = Envelope(email.recipient, email.subject, body)
+        return ClaimedEmail(email.id, envelope, email.attempts >= context.max_attempts)
 
 
-def deliver_due(
-    database: Database, transport: MailTransport, sealer: Sealer, now: datetime, max_attempts: int
-) -> DeliveryReport:
-    outcomes: list[DeliveryStatus | None] = []
-    with database.transaction() as db:
-        for email in claim_due(db, now):
-            outcomes.append(attempt(email, transport, sealer, now, max_attempts))
-    return DeliveryReport(
-        sent=outcomes.count(DeliveryStatus.SENT),
-        retried=outcomes.count(None),
-        failed=outcomes.count(DeliveryStatus.FAILED),
-    )
+def finish(email: OutboundEmail, status: DeliveryStatus, error: str | None) -> None:
+    email.status = status
+    email.last_error = error
+    if status is not DeliveryStatus.PENDING:
+        email.sealed_body = None
+
+
+def record(
+    context: DeliveryContext, claimed: ClaimedEmail, now: datetime, error: str | None
+) -> DeliveryOutcome:
+    with context.database.transaction() as db:
+        email = db.get_one(OutboundEmail, claimed.id)
+        if error is None:
+            email.sent_at = now
+            finish(email, DeliveryStatus.SENT, None)
+            return DeliveryOutcome.SENT
+        if claimed.exhausted:
+            finish(email, DeliveryStatus.FAILED, error)
+            return DeliveryOutcome.FAILED
+        finish(email, DeliveryStatus.PENDING, error)
+        return DeliveryOutcome.RETRY
+
+
+def deliver_one(context: DeliveryContext, claimed: ClaimedEmail, now: datetime) -> DeliveryOutcome:
+    if claimed.envelope is None:
+        return DeliveryOutcome.FAILED
+    try:
+        context.transport.send(claimed.envelope)
+    except (smtplib.SMTPException, OSError) as error:
+        return record(context, claimed, now, type(error).__name__)
+    return record(context, claimed, now, None)
+
+
+def deliver_due(context: DeliveryContext, now: datetime) -> DeliveryReport:
+    outcomes: list[DeliveryOutcome] = []
+    for _ in range(BATCH_SIZE):
+        claimed = claim_next(context, now)
+        if claimed is None:
+            break
+        outcomes.append(deliver_one(context, claimed, now))
+    return DeliveryReport.of(outcomes)
