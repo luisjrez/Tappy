@@ -14,7 +14,17 @@ def upgrade() -> None:
         "idempotency_requests",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("identity_id", sa.Uuid(), nullable=False),
-        sa.Column("operation", sa.String(length=32), nullable=False),
+        sa.Column(
+            "operation",
+            sa.Enum(
+                "create_sale",
+                name="idempotent_operation",
+                native_enum=False,
+                create_constraint=True,
+                length=16,
+            ),
+            nullable=False,
+        ),
         sa.Column("key", sa.String(length=128), nullable=False),
         sa.Column("request_digest", sa.String(length=64), nullable=False),
         sa.Column("resource_id", sa.Uuid(), nullable=False),

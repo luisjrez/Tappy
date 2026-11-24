@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
 from tappy.platform.dependencies import ClockDependency, SessionDependency, SettingsDependency
-from tappy.platform.idempotency import KEY_PATTERN, IdempotencyConflictError
 from tappy.sales.errors import InvalidAmountError, InvalidConceptError, SaleNotFoundError
+from tappy.sales.idempotency import KEY_PATTERN, IdempotencyConflictError
 from tappy.sales.schemas import SaleCreateRequest, SaleResponse
 from tappy.sales.service import SaleRequest, create_sale, read_sale
 
@@ -30,7 +30,10 @@ def sale_request(
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"description": "Merchant not found or not accessible"},
-        HTTPStatus.OK: {"description": "Repeated request: the sale created with this key"},
+        HTTPStatus.OK: {
+            "model": SaleResponse,
+            "description": "Repeated request: the sale created with this key",
+        },
         HTTPStatus.CONFLICT: {
             "description": "New charges are blocked or the key was used with other content"
         },

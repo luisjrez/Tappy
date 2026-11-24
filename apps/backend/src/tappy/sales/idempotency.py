@@ -4,16 +4,21 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from tappy.platform.persistence import Base
+from tappy.platform.persistence import Base, enum_column
 
 KEY_PATTERN = r"^[A-Za-z0-9_-]{8,128}$"
 KEY_MAX_LENGTH = 128
 KEY_CONSTRAINT = "uq_idempotency_requests_key"
+
+
+class IdempotentOperation(StrEnum):
+    CREATE_SALE = "create_sale"
 
 
 class IdempotencyRequest(Base):
@@ -22,7 +27,9 @@ class IdempotencyRequest(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     identity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identities.id"))
-    operation: Mapped[str] = mapped_column(String(32))
+    operation: Mapped[IdempotentOperation] = mapped_column(
+        enum_column(IdempotentOperation, "idempotent_operation")
+    )
     key: Mapped[str] = mapped_column(String(KEY_MAX_LENGTH))
     request_digest: Mapped[str] = mapped_column(String(64))
     resource_id: Mapped[uuid.UUID]
@@ -37,7 +44,7 @@ class IdempotencyConflictError(Exception):
 @dataclass(frozen=True)
 class IdempotencyClaim:
     identity_id: uuid.UUID
-    operation: str
+    operation: IdempotentOperation
     key: str
     request_digest: str
 

@@ -1,5 +1,6 @@
 import secrets
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -10,9 +11,14 @@ from sqlalchemy.orm import Session
 
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.receivers import held_issuing_receiver, masked_account
-from tappy.merchants.service import scoped_ids
-from tappy.platform.idempotency import IdempotencyClaim, claim_or_replay, digest_of
+from tappy.merchants.service import accessible_merchant, scoped_ids
 from tappy.sales.errors import InvalidConceptError, SaleNotFoundError
+from tappy.sales.idempotency import (
+    IdempotencyClaim,
+    IdempotentOperation,
+    claim_or_replay,
+    digest_of,
+)
 from tappy.sales.models import (
     CONCEPT_MAX_LENGTH,
     REFERENCE_CONSTRAINT,
@@ -24,7 +30,6 @@ from tappy.sales.money import validated_amount
 
 REFERENCE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 REFERENCE_ATTEMPTS = 3
-CREATE_SALE = "create_sale"
 
 
 @dataclass(frozen=True)
@@ -101,15 +106,10 @@ def describe_sale(sale: Sale) -> SaleView:
     )
 
 
-def creation_claim(request: SaleRequest) -> IdempotencyClaim:
-    content = {
-        "merchant_id": str(request.merchant_id),
-        "amount_cents": request.amount_cents,
-        "concept": request.concept,
-    }
+def creation_claim(request: SaleRequest, content: Mapping[str, object]) -> IdempotencyClaim:
     return IdempotencyClaim(
         uuid.UUID(request.actor.reference),
-        CREATE_SALE,
+        IdempotentOperation.CREATE_SALE,
         request.idempotency_key,
         digest_of(content),
     )
@@ -118,14 +118,16 @@ def creation_claim(request: SaleRequest) -> IdempotencyClaim:
 def create_sale(db: Session, request: SaleRequest, maximum: int, now: datetime) -> SaleCreation:
     amount_cents = validated_amount(request.amount_cents, maximum)
     concept = clean_concept(request.concept)
+    merchant = accessible_merchant(db, request.actor, request.merchant_id)
+    content = {"merchant_id": str(merchant.id), "amount_cents": amount_cents, "concept": concept}
     sale_id = uuid.uuid4()
-    replayed_id = claim_or_replay(db, creation_claim(request), sale_id, now)
+    replayed_id = claim_or_replay(db, creation_claim(request, content), sale_id, now)
     if replayed_id is not None:
         return SaleCreation(describe_sale(db.get_one(Sale, replayed_id)), replayed=True)
-    receiver = held_issuing_receiver(db, request.actor, request.merchant_id)
+    receiver = held_issuing_receiver(db, merchant)
     sale = Sale(
         id=sale_id,
-        merchant_id=receiver.merchant_id,
+        merchant_id=merchant.id,
         created_by=uuid.UUID(request.actor.reference),
         amount_cents=amount_cents,
         concept=concept,

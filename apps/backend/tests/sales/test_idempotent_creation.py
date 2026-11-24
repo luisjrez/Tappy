@@ -26,7 +26,7 @@ from tests.sales.support import (
     reference_of,
     sale_count,
 )
-from tests.support import build_settings, scalar, wait_until_blocked_on_a_lock
+from tests.support import build_settings, execute, scalar, wait_until_blocked_on_a_lock
 
 KEY = "7f9c2a4e-5b1d-4c8e-9a3f-0d6b8e2c1a57"
 OTHER_AMOUNT = 45000
@@ -230,3 +230,34 @@ def test_concurrent_reuse_with_other_content_conflicts(
     assert response.status_code == HTTPStatus.CONFLICT
     assert response.json() == {"detail": CONFLICT}
     assert sale_count(migrated_database_url) == 1
+
+
+def test_repetition_after_losing_the_membership_reveals_nothing(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+    operator_a = bearer(client, OPERATOR_A)
+    create_sale_with_key(client, operator_a, merchant_a, KEY, amount_cents=AMOUNT)
+    execute(migrated_database_url, "DELETE FROM memberships")
+
+    repeated = create_sale_with_key(client, operator_a, merchant_a, KEY, amount_cents=AMOUNT)
+
+    assert repeated.status_code == HTTPStatus.NOT_FOUND
+    assert repeated.json() == {"detail": "Merchant not found"}
+
+
+def test_whitespace_only_differences_in_the_concept_are_the_same_request(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+    operator_a = bearer(client, OPERATOR_A)
+
+    first = create_sale_with_key(
+        client, operator_a, merchant_a, KEY, amount_cents=AMOUNT, concept="Pan dulce"
+    )
+    repeated = create_sale_with_key(
+        client, operator_a, merchant_a, KEY, amount_cents=AMOUNT, concept="  Pan   dulce "
+    )
+
+    assert repeated.status_code == HTTPStatus.OK
+    assert repeated.json() == first.json()

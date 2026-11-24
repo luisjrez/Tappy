@@ -160,10 +160,7 @@ def issuing_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID
     return describe_receiver(issuable(accessible_receiver(db, actor, merchant_id)))
 
 
-def held_issuing_receiver(
-    db: Session, actor: IdentitySummary, merchant_id: uuid.UUID
-) -> ReceivingAccount:
-    merchant = accessible_merchant(db, actor, merchant_id)
+def held_issuing_receiver(db: Session, merchant: Merchant) -> ReceivingAccount:
     return issuable(
         db.scalar(
             select(ReceivingAccount)
