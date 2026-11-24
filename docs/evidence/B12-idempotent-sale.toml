@@ -1,5 +1,5 @@
 ticket = "B12"
-revision = "c4d292c"
+revision = "97333cf"
 
 [vc01]
 status = "PASS"
@@ -25,6 +25,8 @@ tests = [
     "tests/sales/test_idempotent_creation.py::test_keys_belong_to_the_identity_that_used_them",
     "tests/sales/test_idempotent_creation.py::test_failed_creation_does_not_consume_the_key",
     "tests/sales/test_idempotent_creation.py::test_creation_requires_a_well_formed_key",
+    "tests/sales/test_idempotent_creation.py::test_repetition_after_losing_the_membership_reveals_nothing",
+    "tests/sales/test_idempotent_creation.py::test_whitespace_only_differences_in_the_concept_are_the_same_request",
 ]
 
 [[criteria]]
