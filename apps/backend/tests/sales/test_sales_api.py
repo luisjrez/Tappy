@@ -1,99 +1,38 @@
-import re
 import uuid
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
 from http import HTTPStatus
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx2 import Response
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 
-from tappy.identity.models import Role
-from tappy.main import create_app
 from tappy.merchants.receivers import ReceiverSettings, configure_receiver
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
-from tests.support import build_settings, create_identity, scalar, wait_until_blocked_on_a_lock
-
-ADMIN = "admin@tappy.example"
-OPERATOR_A = "operadora.a@tappy.example"
-OPERATOR_B = "operador.b@tappy.example"
-PASSWORD = "credencial operativa 2026"
-CLABE_A = "012180000123456782"
-CLABE_B = "072180000999900017"
-RECONFIGURED_AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
-RECEIVER_A: dict[str, object] = {
-    "provider_account_id": "bank-account-demo-a",
-    "beneficiary_name": "Tienda Demo A SA de CV",
-    "clabe": CLABE_A,
-    "enabled": True,
-}
-BLOCKED_DISABLED = "The receiving account is disabled; new charges are blocked until it is enabled"
-BLOCKED_MISSING = "No receiving account is configured; new charges are blocked"
-REFERENCE = re.compile(r"[0-9A-HJKMNP-TV-Z]{10}")
-DEFAULT_MAXIMUM = 100_000_000
-AMOUNT = 30000
-CONFIGURED_MAXIMUM = 50000
-
-
-def start_client(settings: Settings, database_url: str) -> TestClient:
-    create_identity(database_url, ADMIN, PASSWORD, role=Role.ADMIN)
-    create_identity(database_url, OPERATOR_A, PASSWORD)
-    create_identity(database_url, OPERATOR_B, PASSWORD)
-    return TestClient(create_app(settings))
-
-
-@pytest.fixture
-def client(migrated_database_url: str) -> Iterator[TestClient]:
-    settings = build_settings(database_url=migrated_database_url)
-    with start_client(settings, migrated_database_url) as client:
-        yield client
-
-
-def bearer(client: TestClient, email: str) -> dict[str, str]:
-    tokens = client.post("/auth/login", json={"email": email, "password": PASSWORD}).json()
-    return {"Authorization": f"Bearer {tokens['access_token']}"}
-
-
-def reference_of(database_url: str, email: str) -> str:
-    return str(scalar(database_url, "SELECT id FROM identities WHERE email = :e", {"e": email}))
-
-
-def merchant_of(client: TestClient, database_url: str, name: str, operator: str) -> str:
-    admin = bearer(client, ADMIN)
-    merchant_id: str = client.post("/merchants", json={"name": name}, headers=admin).json()["id"]
-    client.post(
-        f"/merchants/{merchant_id}/members",
-        json={"operator_reference": reference_of(database_url, operator)},
-        headers=admin,
-    )
-    return merchant_id
-
-
-def ready_merchant(client: TestClient, database_url: str, name: str, operator: str) -> str:
-    merchant_id = merchant_of(client, database_url, name, operator)
-    configure(client, merchant_id)
-    return merchant_id
-
-
-def configure(client: TestClient, merchant_id: str, **changes: object) -> Response:
-    payload = {**RECEIVER_A, **changes}
-    return client.put(
-        f"/merchants/{merchant_id}/receiver", json=payload, headers=bearer(client, ADMIN)
-    )
-
-
-def create_sale(
-    client: TestClient, headers: dict[str, str], merchant_id: str, **fields: object
-) -> Response:
-    return client.post("/sales", json={"merchant_id": merchant_id, **fields}, headers=headers)
-
-
-def sale_count(database_url: str) -> object:
-    return scalar(database_url, "SELECT count(*) FROM sales")
+from tests.sales.support import (
+    ADMIN,
+    AMOUNT,
+    BLOCKED_DISABLED,
+    BLOCKED_MISSING,
+    CLABE_A,
+    CLABE_B,
+    CONFIGURED_MAXIMUM,
+    DEFAULT_MAXIMUM,
+    OPERATOR_A,
+    OPERATOR_B,
+    RECONFIGURED_AT,
+    REFERENCE,
+    bearer,
+    configure,
+    create_sale,
+    merchant_of,
+    ready_merchant,
+    reference_of,
+    sale_count,
+    start_client,
+)
+from tests.support import build_settings, scalar, wait_until_blocked_on_a_lock
 
 
 def test_operator_creates_and_reads_sale_with_exact_amount(

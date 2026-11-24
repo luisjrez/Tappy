@@ -1,11 +1,13 @@
 import uuid
 from http import HTTPStatus
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
 from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
 from tappy.platform.dependencies import ClockDependency, SessionDependency, SettingsDependency
+from tappy.platform.idempotency import KEY_PATTERN, IdempotencyConflictError
 from tappy.sales.errors import InvalidAmountError, InvalidConceptError, SaleNotFoundError
 from tappy.sales.schemas import SaleCreateRequest, SaleResponse
 from tappy.sales.service import SaleRequest, create_sale, read_sale
@@ -13,31 +15,45 @@ from tappy.sales.service import SaleRequest, create_sale, read_sale
 router = APIRouter(prefix="/sales", tags=["sales"])
 
 
+def sale_request(
+    payload: SaleCreateRequest,
+    idempotency_key: Annotated[str, Header(pattern=KEY_PATTERN)],
+    actor: CurrentOperator,
+) -> SaleRequest:
+    return SaleRequest(
+        actor, payload.merchant_id, payload.amount_cents, payload.concept, idempotency_key
+    )
+
+
 @router.post(
     "",
     status_code=HTTPStatus.CREATED,
     responses={
         HTTPStatus.NOT_FOUND: {"description": "Merchant not found or not accessible"},
-        HTTPStatus.CONFLICT: {"description": "New charges are blocked"},
+        HTTPStatus.OK: {"description": "Repeated request: the sale created with this key"},
+        HTTPStatus.CONFLICT: {
+            "description": "New charges are blocked or the key was used with other content"
+        },
     },
 )
 def create(
-    payload: SaleCreateRequest,
-    actor: CurrentOperator,
+    request: Annotated[SaleRequest, Depends(sale_request)],
+    response: Response,
     db: SessionDependency,
     clock: ClockDependency,
     settings: SettingsDependency,
 ) -> SaleResponse:
-    request = SaleRequest(payload.merchant_id, payload.amount_cents, payload.concept)
     try:
-        view = create_sale(db, actor, request, settings.sale_max_amount_cents, clock.now())
+        creation = create_sale(db, request, settings.sale_max_amount_cents, clock.now())
     except (InvalidAmountError, InvalidConceptError) as error:
         raise HTTPException(HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(error)) from None
     except MerchantNotFoundError as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
-    except IssuanceBlockedError as error:
+    except (IssuanceBlockedError, IdempotencyConflictError) as error:
         raise HTTPException(HTTPStatus.CONFLICT, detail=str(error)) from None
-    return SaleResponse.model_validate(view)
+    if creation.replayed:
+        response.status_code = HTTPStatus.OK
+    return SaleResponse.model_validate(creation.sale)
 
 
 @router.get("/{sale_id}", responses={HTTPStatus.NOT_FOUND: {"description": "Sale not found"}})

@@ -100,12 +100,13 @@ A sale is the commercial obligation to receive a fixed amount. Creating one does
 
 | Method and path | Who | Result |
 | --- | --- | --- |
-| `POST /sales {"merchant_id", "amount_cents", "concept"?}` | Operators of that merchant | `201` with the sale; `404` for a merchant outside the caller's memberships; `409` with the reason when the merchant has no enabled receiving account; `403` for administrators |
+| `POST /sales {"merchant_id", "amount_cents", "concept"?}` with `Idempotency-Key` | Operators of that merchant | `201` with the sale; `200` with the same sale when the key is repeated with the same content; `409` when the key was used with other content; `404` for a merchant outside the caller's memberships; `409` with the reason when the merchant has no enabled receiving account; `403` for administrators |
 | `GET /sales/{id}` | Operators of the sale's merchant and administrators | The stored sale; `404` for unknown sales or sales of other merchants |
 
 - `amount_cents` is a JSON integer of MXN centavos between 1 and `TAPPY_SALE_MAX_AMOUNT_CENTS` (default and upper bound 100000000, the provider's documented maximum). Decimals, strings and booleans are rejected; nothing is rounded.
 - `concept` is optional, collapses whitespace and has at most 40 characters (the provider's limit for the text shown to the payer).
 - Every sale gets a unique 10-character `reference`, starts as `open` and keeps a snapshot of the beneficiary and masked account it was created for, so later receiver changes do not rewrite it. The body accepts no receiver, currency, status or reference.
+- `Idempotency-Key` is required (8–128 letters, digits, `-` or `_`; a UUID works). Generate one when the operator confirms the sale and resend it on every retry. Keys belong to the identity that used them and are stored in Postgres, so repeats are recognised across restarts, processes and concurrent requests: a concurrent repeat waits for the first request and then returns its sale. A request that fails (validation, blocked receiver) does not consume its key.
 - Amount, currency, concept, merchant, reference and receiver snapshot cannot change after creation: there is no update route and the database rejects such updates.
 
 ## Back office
