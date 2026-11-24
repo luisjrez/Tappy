@@ -7,9 +7,9 @@ Ticket: [#23](https://github.com/luisjrez/Tappy/issues/23) · Historia: [H4 #4](
 ## Revisiones y escenario
 
 - Ticket, UC/AC/TC y comprobación: B15-UC01–UC03, B15-AC01–AC03, B15-TC01–TC03, B15-VC01.
-- Modalidad: **resultado inicial** (adaptador nuevo). Cambios aditivos en la respuesta de intentos (`failure_code`) y en los mensajes `503`, que ahora incluyen el motivo clasificado (el test de B14 se actualizó). Contratos aprobados sin diferencias.
-- Base: rama B14 `751b951` (PR #70), stack de H4 #68. Revisiones: candidato `83d61d6` → `4983d4a` (id de proveedor duplicado encontrado en la VC01, más refactor del chequeo de unicidad).
-- Contrato versionado: `tests/fixtures/pey/codi-qr.json`, extraído de `https://docs.pey.mx/openapi.json` (versión `2026-10-20`, sha256 `568e0255…5c5a`) con la petición de ejemplo y todas las respuestas de `POST /codi/qr` (201, 400×5, 429, 500×2, 503).
+- Modalidad: **resultado inicial** para el adaptador pey (nuevo) y **antes/después** para dos superficies de B14 que cambian: la respuesta de intentos gana `failure_code` y el `503` incluye el motivo clasificado (ver «Comparación con B14»). Los contratos aprobados (sin sesión) no cubren estas rutas y siguen sin diferencias.
+- Base: rama B14 `751b951` (PR #70), stack de H4 #68. Revisiones: candidato `83d61d6` → `4983d4a` (id de proveedor duplicado encontrado en la VC01, más refactor del chequeo de unicidad) → `55c57e9` (correcciones de review: mensaje único de clave obligatoria, aviso en log ante id duplicado, downgrade protegido, esquema de petición en el contrato versionado). La VC01 se ejecutó sobre `4983d4a`; `55c57e9` no cambia ninguna respuesta de la API.
+- Contrato versionado: `tests/fixtures/pey/codi-qr.json`, extraído de `https://docs.pey.mx/openapi.json` (versión `2026-10-20`, sha256 `568e0255…5c5a`) con el esquema oficial de la petición (`amount`, `bankAccountId`, `concept`, `expiration`, `generateImage`, `metadata`, `numRef`), la petición de ejemplo y todas las respuestas de `POST /codi/qr` (201, 400×5, 429, 500×2, 503).
 - Entorno: macOS, Colima + Compose (Postgres 18), Python 3.14.8, httpx2 2.16.2 (movido a dependencias de ejecución; mismo lockfile). Fecha: 2026-11-24. Ejecutor: sesión local de desarrollo del autor del PR.
 - Datos: receptor ficticio con `bankAccountId` de forma ULID (`01HZY3K8Q4N6V7W8X9Y0Z1A2B3`), clave sintética de prueba generada por ejecución (nunca guardada).
 
@@ -19,16 +19,19 @@ Ticket: [#23](https://github.com/luisjrez/Tappy/issues/23) · Historia: [H4 #4](
 - Centavos → pesos sin floats en el dominio: `Decimal(centavos) / 100` y comprobación de que el número JSON enviado representa exactamente ese decimal (si no, no se envía).
 - Respuesta 201 validada (`id` 1–64 caracteres, `qrString` no vacío): se guardan **exactos**. Clasificación: `400`/`429` con `error.type` válido → `ProviderRejectedError(code)` (definitivo: el intento pasa a `failed` con `failure_code`, API `502`); timeout, conexión, 5xx, cuerpo de error desconocido, 201 inválido o `id` ya vinculado a otro intento → `ProviderUnavailableError(reason)` (incierto: el intento queda `creating`, API `503` con el motivo; su recuperación es B16, arrastre en [#24](https://github.com/luisjrez/Tappy/issues/24)). Nunca se inventa un ID ni se confirma un pago.
 - Configuración solo de servidor: `TAPPY_PAYMENT_PROVIDER=pey` exige `TAPPY_PEY_API_KEY` (`SecretStr`, ≥16 caracteres); `TAPPY_PEY_BASE_URL` exige `https://` salvo loopback (`127.0.0.1`/`localhost`) para no enviar la clave por HTTP; `provider_from` (ahora en `tappy.payments.factory`) construye el adaptador. La clave no aparece en respuestas, errores, `repr` ni logs.
-- Migración `0011_pey_provider`: `pey` en el check de `payment_provider` y `failure_code` en los intentos.
+- Migración `0011_pey_provider`: `pey` en el check de `payment_provider` y `failure_code` en los intentos. El downgrade se niega si existen intentos `pey` (no borra registros financieros).
+- Un id de proveedor ya vinculado a otro intento deja un aviso en el log (id del proveedor e intento) además de responder `503`.
+- Riesgo conocido, fuera de alcance: el QR se crea sin `expiration` (valor por defecto del contrato, `0` = sin vencimiento) y el contrato indica que *«the QR can be paid more than once until it expires»*. Fijar la ventana de uso es B24 (arrastre en [#32](https://github.com/luisjrez/Tappy/issues/32)); las recepciones múltiples, B26.
+- Supuesto por confirmar: `429 CALL_LIMIT_REACHED` se trata como rechazo definitivo (no se creó el QR). La investigación lo deja abierto; se confirma con acceso real en B35 ([#43](https://github.com/luisjrez/Tappy/issues/43)).
 - Refactor: `is_unique_violation` compartido en `tappy.platform.persistence` (referencia de cobro, cuenta de receptor e id de proveedor).
 
 ## Trazabilidad UC → AC → TC → test
 
 | UC | AC | TC | Test real | Resultado |
 | --- | --- | --- | --- | --- |
-| B15-UC01 | B15-AC01 | B15-TC01 | `test_sends_exact_peso_amounts_and_keeps_the_official_id_and_payload` (1 → `0.01` y 30010 → `300.10` leídos como `Decimal`; id/payload oficiales intactos); `test_amounts_that_would_lose_precision_are_never_sent`; `test_omits_the_concept_when_the_sale_has_none`; `test_pey_qr_is_stored_with_the_official_id_and_payload` (API: `pending`, `simulated: false`, id y payload oficiales, proveedor `pey`) | PASS |
-| B15-UC02 | B15-AC02 | B15-TC02 | `test_invalid_creation_responses_never_invent_an_identifier` (6 casos); `test_official_rejections_are_classified_by_type` (5 fixtures 400); `test_rate_limit_is_a_definitive_rejection`; `test_server_errors_and_unknown_errors_are_uncertain` (503, 500×2, 400 desconocido); `test_timeouts_and_connection_failures_are_uncertain`; `test_definitive_rejection_fails_the_attempt_with_its_code` (API 502, `failed`, `INVALID_AMOUNT`); `test_uncertain_response_keeps_the_attempt_creating`; `test_a_provider_id_already_linked_to_another_attempt_is_uncertain` | PASS |
-| B15-UC03 | B15-AC03 | B15-TC03 | `test_request_targets_the_snapshotted_receiver_and_links_the_attempt` (cuerpo exacto con `bankAccountId` y metadatos); `test_credentials_never_reach_logs_errors_or_representations` (hay registros y ninguno contiene la clave); `test_adapter_is_labelled_as_the_real_provider`; `test_pey_settings_require_a_server_side_key`; `test_pey_base_url_requires_tls_outside_loopback` (6 casos) | PASS |
+| B15-UC01 | B15-AC01 | B15-TC01 | `test_sends_exact_peso_amounts_and_keeps_the_official_id_and_payload` (1 → `0.01` y 30010 → `300.10` leídos como `Decimal`; id/payload oficiales intactos); `test_amounts_that_would_lose_precision_are_never_sent`; `test_omits_the_concept_when_the_sale_has_none`; `test_pey_qr_is_stored_with_the_official_id_and_payload` (API: `pending`, `simulated: false`, id y payload oficiales, proveedor `pey`; pey recibió el `bankAccountId` del receptor autorizado del comercio y el id del intento) | PASS |
+| B15-UC02 | B15-AC02 | B15-TC02 | `test_invalid_creation_responses_never_invent_an_identifier` (6 casos); `test_official_rejections_are_classified_by_type` (5 fixtures 400); `test_rate_limit_is_a_definitive_rejection`; `test_server_errors_and_unknown_errors_are_uncertain` (503, 500×2 → `server_error`; 400 desconocido → `invalid_response`); `test_timeouts_and_connection_failures_are_uncertain`; `test_definitive_rejection_fails_the_attempt_with_its_code` (API 502, `failed`, `INVALID_AMOUNT`); `test_uncertain_response_keeps_the_attempt_creating`; `test_a_provider_id_already_linked_to_another_attempt_is_uncertain` | PASS |
+| B15-UC03 | B15-AC03 | B15-TC03 | `test_request_targets_the_snapshotted_receiver_and_links_the_attempt` (cuerpo exacto con `bankAccountId` y metadatos); `test_request_fields_are_allowed_by_the_official_request_schema`; `test_credentials_never_reach_logs_errors_or_representations` (hay registros y ninguno contiene la clave); `test_adapter_is_labelled_as_the_real_provider`; `test_pey_settings_require_a_server_side_key`; `test_pey_base_url_requires_tls_outside_loopback` (6 casos) | PASS |
 
 ## TDD
 
@@ -41,6 +44,18 @@ Ticket: [#23](https://github.com/luisjrez/Tappy/issues/23) · Historia: [H4 #4](
 | Clasificación 400 | Mutación que trata 400 como incierto: 5 tests fallan | `REJECTED_STATUSES = {400, 429}` |
 
 Mutación sin efecto, registrada: `strict=False` en `CreatedQr` no cambia ningún resultado (Pydantic v2 tampoco convierte `int` a `str` en modo laxo); `strict=True` se conserva como defensa, sin atribuirle cobertura.
+
+## Comparación con B14 (antes/después)
+
+Última evidencia aprobada: [B14](B14-simulated-qr.md) sobre `41b4b1f`. Resultado actual: este ticket sobre `4983d4a`/`55c57e9`. Escenarios equivalentes: un intento QR creado y un proveedor no disponible.
+
+| Superficie | Antes (B14, `41b4b1f`) | Después (B15) | Clasificación | Decisión |
+| --- | --- | --- | --- | --- |
+| Intento en `POST /sales/{id}/attempts` y `GET /sales/{id}` | `{"id", "sale_id", "sale_reference", "method", "status", "simulated", "provider_request_id", "qr_payload", "created_at"}` | Igual más `"failure_code": null` (o el `error.type` de pey si el intento falló) | Aditiva compatible | Aceptada: expone el error clasificado (AC02) |
+| `503` con proveedor no disponible | `{"detail": "The QR provider is unavailable; the attempt is kept for reconciliation"}` | `{"detail": "The QR provider is unavailable (server_error); the attempt is kept for reconciliation"}` (motivos: `server_error`, `timeout`, `connection`, `invalid_response`, `duplicate_provider_id`) | Cambio de texto, mismo status | Aceptada: clasifica el error sin exponer datos del proveedor |
+| Rechazo definitivo | No existía (el simulador no rechaza) | `502 {"detail": "The QR provider rejected the request (INVALID_AMOUNT)"}` y el intento `failed` | Nuevo | Aceptada (AC02) |
+
+Tests de B14 actualizados por el cambio: el cuerpo exacto incluye `failure_code` y la constante del `503` incluye el motivo.
 
 ## B15-VC01 — Resultado inicial contra el contrato HTTP
 
@@ -71,7 +86,7 @@ Comprobaciones: `amount` `0.01` y `300.1` (= 300.10 MXN) para 1 y 30010 centavos
 
 ## Checks
 
-`uv run python -m quality.check` sobre `4983d4a` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (305 passed, Postgres real aislado), api (15 contratos sin diferencias).
+`uv run python -m quality.check` sobre `55c57e9` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (306 passed, Postgres real aislado), api (15 contratos sin diferencias).
 
 ## Supresiones
 

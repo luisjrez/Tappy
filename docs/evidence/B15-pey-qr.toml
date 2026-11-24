@@ -1,5 +1,5 @@
 ticket = "B15"
-revision = "4983d4a"
+revision = "55c57e9"
 
 [vc01]
 status = "PASS"
@@ -55,6 +55,7 @@ id = "B15-TC03"
 mode = "automated"
 tests = [
     "tests/payments/test_pey_adapter.py::test_request_targets_the_snapshotted_receiver_and_links_the_attempt",
+    "tests/payments/test_pey_adapter.py::test_request_fields_are_allowed_by_the_official_request_schema",
     "tests/payments/test_pey_adapter.py::test_credentials_never_reach_logs_errors_or_representations",
     "tests/payments/test_pey_adapter.py::test_adapter_is_labelled_as_the_real_provider",
     "tests/sales/test_pey_qr_flow.py::test_pey_settings_require_a_server_side_key",
