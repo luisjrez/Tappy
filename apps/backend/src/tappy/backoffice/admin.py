@@ -7,6 +7,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette_admin.base import BaseAdmin
 
 from tappy.backoffice.auth import AdminAuthProvider
+from tappy.backoffice.merchants import MerchantsView
 from tappy.backoffice.operators import OperatorsView
 from tappy.identity.passwords import PasswordPolicy
 from tappy.identity.recovery import RecoveryService
@@ -46,4 +47,5 @@ def mount_admin(
     admin.add_view(
         OperatorsView(database, clock, ADMIN_BASE_URL, PasswordPolicy.from_settings(settings))
     )
+    admin.add_view(MerchantsView(database, clock, ADMIN_BASE_URL))
     admin.mount_to(app)
