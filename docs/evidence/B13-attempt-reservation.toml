@@ -1,5 +1,5 @@
 ticket = "B13"
-revision = "b875cb0"
+revision = "c8cf0cf"
 
 [vc01]
 status = "PASS"
@@ -53,4 +53,6 @@ mode = "automated"
 tests = [
     "tests/sales/test_attempt_reservation.py::test_concurrent_reservations_leave_a_single_active_attempt",
     "tests/sales/test_attempt_reservation.py::test_interrupted_reservation_stays_recoverable_after_a_restart",
+    "tests/sales/test_attempt_reservation.py::test_reservation_interrupted_before_commit_leaves_no_trace",
+    "tests/sales/test_attempt_reservation.py::test_reservation_waits_for_a_concurrent_status_change_and_honours_it",
 ]
