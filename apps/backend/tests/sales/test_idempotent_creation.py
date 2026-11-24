@@ -12,6 +12,7 @@ from tappy.identity.provisioning import IdentitySummary
 from tappy.platform.database import Database
 from tappy.sales.service import SaleRequest, create_sale
 from tests.sales.support import (
+    ADMIN,
     AMOUNT,
     BLOCKED_MISSING,
     DEFAULT_MAXIMUM,
@@ -77,7 +78,7 @@ def test_keys_belong_to_the_identity_that_used_them(
     client: TestClient, migrated_database_url: str
 ) -> None:
     merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
-    admin = bearer(client, "admin@tappy.example")
+    admin = bearer(client, ADMIN)
     client.post(
         f"/merchants/{merchant_a}/members",
         json={"operator_reference": reference_of(migrated_database_url, OPERATOR_B)},
