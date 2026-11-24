@@ -29,6 +29,7 @@ REFERENCE_CONSTRAINT = "uq_sales_reference"
 ACTIVE_ATTEMPT_INDEX = "uq_payment_attempts_active_sale"
 PROVIDER_REQUEST_CONSTRAINT = "uq_payment_attempts_provider_request"
 PROVIDER_REQUEST_ID_MAX_LENGTH = 64
+FAILURE_CODE_MAX_LENGTH = 32
 
 
 class SaleStatus(StrEnum):
@@ -109,6 +110,7 @@ class PaymentAttempt(Base):
     receiver_account: Mapped[str] = mapped_column(String(PROVIDER_ACCOUNT_ID_MAX_LENGTH))
     provider_request_id: Mapped[str | None] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
     qr_payload: Mapped[str | None] = mapped_column(Text)
+    failure_code: Mapped[str | None] = mapped_column(String(FAILURE_CODE_MAX_LENGTH))
     sale: Mapped[Sale] = relationship(back_populates="attempts")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

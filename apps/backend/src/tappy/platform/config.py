@@ -1,12 +1,13 @@
 from collections.abc import Sequence
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr, ValidationError
+from pydantic import Field, SecretStr, ValidationError, model_validator
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_PREFIX = "TAPPY_"
 PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
+PEY_BASE_URL = r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))"
 
 
 class Settings(BaseSettings):
@@ -20,10 +21,19 @@ class Settings(BaseSettings):
     access_token_ttl_seconds: int = Field(default=900, ge=60)
     session_max_lifetime_seconds: int = Field(default=30 * 24 * 3600, ge=3600)
     admin_secure_cookies: bool = True
-    payment_provider: Literal["simulated"] = "simulated"
+    payment_provider: Literal["simulated", "pey"] = "simulated"
+    pey_base_url: str = Field(default="https://api.pey.mx", pattern=PEY_BASE_URL)
+    pey_api_key: SecretStr | None = Field(default=None, min_length=16)
+    pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
+
+    @model_validator(mode="after")
+    def pey_needs_a_key(self) -> Self:
+        if self.payment_provider == "pey" and self.pey_api_key is None:
+            raise ValueError("TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey")
+        return self
 
 
 class ConfigurationError(Exception):

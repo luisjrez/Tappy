@@ -8,8 +8,8 @@ from tappy.backoffice.admin import mount_admin
 from tappy.identity import operators_router
 from tappy.identity import router as identity_router
 from tappy.merchants import router as merchants_router
+from tappy.payments.factory import provider_from
 from tappy.payments.provider import QrProvider
-from tappy.payments.simulator import provider_from
 from tappy.platform import health
 from tappy.platform.clock import Clock, SystemClock
 from tappy.platform.config import Settings

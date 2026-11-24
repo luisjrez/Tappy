@@ -1,8 +1,7 @@
 import secrets
 from collections.abc import Callable
 
-from tappy.payments.provider import IssuedQr, ProviderName, QrOrder, QrProvider
-from tappy.platform.config import Settings
+from tappy.payments.provider import IssuedQr, ProviderName, QrOrder
 
 
 def simulated_identifier() -> str:
@@ -27,9 +26,3 @@ class SimulatedQrProvider:
             ]
         )
         return IssuedQr(self.id_factory(), payload)
-
-
-def provider_from(settings: Settings) -> QrProvider:
-    match settings.payment_provider:
-        case "simulated":
-            return SimulatedQrProvider()

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
 from tappy.payments.dependencies import QrProviderDependency
-from tappy.payments.provider import ProviderUnavailableError
+from tappy.payments.provider import ProviderRejectedError, ProviderUnavailableError
 from tappy.platform.dependencies import (
     ClockDependency,
     DatabaseDependency,
@@ -33,7 +33,6 @@ from tappy.sales.schemas import (
 from tappy.sales.service import SaleRequest, create_sale, read_sale
 
 router = APIRouter(prefix="/sales", tags=["sales"])
-PROVIDER_UNAVAILABLE = "The QR provider is unavailable; the attempt is kept for reconciliation"
 
 
 def sale_request(
@@ -109,8 +108,9 @@ def attempt_request(
         HTTPStatus.CONFLICT: {
             "description": "Active attempt, sale not open, charges blocked or key reused"
         },
+        HTTPStatus.BAD_GATEWAY: {"description": "QR provider rejected the request; attempt failed"},
         HTTPStatus.SERVICE_UNAVAILABLE: {
-            "description": "QR provider unavailable; the reserved attempt stays creating"
+            "description": "QR provider unavailable or uncertain; the attempt stays creating"
         },
     },
 )
@@ -125,8 +125,19 @@ def reserve(
         reservation = request_attempt(database, request, provider, clock)
     except SaleNotFoundError as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
-    except ProviderUnavailableError:
-        raise HTTPException(HTTPStatus.SERVICE_UNAVAILABLE, detail=PROVIDER_UNAVAILABLE) from None
+    except ProviderUnavailableError as error:
+        raise HTTPException(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            detail=(
+                f"The QR provider is unavailable ({error.reason}); "
+                "the attempt is kept for reconciliation"
+            ),
+        ) from None
+    except ProviderRejectedError as error:
+        raise HTTPException(
+            HTTPStatus.BAD_GATEWAY,
+            detail=f"The QR provider rejected the request ({error.code})",
+        ) from None
     except (
         ActiveAttemptError,
         SaleNotOpenError,

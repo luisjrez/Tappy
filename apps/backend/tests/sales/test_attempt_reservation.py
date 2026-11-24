@@ -78,6 +78,7 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
         "simulated": True,
         "provider_request_id": None,
         "qr_payload": None,
+        "failure_code": None,
         "created_at": attempt["created_at"],
     }
     assert sale["status"] == "open"

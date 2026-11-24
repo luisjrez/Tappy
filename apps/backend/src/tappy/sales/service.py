@@ -54,6 +54,7 @@ class AttemptView:
     simulated: bool
     provider_request_id: str | None
     qr_payload: str | None
+    failure_code: str | None
     created_at: datetime
 
 
@@ -118,6 +119,7 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
         simulated=attempt.simulated,
         provider_request_id=attempt.provider_request_id,
         qr_payload=attempt.qr_payload,
+        failure_code=attempt.failure_code,
         created_at=attempt.created_at,
     )
 

@@ -6,10 +6,19 @@ from typing import Protocol
 
 class ProviderName(StrEnum):
     SIMULATED = "simulated"
+    PEY = "pey"
 
 
 class ProviderUnavailableError(Exception):
-    pass
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"QR provider unavailable: {reason}")
+        self.reason = reason
+
+
+class ProviderRejectedError(Exception):
+    def __init__(self, code: str) -> None:
+        super().__init__(f"QR provider rejected the request: {code}")
+        self.code = code
 
 
 @dataclass(frozen=True)

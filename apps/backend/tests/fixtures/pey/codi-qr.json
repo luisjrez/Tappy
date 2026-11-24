@@ -1,0 +1,92 @@
+{
+  "source": "https://docs.pey.mx/openapi.json",
+  "openapi_version": "2026-10-20",
+  "sha256": "568e0255f334cbf8e4830324b2301e7c0d37158d90cf3a7bb8d839dd0f345c5a",
+  "operation": "POST /codi/qr",
+  "request_example": {
+    "amount": 150.0,
+    "concept": "Order #12345",
+    "expiration": 600,
+    "numRef": "1234567"
+  },
+  "responses": {
+    "201": {
+      "default": {
+        "id": "AB12CD34EF",
+        "qrString": "{\"TYP\":1,\"v\":\"01\",\"ic\":0,\"IDC\":\"AB12CD34EF\"}",
+        "qrImage": "iVBORw0KGgoAAAANSUhEUgAAAooAAAKKAQAAAACq/MUfAAAC..."
+      }
+    },
+    "400": {
+      "invalidAmount": {
+        "error": {
+          "message": "Amount must be a number greater than or equal to 0",
+          "type": "INVALID_AMOUNT",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "invalidExpiration": {
+        "error": {
+          "message": "Expiration must be 0 (no expiration) or at least 360 seconds (6 minutes)",
+          "type": "INVALID_PARAMETER",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "codiNotEnabled": {
+        "error": {
+          "message": "API key does not have CoDi enabled",
+          "type": "INVALID_STATE",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "missingBankAccount": {
+        "error": {
+          "message": "Missing bankAccountId in API key",
+          "type": "PEY_CONSISTENCY_ERROR",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "invalidRequest": {
+        "error": {
+          "message": "Invalid JSON body",
+          "type": "INVALID_REQUEST",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "429": {
+      "default": {
+        "error": {
+          "message": "API call limit reached for the current period",
+          "type": "CALL_LIMIT_REACHED",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "503": {
+      "maintenance": {
+        "error": {
+          "message": "This endpoint is under maintenance, please try again later",
+          "type": "SERVICE_UNAVAILABLE",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "500": {
+      "invokeError": {
+        "error": {
+          "message": "Error creating CoDi QR",
+          "type": "INTERNAL_SERVER_ERROR",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "requestIdError": {
+        "error": {
+          "message": "Error getting request ID",
+          "type": "INTERNAL_SERVER_ERROR",
+          "requestId": null
+        }
+      }
+    }
+  }
+}

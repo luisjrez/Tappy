@@ -6,8 +6,9 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
+from tappy.payments.factory import provider_from
 from tappy.payments.provider import IssuedQr, ProviderUnavailableError, QrOrder
-from tappy.payments.simulator import SimulatedQrProvider, provider_from
+from tappy.payments.simulator import SimulatedQrProvider
 from tappy.platform.config import Settings
 from tests.sales.support import (
     AMOUNT,
@@ -26,7 +27,9 @@ from tests.support import build_settings, scalar
 Q1 = "Q1"
 
 
-UNAVAILABLE = "The QR provider is unavailable; the attempt is kept for reconciliation"
+UNAVAILABLE = (
+    "The QR provider is unavailable (server_error); the attempt is kept for reconciliation"
+)
 
 
 class RecordingSimulator(SimulatedQrProvider):
@@ -42,7 +45,7 @@ class RecordingSimulator(SimulatedQrProvider):
 class UnavailableProvider(RecordingSimulator):
     def create_qr(self, order: QrOrder) -> IssuedQr:
         self.orders.append(order)
-        raise ProviderUnavailableError
+        raise ProviderUnavailableError("server_error")
 
 
 @pytest.fixture
@@ -108,6 +111,7 @@ def test_creating_a_qr_returns_the_simulated_payload_pending(
         "simulated": True,
         "provider_request_id": Q1,
         "qr_payload": expected_payload(reference, attempt["id"]),
+        "failure_code": None,
         "created_at": attempt["created_at"],
     }
     assert sale["attempts"] == [attempt]

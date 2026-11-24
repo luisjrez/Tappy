@@ -31,6 +31,7 @@ class AttemptResponse(BaseModel):
     simulated: bool
     provider_request_id: str | None
     qr_payload: str | None
+    failure_code: str | None
     created_at: datetime
 
 

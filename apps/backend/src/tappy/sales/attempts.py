@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.models import ReceivingAccount
 from tappy.merchants.receivers import held_issuing_receiver
-from tappy.payments.provider import IssuedQr, QrOrder, QrProvider
+from tappy.payments.provider import IssuedQr, ProviderRejectedError, QrOrder, QrProvider
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
 from tappy.sales.errors import ActiveAttemptError, ReceiverChangedError, SaleNotOpenError
@@ -125,15 +125,28 @@ def pending_qr_order(db: Session, attempt_id: uuid.UUID) -> QrOrder | None:
     )
 
 
-def record_issued_qr(
-    db: Session, attempt_id: uuid.UUID, issued: IssuedQr, now: datetime
-) -> AttemptView:
-    attempt = db.scalars(
+def held_attempt(db: Session, attempt_id: uuid.UUID) -> PaymentAttempt:
+    return db.scalars(
         select(PaymentAttempt)
         .where(PaymentAttempt.id == attempt_id)
         .with_for_update()
         .execution_options(populate_existing=True)
     ).one()
+
+
+def record_rejected_qr(db: Session, attempt_id: uuid.UUID, code: str, now: datetime) -> None:
+    attempt = held_attempt(db, attempt_id)
+    if attempt.status is AttemptStatus.CREATING:
+        attempt.status = AttemptStatus.FAILED
+        attempt.failure_code = code
+        attempt.updated_at = now
+        db.flush()
+
+
+def record_issued_qr(
+    db: Session, attempt_id: uuid.UUID, issued: IssuedQr, now: datetime
+) -> AttemptView:
+    attempt = held_attempt(db, attempt_id)
     if attempt.status is AttemptStatus.CREATING:
         attempt.provider_request_id = issued.provider_request_id
         attempt.qr_payload = issued.payload
@@ -155,7 +168,12 @@ def request_attempt(
         )
     if order is None:
         return reservation
-    issued = provider.create_qr(order)
+    try:
+        issued = provider.create_qr(order)
+    except ProviderRejectedError as rejection:
+        with database.transaction() as db:
+            record_rejected_qr(db, order.attempt_id, rejection.code, clock.now())
+        raise
     with database.transaction() as db:
         return AttemptReservation(
             record_issued_qr(db, order.attempt_id, issued, clock.now()), replayed=False
