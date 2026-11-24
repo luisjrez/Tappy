@@ -92,6 +92,16 @@ Datos de prueba y buzón limpiados al terminar. Estado VC01: **PASS** (resultado
 
 `uv run python -m quality.check`: format, lint, types, hygiene, migrations (`0006` sin drift), tests (`196 passed`), api (10 contratos sin diferencias) en PASS; `evidence`: B42 pendiente solo de aprobar el review; B41 BLOCKED (TC06).
 
+## Integración con `main` (2026-11-24)
+
+Tras mergearse B01–B10 a `main`, B41 se integró sobre `main` (`183db45`) y esta rama recibió ese B41 con un merge (`5c50010`) más un commit de reencadenado (`48776b0`):
+
+- Conflictos resueltos conservando ambos lados: `contracts/api/cases.toml` (casos de comercios/receptor y `password-reset-confirm-invalid`), `src/tappy/main.py` (router de comercios y página de restablecimiento) y `src/tappy/backoffice/admin.py` (`OperatorsView` con la política de contraseñas configurable y `MerchantsView` de B09).
+- Migración renombrada de `0006_identity_password_reset` a `0008_identity_password_reset` con `down_revision = "0007_identity_password_recovery"`; el esquema que crea no cambia.
+- El bloqueo de identidad de B42 (`FOR NO KEY UPDATE` en el reset) convive con el `FOR SHARE` que toma la asignación de operadores de B09: una asignación espera a que termine un reset concurrente de ese operador y viceversa.
+
+Checks sobre `48776b0` (con `.env` exportado): format, lint, types, hygiene, migrations (cadena lineal hasta `0008`, upgrade/downgrade sin drift), tests (`230 passed`), api (13 contratos sin diferencias) en PASS; `evidence`: B01–B10 y B42 APPROVED, B41 BLOCKED (80 %, solo TC06).
+
 ## Supresiones
 
 Sin supresiones nuevas.
