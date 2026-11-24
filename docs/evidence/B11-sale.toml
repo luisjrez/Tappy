@@ -1,5 +1,5 @@
 ticket = "B11"
-revision = "6629897"
+revision = "f676cde"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B11-sale.md#b11-vc01--resultado-inicial-de-api"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -23,6 +23,7 @@ tests = [
     "tests/sales/test_sales_api.py::test_operator_creates_and_reads_sale_with_exact_amount",
     "tests/sales/test_sales_api.py::test_concept_is_optional_and_normalized",
     "tests/sales/test_sales_api.py::test_each_sale_gets_its_own_reference",
+    "tests/sales/test_sales_api.py::test_reference_collision_is_retried_with_a_new_reference",
     "tests/sales/test_sales_api.py::test_sale_keeps_the_receiver_it_was_created_for",
     "tests/sales/test_sales_api.py::test_sale_is_blocked_without_an_enabled_receiver",
     "tests/sales/test_sales_api.py::test_sale_waits_for_a_concurrent_receiver_change_and_honours_it",
