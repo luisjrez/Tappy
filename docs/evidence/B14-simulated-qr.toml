@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B14-simulated-qr.md#b14-vc01--resultado-inicial-del-qr-simulado"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -24,7 +24,6 @@ tests = [
     "tests/sales/test_simulated_qr.py::test_stored_qr_keeps_the_exact_payload_and_identifier",
     "tests/sales/test_simulated_qr.py::test_default_simulator_issues_distinct_labelled_identifiers",
     "tests/sales/test_simulated_qr.py::test_reservation_is_committed_before_the_provider_is_called",
-    "tests/sales/test_simulated_qr.py::test_unavailable_provider_fails_closed_and_keeps_the_reservation",
 ]
 
 [[criteria]]

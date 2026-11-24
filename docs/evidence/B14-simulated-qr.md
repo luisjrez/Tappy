@@ -27,7 +27,7 @@ Ticket: [#22](https://github.com/luisjrez/Tappy/issues/22) · Historia: [H4 #4](
 
 | UC | AC | TC | Test real | Resultado |
 | --- | --- | --- | --- | --- |
-| B14-UC01 | B14-AC01 | B14-TC01 | `test_creating_a_qr_returns_the_simulated_payload_pending` (payload exacto con la referencia, ID Q1, `sale_reference`, `simulated: true`, `pending`; el proveedor recibió referencia, importe, concepto, cuenta e intento); `test_stored_qr_keeps_the_exact_payload_and_identifier`; `test_default_simulator_issues_distinct_labelled_identifiers`; `test_reservation_is_committed_before_the_provider_is_called`; `test_unavailable_provider_fails_closed_and_keeps_the_reservation` | PASS |
+| B14-UC01 | B14-AC01 | B14-TC01 | `test_creating_a_qr_returns_the_simulated_payload_pending` (payload exacto con la referencia, ID Q1, `sale_reference`, `simulated: true`, `pending`; el proveedor recibió referencia, importe, concepto, cuenta e intento); `test_stored_qr_keeps_the_exact_payload_and_identifier`; `test_default_simulator_issues_distinct_labelled_identifiers`; `test_reservation_is_committed_before_the_provider_is_called` | PASS |
 | B14-UC02 | B14-AC02 | B14-TC02 | `test_simulated_acceptance_never_shows_a_payment` (cobro `open`, intento `pending`; la respuesta no contiene «paid», «received» ni «transaction») | PASS |
 | B14-UC03 | B14-AC03 | B14-TC03 | `test_repeating_or_reopening_the_session_reuses_the_same_qr` (repetir con la misma clave → 200 mismo QR; logout `204` y el token anterior da `401`; con la sesión nueva, mismo intento y misma referencia; otra clave → 409; el simulador recibió una sola orden; 1 intento) | PASS |
 
@@ -126,7 +126,7 @@ Clasificación: **cambio aditivo** (campos nuevos en las respuestas de intentos 
 
 `uv run python -m quality.check` sobre `41b4b1f` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (269 passed, Postgres real aislado), api (15 contratos sin diferencias). Mutaciones comprobadas: proveedor llamado dentro de la transacción → `NoResultFound`; sin la regla de receptor → 201; `payment_provider: str` → acepta valores desconocidos.
 
-Tests complementarios fuera de la matriz de AC (no cuentan para el umbral): `test_qr_is_refused_when_the_receiver_changed_after_the_sale` (2 casos), `test_other_channels_stay_reserved_without_calling_the_qr_provider` y `test_provider_setting_selects_the_simulator_and_rejects_unknown_values`.
+Tests complementarios fuera de la matriz de AC (no cuentan para el umbral): `test_qr_is_refused_when_the_receiver_changed_after_the_sale` (2 casos), `test_other_channels_stay_reserved_without_calling_the_qr_provider`, `test_provider_setting_selects_the_simulator_and_rejects_unknown_values` y `test_unavailable_provider_fails_closed_and_keeps_the_reservation`.
 
 ## Supresiones
 
@@ -138,4 +138,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `e8b4f54` + `d9c8665` | CHANGES_REQUESTED | CHANGES_REQUESTED | Standards (hard): la regla de receptor comparaba solo beneficiario y últimos 4 (otra cuenta del proveedor pasaba); un fallo del proveedor daba 500 y la evidencia afirmaba recuperación inexistente; `provider_from` sin Red de comportamiento. Juicios: `platform` dependía de `payments`, estado de test en el simulador de producción, backfill con `""` y downgrade con pérdida sin documentar. Spec: la referencia no aparecía junto al QR ni se probaba, y la VC01 la ocultaba al normalizar; TC03 no comprobaba el cierre de sesión; tests fuera de AC01 contados en TC01; regla de receptor sin decisión registrada |
+| 2 | `41b4b1f` + `1bfa813` | APPROVE | APPROVE | Instantánea de la cuenta del proveedor en el cobro, `503` que falla cerrado con traspaso a B16 (#24), Red por mutación, referencia en el intento y el payload, VC01 con valores crudos, logout comprobado, decisión registrada en #22. Se mantienen los valores sintéticos crudos en la VC01 (lo exige «el diff no debe esconder cambios en el contenido QR»), aunque Standards sugería normalizarlos |
+
+Hallazgos pendientes: 0.
