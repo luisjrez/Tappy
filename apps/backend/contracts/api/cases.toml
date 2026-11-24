@@ -1,0 +1,69 @@
+[[cases]]
+name = "health"
+method = "GET"
+path = "/health"
+database = "unreachable"
+
+[[cases]]
+name = "ready-migrated"
+method = "GET"
+path = "/ready"
+database = "migrated"
+
+[[cases]]
+name = "ready-unreachable"
+method = "GET"
+path = "/ready"
+database = "unreachable"
+
+[[cases]]
+name = "login-rejected"
+method = "POST"
+path = "/auth/login"
+database = "migrated"
+body = { email = "nadie@tappy.example", password = "frase inexistente 2026" }
+
+[[cases]]
+name = "me-unauthenticated"
+method = "GET"
+path = "/auth/me"
+database = "migrated"
+
+[[cases]]
+name = "refresh-rejected"
+method = "POST"
+path = "/auth/refresh"
+database = "migrated"
+body = { refresh_token = "unknown-refresh-token" }
+
+[[cases]]
+name = "logout-unauthenticated"
+method = "POST"
+path = "/auth/logout"
+database = "migrated"
+
+[[cases]]
+name = "operators-unauthenticated"
+method = "POST"
+path = "/operators"
+database = "migrated"
+body = { email = "nuevo@tappy.example", initial_password = "frase sintetica 2026" }
+
+[[cases]]
+name = "merchants-unauthenticated"
+method = "GET"
+path = "/merchants"
+database = "migrated"
+
+[[cases]]
+name = "receiver-unauthenticated"
+method = "GET"
+path = "/merchants/00000000-0000-0000-0000-000000000000/receiver"
+database = "migrated"
+
+[[cases]]
+name = "issuance-check-unauthenticated"
+method = "POST"
+path = "/merchants/00000000-0000-0000-0000-000000000000/issuance-check"
+database = "migrated"
+body = {}

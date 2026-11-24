@@ -1,0 +1,59 @@
+ticket = "B06"
+revision = "4211fb9"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B06-session-lifecycle.md#b06-vc01--api-inicial-y-comparación-de-login"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B06-AC01"
+use_cases = ["B06-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B06-TC01"
+mode = "automated"
+tests = [
+    "tests/identity/test_session_lifecycle.py::test_renewal_issues_working_tokens_and_retires_the_previous_pair",
+    "tests/identity/test_session_lifecycle.py::test_expired_access_token_can_be_renewed_within_the_session_lifetime",
+]
+
+[[criteria]]
+id = "B06-AC02"
+use_cases = ["B06-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B06-TC02"
+mode = "automated"
+tests = [
+    "tests/identity/test_session_lifecycle.py::test_session_cannot_be_renewed_past_its_absolute_lifetime",
+    "tests/identity/test_session_lifecycle.py::test_reused_refresh_token_fails_and_revokes_the_whole_session",
+    "tests/identity/test_session_lifecycle.py::test_logged_out_session_is_not_revived_by_renewal",
+    "tests/identity/test_session_lifecycle.py::test_concurrent_renewals_keep_exactly_one_working_session",
+    "tests/identity/test_login.py::test_expired_token_is_rejected",
+    "tests/identity/test_login.py::test_revoked_session_is_rejected",
+]
+
+[[criteria]]
+id = "B06-AC03"
+use_cases = ["B06-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B06-TC03"
+mode = "automated"
+tests = [
+    "tests/identity/test_session_lifecycle.py::test_logged_out_session_is_not_revived_by_renewal",
+    "tests/identity/test_session_lifecycle.py::test_deactivated_identity_loses_access_and_renewal",
+    "tests/identity/test_session_lifecycle.py::test_logout_with_expired_access_token_still_revokes_the_session",
+    "tests/identity/test_session_lifecycle.py::test_logout_racing_a_renewal_also_revokes_the_renewed_session",
+    "tests/identity/test_session_lifecycle.py::test_locking_an_identity_for_deactivation_does_not_block_new_sessions",
+    "tests/identity/test_login.py::test_token_stops_working_when_identity_becomes_inactive",
+]

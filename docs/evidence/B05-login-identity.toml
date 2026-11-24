@@ -1,0 +1,52 @@
+ticket = "B05"
+revision = "e223b5e"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B05-login-identity.md#b05-vc01--resultado-inicial-de-api"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B05-AC01"
+use_cases = ["B05-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B05-TC01"
+mode = "automated"
+tests = [
+    "tests/identity/test_login.py::test_active_operator_logs_in_and_reads_own_identity",
+    "tests/identity/test_login.py::test_only_a_digest_of_the_token_is_stored",
+    "tests/identity/test_login.py::test_active_administrator_logs_in",
+]
+
+[[criteria]]
+id = "B05-AC02"
+use_cases = ["B05-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B05-TC02"
+mode = "automated"
+tests = ["tests/identity/test_login.py::test_rejected_logins_share_one_generic_error_and_create_no_session"]
+
+[[criteria]]
+id = "B05-AC03"
+use_cases = ["B05-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B05-TC03"
+mode = "automated"
+tests = [
+    "tests/identity/test_login.py::test_requests_without_valid_token_are_rejected",
+    "tests/identity/test_login.py::test_each_token_only_reveals_its_own_identity",
+    "tests/identity/test_login.py::test_expired_token_is_rejected",
+    "tests/identity/test_login.py::test_token_stops_working_when_identity_becomes_inactive",
+    "tests/identity/test_login.py::test_revoked_session_is_rejected",
+]

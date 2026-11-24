@@ -1,0 +1,11 @@
+{
+  "revision": "2027d97",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "status": "ok",
+    "environment": "contract"
+  }
+}

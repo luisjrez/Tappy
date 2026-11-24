@@ -1,0 +1,60 @@
+ticket = "B07"
+revision = "31149bd"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B07-admin-panel.md#b07-vc01--resultado-inicial-del-panel"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B07-AC01"
+use_cases = ["B07-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B07-TC01"
+mode = "automated"
+tests = [
+    "tests/backoffice/test_admin_access.py::test_admin_enters_panel_and_logout_revokes_access",
+    "tests/backoffice/test_admin_access.py::test_panel_renews_expired_access_transparently",
+    "tests/backoffice/test_admin_access.py::test_concurrent_panel_request_with_stale_cookie_keeps_current_session",
+]
+
+[[criteria]]
+id = "B07-AC02"
+use_cases = ["B07-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B07-TC02"
+mode = "automated"
+tests = [
+    "tests/backoffice/test_admin_access.py::test_anonymous_visitor_is_sent_to_login",
+    "tests/backoffice/test_admin_access.py::test_operator_cannot_enter_panel",
+    "tests/backoffice/test_admin_access.py::test_api_bearer_token_does_not_open_panel",
+    "tests/backoffice/test_admin_access.py::test_revoked_panel_session_loses_access",
+    "tests/backoffice/test_admin_access.py::test_demoted_or_deactivated_admin_loses_panel",
+    "tests/backoffice/test_admin_access.py::test_demoted_admin_session_is_revoked_without_renewal",
+    "tests/backoffice/test_admin_access.py::test_replayed_panel_cookie_revokes_the_whole_session",
+    "tests/backoffice/test_admin_access.py::test_anonymous_logout_changes_nothing",
+    "tests/backoffice/test_admin_access.py::test_failed_panel_login_keeps_emails_out_of_logs",
+]
+
+[[criteria]]
+id = "B07-AC03"
+use_cases = ["B07-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B07-TC03"
+mode = "automated"
+tests = [
+    "tests/backoffice/test_admin_access.py::test_logout_without_valid_csrf_is_rejected_without_changes",
+    "tests/backoffice/test_admin_access.py::test_login_without_csrf_is_rejected",
+    "tests/backoffice/test_admin_access.py::test_panel_cookie_flags_follow_environment",
+]

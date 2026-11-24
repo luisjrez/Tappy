@@ -1,0 +1,55 @@
+ticket = "B01"
+
+revision = "9f53aa9"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B01-api-health.md#api--resultado-inicial"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B01-AC01"
+use_cases = ["B01-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B01-TC01"
+mode = "automated"
+tests = [
+    "tests/test_health.py::test_health_reports_healthy_status",
+    "tests/test_startup.py::test_started_api_answers_health",
+]
+
+[[criteria.cases]]
+id = "B01-TC01-clean-install"
+mode = "manual"
+result = "PASS"
+evidence = "docs/evidence/B01-api-health.md#api--resultado-inicial"
+
+[[criteria]]
+id = "B01-AC02"
+use_cases = ["B01-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B01-TC02"
+mode = "automated"
+tests = [
+    "tests/test_startup.py::test_startup_fails_when_required_variable_is_missing",
+    "tests/test_startup.py::test_startup_failure_does_not_expose_secret_values",
+]
+
+[[criteria]]
+id = "B01-AC03"
+use_cases = ["B01-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B01-TC03"
+mode = "automated"
+tests = ["tests/test_health.py::test_independent_app_instances_do_not_share_state"]
