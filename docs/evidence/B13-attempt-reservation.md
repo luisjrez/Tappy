@@ -102,4 +102,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `b875cb0` + `90bbc15` | CHANGES_REQUESTED | APPROVE | Hard: el estado del cobro se comprobaba con la copia cargada antes del bloqueo (un cobro que pasara a `paid`/`review` en paralelo recibiría un intento); el único Red registrado era un error de colección. Juicios: carga innecesaria del comercio, `order_by` como texto, downgrade de `0009` que fallaría con claves `create_attempt`. Spec: la prueba de reinicio no ejercía la recuperación con la misma clave ni la interrupción antes del commit |
+| 2 | `c8cf0cf` + `331e62d` | APPROVE | APPROVE | `populate_existing` con test de carrera Red→Green; Red de comportamiento por TC; reintento tras reinicio con la misma clave e interrupción antes del commit cubiertos; menores aplicados. Se mantienen los métodos `phone`/`link` (el ticket pide «diferentes claves/canales») |
+
+Hallazgos pendientes: 0.

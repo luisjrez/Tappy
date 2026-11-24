@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B13-attempt-reservation.md#b13-vc01--resultado-inicial-de-api-e-interrupción"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
