@@ -51,6 +51,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DELETE FROM idempotency_requests WHERE operation = 'create_attempt'")
     op.drop_constraint("idempotent_operation", "idempotency_requests", type_="check")
     op.create_check_constraint(
         "idempotent_operation", "idempotency_requests", "operation IN ('create_sale')"

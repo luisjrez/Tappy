@@ -74,7 +74,7 @@ class Sale(Base):
     account_last4: Mapped[str] = mapped_column(String(4))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[list[PaymentAttempt]] = relationship(
-        order_by="(PaymentAttempt.created_at, PaymentAttempt.id)", lazy="selectin"
+        order_by=lambda: [PaymentAttempt.created_at, PaymentAttempt.id], lazy="selectin"
     )
 
 

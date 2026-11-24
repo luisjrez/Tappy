@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from tappy.identity.provisioning import IdentitySummary
-from tappy.merchants.models import Merchant
 from tappy.merchants.receivers import held_issuing_receiver
 from tappy.sales.errors import ActiveAttemptError, SaleNotOpenError
 from tappy.sales.idempotency import (
@@ -51,7 +50,12 @@ def reservation_claim(request: AttemptRequest, sale: Sale) -> IdempotencyClaim:
 
 
 def held_open_sale(db: Session, sale_id: uuid.UUID) -> Sale:
-    sale = db.scalars(select(Sale).where(Sale.id == sale_id).with_for_update(key_share=True)).one()
+    sale = db.scalars(
+        select(Sale)
+        .where(Sale.id == sale_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    ).one()
     if sale.status is not SaleStatus.OPEN:
         raise SaleNotOpenError
     return sale
@@ -76,7 +80,7 @@ def reserve_attempt(db: Session, request: AttemptRequest, now: datetime) -> Atte
         replayed = db.get_one(PaymentAttempt, replayed_id)
         return AttemptReservation(describe_attempt(replayed), replayed=True)
     held = held_open_sale(db, sale.id)
-    held_issuing_receiver(db, db.get_one(Merchant, held.merchant_id))
+    held_issuing_receiver(db, held.merchant_id)
     ensure_no_active_attempt(db, held.id)
     attempt = PaymentAttempt(
         id=attempt_id,

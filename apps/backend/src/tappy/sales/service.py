@@ -148,7 +148,7 @@ def create_sale(db: Session, request: SaleRequest, maximum: int, now: datetime) 
     replayed_id = claim_or_replay(db, creation_claim(request, content), sale_id, now)
     if replayed_id is not None:
         return SaleCreation(describe_sale(db.get_one(Sale, replayed_id)), replayed=True)
-    receiver = held_issuing_receiver(db, merchant)
+    receiver = held_issuing_receiver(db, merchant.id)
     sale = Sale(
         id=sale_id,
         merchant_id=merchant.id,

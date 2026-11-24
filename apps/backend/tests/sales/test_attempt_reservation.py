@@ -6,9 +6,10 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
-from tappy.sales.attempts import AttemptRequest, reserve_attempt
+from sqlalchemy import create_engine, text
 
 from tappy.platform.database import Database
+from tappy.sales.attempts import AttemptRequest, reserve_attempt
 from tappy.sales.models import AttemptMethod
 from tests.sales.support import (
     ADMIN,
@@ -254,10 +255,58 @@ def test_interrupted_reservation_stays_recoverable_after_a_restart(
     settings = build_settings(database_url=migrated_database_url)
     with start_client(settings, migrated_database_url) as first:
         sale_id, operator_a = open_sale(first, migrated_database_url)
-        reserved = reserve(first, operator_a, sale_id).json()
+
+        key = str(uuid.uuid4())
+        reserved = reserve(first, operator_a, sale_id, key=key).json()
 
     with app_client(settings) as restarted:
+        retried = reserve(restarted, operator_a, sale_id, key=key)
         sale = restarted.get(f"/sales/{sale_id}", headers=operator_a).json()
 
+    assert retried.status_code == HTTPStatus.OK
+    assert retried.json() == reserved
     assert sale["attempts"] == [reserved]
     assert sale["attempts"][0]["status"] == "creating"
+
+
+def test_reservation_interrupted_before_commit_leaves_no_trace(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale_id, operator_a = open_sale(client, migrated_database_url)
+    key = str(uuid.uuid4())
+    database = Database.from_settings(build_settings(database_url=migrated_database_url))
+    try:
+        with database.session_factory() as interrupted, interrupted.begin():
+            request = AttemptRequest(
+                actor_of(client, operator_a), uuid.UUID(sale_id), AttemptMethod.QR, key
+            )
+            reserve_attempt(interrupted, request, RESERVED_AT)
+            interrupted.rollback()
+    finally:
+        database.dispose()
+
+    retried = reserve(client, operator_a, sale_id, key=key)
+
+    assert retried.status_code == HTTPStatus.CREATED
+    assert attempt_count(migrated_database_url) == 1
+
+
+def test_reservation_waits_for_a_concurrent_status_change_and_honours_it(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale_id, operator_a = open_sale(client, migrated_database_url)
+    engine = create_engine(migrated_database_url)
+    try:
+        with engine.connect() as racing, racing.begin() as transaction:
+            racing.execute(text("UPDATE sales SET status = 'paid'"))
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                attempt = pool.submit(reserve, client, operator_a, sale_id)
+                wait_until_blocked_on_a_lock(migrated_database_url)
+                transaction.commit()
+                response = attempt.result(timeout=10)
+    finally:
+        engine.dispose()
+
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.json() == {"detail": NOT_OPEN}
+    assert attempt_count(migrated_database_url) == 0
