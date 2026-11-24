@@ -70,6 +70,30 @@ Administrator bearer token required (`401` without a valid token, `403` for oper
 | `GET /operators` · `GET /operators/{reference}` | Operator identities only (`404` for administrators or unknown references) |
 | `POST /operators/{reference}/deactivate` | Marks the operator inactive and revokes all its sessions |
 
+## Merchants
+
+Every merchant query is scoped by membership: administrators see every merchant, operators only the merchants they belong to. A merchant outside the caller's scope answers `404` (its existence is not revealed).
+
+| Method and path | Who | Result |
+| --- | --- | --- |
+| `GET /merchants` · `GET /merchants/{id}` | Any active identity | Merchants within scope, with their operators |
+| `POST /merchants {"name"}` | Administrators | Create a merchant |
+| `POST /merchants/{id}/members {"operator_reference"}` | Administrators | `201` assigns an active operator; repeating it answers `200` and keeps the original membership |
+
+The back office has a **Merchants** page to create merchants and assign operators.
+
+### Receiving accounts
+
+Each merchant has at most one receiving account: an account already authorized at the provider, registered by an administrator. Tappy never opens bank accounts and offers no public sign-up for them.
+
+| Method and path | Who | Result |
+| --- | --- | --- |
+| `PUT /merchants/{id}/receiver {"provider_account_id", "beneficiary_name", "clabe", "enabled"}` | Administrators | Creates or replaces the receiving account. The CLABE needs 18 digits and a valid check digit; only its last 4 digits are stored. A provider account ID used by another merchant answers `409` |
+| `GET /merchants/{id}/receiver` | Any active identity within scope | Beneficiary, masked account (`**************1234`), `enabled`, `can_issue` and `blocked_reason`; `404` when none is configured |
+| `POST /merchants/{id}/issuance-check {}` | Any active identity within scope | `200` with the receiver new charges will use, or `409` with the reason they are blocked (no receiver, or receiver disabled). The body accepts no fields: callers cannot choose a receiver |
+
+Disabling a receiving account only blocks new charges; the account and the merchant's records stay. The same rule decides availability in the API, the issuance check and the back office, where the **Merchants** page shows and edits each receiving account.
+
 ## Password recovery
 
 `POST /auth/password-reset/request {"email": …}` (also the "Forgot your password?" form at `/admin/forgot-password`, linked from the panel login) always answers `202` with the same generic message, and the request does the same work for every account: it records rate-limit attempts and queues an encrypted recovery job. The worker later checks whether the account exists and is active and only then issues a token and an email, so neither the response nor its timing reveals which emails are registered.

@@ -55,3 +55,22 @@ method = "POST"
 path = "/auth/password-reset/request"
 database = "migrated"
 body = { email = "nadie@tappy.example" }
+
+[[cases]]
+name = "merchants-unauthenticated"
+method = "GET"
+path = "/merchants"
+database = "migrated"
+
+[[cases]]
+name = "receiver-unauthenticated"
+method = "GET"
+path = "/merchants/00000000-0000-0000-0000-000000000000/receiver"
+database = "migrated"
+
+[[cases]]
+name = "issuance-check-unauthenticated"
+method = "POST"
+path = "/merchants/00000000-0000-0000-0000-000000000000/issuance-check"
+database = "migrated"
+body = {}

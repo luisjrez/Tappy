@@ -1,0 +1,60 @@
+ticket = "B10"
+revision = "c1cdfaf"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B10-receiver.md#b10-vc01--resultado-inicial-de-api-y-panel"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B10-AC01"
+use_cases = ["B10-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B10-TC01"
+mode = "automated"
+tests = [
+    "tests/merchants/test_receivers_api.py::test_operator_reads_beneficiary_and_masked_account_of_own_receiver",
+    "tests/merchants/test_receivers_api.py::test_full_account_number_is_never_stored",
+    "tests/merchants/test_receivers_api.py::test_invalid_receiver_configuration_is_rejected",
+    "tests/merchants/test_receivers_api.py::test_only_administrators_configure_receivers",
+    "tests/merchants/test_receivers_api.py::test_unknown_merchant_has_no_receiver",
+    "tests/merchants/test_receivers_api.py::test_racing_first_configurations_keep_one_receiver",
+    "tests/backoffice/test_merchants_panel.py::test_admin_configures_and_disables_receiver_from_panel",
+    "tests/backoffice/test_merchants_panel.py::test_panel_rejects_invalid_receiver_without_echoing_the_account",
+    "tests/merchants/test_receivers_api.py::test_malformed_bodies_never_echo_the_account",
+    "tests/test_validation_errors.py::test_validation_errors_do_not_echo_submitted_values",
+]
+
+[[criteria]]
+id = "B10-AC02"
+use_cases = ["B10-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B10-TC02"
+mode = "automated"
+tests = [
+    "tests/merchants/test_receivers_api.py::test_disabled_receiver_blocks_issuance_with_an_explanation",
+    "tests/merchants/test_receivers_api.py::test_merchant_without_receiver_cannot_issue",
+    "tests/merchants/test_receivers_api.py::test_requests_cannot_choose_a_foreign_receiver",
+]
+
+[[criteria]]
+id = "B10-AC03"
+use_cases = ["B10-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B10-TC03"
+mode = "automated"
+tests = [
+    "tests/merchants/test_receivers_api.py::test_disabling_keeps_the_receiver_and_merchant_records",
+    "tests/backoffice/test_merchants_panel.py::test_admin_configures_and_disables_receiver_from_panel",
+]
