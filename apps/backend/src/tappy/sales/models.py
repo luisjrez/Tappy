@@ -12,12 +12,14 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from tappy.merchants.models import BENEFICIARY_NAME_MAX_LENGTH
+from tappy.merchants.models import BENEFICIARY_NAME_MAX_LENGTH, PROVIDER_ACCOUNT_ID_MAX_LENGTH
+from tappy.payments.provider import ProviderName
 from tappy.platform.persistence import Base, enum_column
 
 CONCEPT_MAX_LENGTH = 40
@@ -25,6 +27,8 @@ REFERENCE_LENGTH = 10
 CURRENCY = "MXN"
 REFERENCE_CONSTRAINT = "uq_sales_reference"
 ACTIVE_ATTEMPT_INDEX = "uq_payment_attempts_active_sale"
+PROVIDER_REQUEST_CONSTRAINT = "uq_payment_attempts_provider_request"
+PROVIDER_REQUEST_ID_MAX_LENGTH = 64
 
 
 class SaleStatus(StrEnum):
@@ -89,6 +93,7 @@ class PaymentAttempt(Base):
                 "status IN (" + ", ".join(f"'{status}'" for status in ACTIVE_ATTEMPT_STATUSES) + ")"
             ),
         ),
+        UniqueConstraint("provider", "provider_request_id", name=PROVIDER_REQUEST_CONSTRAINT),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -96,6 +101,11 @@ class PaymentAttempt(Base):
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("identities.id"))
     method: Mapped[AttemptMethod] = mapped_column(enum_column(AttemptMethod, "attempt_method"))
     status: Mapped[AttemptStatus] = mapped_column(enum_column(AttemptStatus, "attempt_status"))
+    provider: Mapped[ProviderName] = mapped_column(enum_column(ProviderName, "payment_provider"))
+    simulated: Mapped[bool]
+    receiver_account: Mapped[str] = mapped_column(String(PROVIDER_ACCOUNT_ID_MAX_LENGTH))
+    provider_request_id: Mapped[str | None] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
+    qr_payload: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     version: Mapped[int] = mapped_column(Integer)

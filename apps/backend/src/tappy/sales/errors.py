@@ -25,3 +25,10 @@ class SaleNotOpenError(SaleError):
 class ActiveAttemptError(SaleError):
     def __init__(self) -> None:
         super().__init__("The sale already has an active payment attempt")
+
+
+class ReceiverChangedError(SaleError):
+    def __init__(self) -> None:
+        super().__init__(
+            "The receiving account changed after the sale was created; create a new sale"
+        )

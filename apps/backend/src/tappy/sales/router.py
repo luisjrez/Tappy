@@ -6,12 +6,19 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 
 from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
-from tappy.platform.dependencies import ClockDependency, SessionDependency, SettingsDependency
-from tappy.sales.attempts import AttemptRequest, reserve_attempt
+from tappy.platform.dependencies import (
+    ClockDependency,
+    DatabaseDependency,
+    QrProviderDependency,
+    SessionDependency,
+    SettingsDependency,
+)
+from tappy.sales.attempts import AttemptRequest, request_attempt
 from tappy.sales.errors import (
     ActiveAttemptError,
     InvalidAmountError,
     InvalidConceptError,
+    ReceiverChangedError,
     SaleNotFoundError,
     SaleNotOpenError,
 )
@@ -105,16 +112,18 @@ def attempt_request(
 def reserve(
     request: Annotated[AttemptRequest, Depends(attempt_request)],
     response: Response,
-    db: SessionDependency,
+    database: DatabaseDependency,
     clock: ClockDependency,
+    provider: QrProviderDependency,
 ) -> AttemptResponse:
     try:
-        reservation = reserve_attempt(db, request, clock.now())
+        reservation = request_attempt(database, request, provider, clock)
     except SaleNotFoundError as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
     except (
         ActiveAttemptError,
         SaleNotOpenError,
+        ReceiverChangedError,
         IssuanceBlockedError,
         IdempotencyConflictError,
     ) as error:

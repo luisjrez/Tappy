@@ -27,6 +27,9 @@ class AttemptResponse(BaseModel):
     sale_id: str
     method: AttemptMethod
     status: AttemptStatus
+    simulated: bool
+    provider_request_id: str | None
+    qr_payload: str | None
     created_at: datetime
 
 

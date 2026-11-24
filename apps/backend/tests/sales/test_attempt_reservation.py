@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 from sqlalchemy import create_engine, text
 
+from tappy.payments.simulator import SimulatedQrProvider
 from tappy.platform.database import Database
 from tappy.sales.attempts import AttemptRequest, reserve_attempt
 from tappy.sales.models import AttemptMethod
@@ -63,7 +64,7 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
 
-    reserved = reserve(client, operator_a, sale_id)
+    reserved = reserve(client, operator_a, sale_id, method="phone")
     sale = client.get(f"/sales/{sale_id}", headers=operator_a).json()
 
     assert reserved.status_code == HTTPStatus.CREATED
@@ -71,8 +72,11 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
     assert attempt == {
         "id": attempt["id"],
         "sale_id": sale_id,
-        "method": "qr",
+        "method": "phone",
         "status": "creating",
+        "simulated": True,
+        "provider_request_id": None,
+        "qr_payload": None,
         "created_at": attempt["created_at"],
     }
     assert sale["status"] == "open"
@@ -149,9 +153,10 @@ def test_database_allows_only_one_active_attempt_per_sale(
     with pytest.raises(Exception, match="uq_payment_attempts_active_sale"):
         execute(
             migrated_database_url,
-            "INSERT INTO payment_attempts (id, sale_id, created_by, method, status, "
-            "created_at, updated_at, version) SELECT gen_random_uuid(), sale_id, created_by, "
-            "'link', 'pending', created_at, updated_at, 1 FROM payment_attempts",
+            "INSERT INTO payment_attempts (id, sale_id, created_by, method, status, provider, "
+            "simulated, receiver_account, created_at, updated_at, version) "
+            "SELECT gen_random_uuid(), sale_id, created_by, 'link', 'pending', provider, "
+            "simulated, receiver_account, created_at, updated_at, 1 FROM payment_attempts",
         )
 
 
@@ -234,7 +239,7 @@ def test_concurrent_reservations_leave_a_single_active_attempt(
                 AttemptMethod.QR,
                 str(uuid.uuid4()),
             )
-            held = reserve_attempt(racing, request, RESERVED_AT)
+            held = reserve_attempt(racing, request, SimulatedQrProvider(), RESERVED_AT)
             with ThreadPoolExecutor(max_workers=1) as pool:
                 attempt = pool.submit(reserve, client, operator_a, sale_id, "phone")
                 wait_until_blocked_on_a_lock(migrated_database_url)
@@ -257,10 +262,10 @@ def test_interrupted_reservation_stays_recoverable_after_a_restart(
         sale_id, operator_a = open_sale(first, migrated_database_url)
 
         key = str(uuid.uuid4())
-        reserved = reserve(first, operator_a, sale_id, key=key).json()
+        reserved = reserve(first, operator_a, sale_id, method="phone", key=key).json()
 
     with app_client(settings) as restarted:
-        retried = reserve(restarted, operator_a, sale_id, key=key)
+        retried = reserve(restarted, operator_a, sale_id, method="phone", key=key)
         sale = restarted.get(f"/sales/{sale_id}", headers=operator_a).json()
 
     assert retried.status_code == HTTPStatus.OK
@@ -280,7 +285,7 @@ def test_reservation_interrupted_before_commit_leaves_no_trace(
             request = AttemptRequest(
                 actor_of(client, operator_a), uuid.UUID(sale_id), AttemptMethod.QR, key
             )
-            reserve_attempt(interrupted, request, RESERVED_AT)
+            reserve_attempt(interrupted, request, SimulatedQrProvider(), RESERVED_AT)
             interrupted.rollback()
     finally:
         database.dispose()

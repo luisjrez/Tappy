@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Literal
 
 from pydantic import Field, SecretStr, ValidationError
 from pydantic_core import ErrorDetails
@@ -19,6 +20,7 @@ class Settings(BaseSettings):
     access_token_ttl_seconds: int = Field(default=900, ge=60)
     session_max_lifetime_seconds: int = Field(default=30 * 24 * 3600, ge=3600)
     admin_secure_cookies: bool = True
+    payment_provider: Literal["simulated"] = "simulated"
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
