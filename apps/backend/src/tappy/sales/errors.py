@@ -1,0 +1,17 @@
+class SaleError(Exception):
+    pass
+
+
+class SaleNotFoundError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("Sale not found")
+
+
+class InvalidAmountError(SaleError):
+    def __init__(self, maximum: int) -> None:
+        super().__init__(f"Amount must be a whole number of centavos between 1 and {maximum}")
+
+
+class InvalidConceptError(SaleError):
+    def __init__(self, max_length: int) -> None:
+        super().__init__(f"Concept must have at most {max_length} characters")

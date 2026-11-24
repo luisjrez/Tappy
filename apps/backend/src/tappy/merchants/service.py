@@ -65,6 +65,10 @@ def scoped(actor: IdentitySummary) -> Select[Merchant]:
     return ordered_merchants().where(Merchant.id.in_(memberships))
 
 
+def scoped_ids(actor: IdentitySummary) -> Select[uuid.UUID]:
+    return scoped(actor).with_only_columns(Merchant.id).order_by(None)
+
+
 def describe_all(db: Session, merchants: Sequence[Merchant]) -> list[MerchantView]:
     members: dict[uuid.UUID, list[MemberView]] = defaultdict(list)
     rows = db.execute(

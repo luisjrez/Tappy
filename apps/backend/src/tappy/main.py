@@ -13,6 +13,7 @@ from tappy.platform.clock import Clock, SystemClock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.platform.validation import validation_error_response
+from tappy.sales import router as sales_router
 
 
 def create_app(settings: Settings, clock: Clock | None = None) -> FastAPI:
@@ -34,5 +35,6 @@ def create_app(settings: Settings, clock: Clock | None = None) -> FastAPI:
     app.include_router(identity_router.router)
     app.include_router(operators_router.router)
     app.include_router(merchants_router.router)
+    app.include_router(sales_router.router)
     mount_admin(app, settings, database, app.state.clock)
     return app

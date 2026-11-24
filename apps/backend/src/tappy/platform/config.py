@@ -5,6 +5,7 @@ from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_PREFIX = "TAPPY_"
+PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
 
 
 class Settings(BaseSettings):
@@ -18,6 +19,9 @@ class Settings(BaseSettings):
     access_token_ttl_seconds: int = Field(default=900, ge=60)
     session_max_lifetime_seconds: int = Field(default=30 * 24 * 3600, ge=3600)
     admin_secure_cookies: bool = True
+    sale_max_amount_cents: int = Field(
+        default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
+    )
 
 
 class ConfigurationError(Exception):

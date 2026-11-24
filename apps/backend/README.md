@@ -94,6 +94,20 @@ Each merchant has at most one receiving account: an account already authorized a
 
 Disabling a receiving account only blocks new charges; the account and the merchant's records stay. The same rule decides availability in the API, the issuance check and the back office, where the **Merchants** page shows and edits each receiving account.
 
+## Sales
+
+A sale is the commercial obligation to receive a fixed amount. Creating one does not request money from the bank and does not mean anything was paid.
+
+| Method and path | Who | Result |
+| --- | --- | --- |
+| `POST /sales {"merchant_id", "amount_cents", "concept"?}` | Operators of that merchant | `201` with the sale; `404` for a merchant outside the caller's memberships; `409` with the reason when the merchant has no enabled receiving account; `403` for administrators |
+| `GET /sales/{id}` | Operators of the sale's merchant and administrators | The stored sale; `404` for unknown sales or sales of other merchants |
+
+- `amount_cents` is a JSON integer of MXN centavos between 1 and `TAPPY_SALE_MAX_AMOUNT_CENTS` (default and upper bound 100000000, the provider's documented maximum). Decimals, strings and booleans are rejected; nothing is rounded.
+- `concept` is optional, collapses whitespace and has at most 40 characters (the provider's limit for the text shown to the payer).
+- Every sale gets a unique 10-character `reference`, starts as `open` and keeps a snapshot of the beneficiary and masked account it was created for, so later receiver changes do not rewrite it. The body accepts no receiver, currency, status or reference.
+- Amount, currency, concept, merchant, reference and receiver snapshot cannot change after creation: there is no update route and the database rejects such updates.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.

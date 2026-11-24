@@ -145,12 +145,28 @@ def read_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -
     return describe_receiver(receiver)
 
 
-def issuing_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -> ReceiverView:
-    receiver = accessible_receiver(db, actor, merchant_id)
+def issuable(receiver: ReceivingAccount | None) -> ReceivingAccount:
     reason = issuance_block(receiver)
     if reason is not None or receiver is None:
         raise IssuanceBlockedError(reason)
-    return describe_receiver(receiver)
+    return receiver
+
+
+def issuing_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -> ReceiverView:
+    return describe_receiver(issuable(accessible_receiver(db, actor, merchant_id)))
+
+
+def held_issuing_receiver(
+    db: Session, actor: IdentitySummary, merchant_id: uuid.UUID
+) -> ReceivingAccount:
+    merchant = accessible_merchant(db, actor, merchant_id)
+    return issuable(
+        db.scalar(
+            select(ReceivingAccount)
+            .where(ReceivingAccount.merchant_id == merchant.id)
+            .with_for_update(read=True)
+        )
+    )
 
 
 def list_receivers(db: Session) -> dict[uuid.UUID, ReceiverView]:

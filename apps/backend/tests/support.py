@@ -2,8 +2,10 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta
 
+import pytest
 from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 
@@ -118,6 +120,20 @@ def create_identity(
             {"email": email, "hash": hash_password(password), "role": role, "status": status},
         )
     )
+
+
+def wait_until_blocked_on_a_lock(database_url: str) -> None:
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        waiting = scalar(
+            database_url,
+            "SELECT count(*) FROM pg_stat_activity "
+            "WHERE datname = current_database() AND wait_event_type = 'Lock'",
+        )
+        if waiting:
+            return
+        time.sleep(0.01)
+    pytest.fail("the request never waited for a row lock")
 
 
 class MovableClock:
