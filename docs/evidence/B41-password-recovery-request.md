@@ -2,7 +2,7 @@
 
 Ticket: [#49](https://github.com/luisjrez/Tappy/issues/49) · Historia: [H2 #2](https://github.com/luisjrez/Tappy/issues/2) · Protocolo: [TICKET_QUALITY_PROTOCOL](../planning/TICKET_QUALITY_PROTOCOL.md) · Manifiesto: [B41-password-recovery-request.toml](B41-password-recovery-request.toml)
 
-> **Estado: BLOCKED por B41-TC06.** La entrega real a un buzón controlado requiere proveedor SMTP y remitente autorizados que aún no existen. El resto del ticket está implementado y verificado con Mailpit (SMTP de prueba). Por decisión del usuario (2026-11-20), B41/B42 viven en un stack lateral con base B08 para no bloquear el stack principal.
+> **Estado: BLOCKED por B41-TC06.** La entrega real a un buzón controlado requiere proveedor SMTP y remitente autorizados que aún no existen. El resto del ticket está implementado y verificado con Mailpit (SMTP de prueba). B41/B42 nacieron en un stack lateral con base B08 (decisión del usuario, 2026-11-20); tras mergearse B01–B10 a `main`, la rama se integró sobre `main` (ver «Integración con `main`»).
 
 ## Revisiones y escenario
 
@@ -84,6 +84,16 @@ Logs del servidor sin `token=` (0 coincidencias). Datos y buzón limpiados al te
 ## Checks sobre `cbe0679`
 
 `uv run python -m quality.check`: format, lint, types, hygiene, migrations (`0005` sin drift), tests (`164 passed`), api (9 contratos sin diferencias) en PASS; `evidence`: B01–B08 APPROVED, B41 BLOCKED (80 %, TC06 + review).
+
+## Integración con `main` (2026-11-24)
+
+B08 y el resto del stack principal (B09–B10) se mergearon a `main`. La rama se actualizó con un merge de `main` (`6779438`, conserva los SHAs citados arriba) y un commit de reencadenado (`8d14bcb`):
+
+- Conflictos resueltos conservando ambos lados: `README.md` (secciones de comercios y de recuperación), `contracts/api/cases.toml` (casos de comercios/receptor y `password-reset-request`), `src/tappy/models.py` (modelos de comercios y de recuperación) y `src/tappy/main.py` (handler global de validación, router de comercios y `RecoveryService`).
+- Migración renombrada de `0005_identity_password_recovery` a `0007_identity_password_recovery` con `down_revision = "0006_receiving_accounts"`: `main` ya tenía `0005_merchants_memberships` y `0006_receiving_accounts` sobre `0004`, lo que dejaba dos cabezas. Sin cambios en el esquema que crea.
+- Sin cambios de comportamiento: el 422 sin `input` de B10 ahora protege también el correo de `POST /auth/password-reset/request`.
+
+Checks sobre `8d14bcb` (con `.env` exportado): format, lint, types, hygiene, migrations (cadena lineal hasta `0007`, upgrade/downgrade sin drift), tests (`198 passed`), api (12 contratos sin diferencias) en PASS; `evidence`: B01–B10 APPROVED, B41 BLOCKED (80 %, solo TC06).
 
 ## Supresiones
 
