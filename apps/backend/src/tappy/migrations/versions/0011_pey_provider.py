@@ -20,7 +20,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    pey_attempts = op.get_bind().scalar(
+        sa.text("SELECT count(*) FROM payment_attempts WHERE provider = 'pey'")
+    )
+    if pey_attempts:
+        raise RuntimeError("Cannot downgrade while pey payment attempts exist")
     op.drop_column("payment_attempts", "failure_code")
-    op.execute("DELETE FROM payment_attempts WHERE provider = 'pey'")
     op.drop_constraint("payment_provider", "payment_attempts", type_="check")
     op.create_check_constraint("payment_provider", "payment_attempts", "provider IN ('simulated')")

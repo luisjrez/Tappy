@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_PREFIX = "TAPPY_"
 PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
+PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
 PEY_BASE_URL = r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))"
 
 
@@ -32,7 +33,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def pey_needs_a_key(self) -> Self:
         if self.payment_provider == "pey" and self.pey_api_key is None:
-            raise ValueError("TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey")
+            raise ValueError(PEY_KEY_REQUIRED)
         return self
 
 

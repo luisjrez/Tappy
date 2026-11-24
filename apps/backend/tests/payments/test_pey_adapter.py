@@ -44,6 +44,16 @@ def test_sends_exact_peso_amounts_and_keeps_the_official_id_and_payload(
     assert issued == IssuedQr(CREATED["id"], CREATED["qrString"])
 
 
+def test_request_fields_are_allowed_by_the_official_request_schema() -> None:
+    fake = FakePey()
+
+    fake.provider().create_qr(order())
+
+    allowed = set(FIXTURE["request_schema"]["properties"])
+    assert set(sent_body(fake)) <= allowed
+    assert {"amount", "bankAccountId", "metadata", "concept"} <= allowed
+
+
 def test_request_targets_the_snapshotted_receiver_and_links_the_attempt() -> None:
     fake = FakePey()
 
@@ -113,21 +123,23 @@ def test_rate_limit_is_a_definitive_rejection() -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "body"),
+    ("status", "body", "reason"),
     [
-        (503, FIXTURE["responses"]["503"]["maintenance"]),
-        (500, FIXTURE["responses"]["500"]["invokeError"]),
-        (500, FIXTURE["responses"]["500"]["requestIdError"]),
-        (400, {"unexpected": True}),
+        (503, FIXTURE["responses"]["503"]["maintenance"], "server_error"),
+        (500, FIXTURE["responses"]["500"]["invokeError"], "server_error"),
+        (500, FIXTURE["responses"]["500"]["requestIdError"], "server_error"),
+        (400, {"unexpected": True}, "invalid_response"),
     ],
 )
-def test_server_errors_and_unknown_errors_are_uncertain(status: int, body: object) -> None:
+def test_server_errors_and_unknown_errors_are_uncertain(
+    status: int, body: object, reason: str
+) -> None:
     fake = FakePey(status, body)
 
     with pytest.raises(ProviderUnavailableError) as raised:
         fake.provider().create_qr(order())
 
-    assert raised.value.reason in {"server_error", "invalid_response"}
+    assert raised.value.reason == reason
 
 
 @pytest.mark.parametrize(

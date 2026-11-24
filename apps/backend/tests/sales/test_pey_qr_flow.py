@@ -1,3 +1,4 @@
+import json
 import uuid
 from http import HTTPStatus
 from typing import Any
@@ -13,6 +14,7 @@ from tests.sales.support import (
     AMOUNT,
     IDEMPOTENCY_HEADER,
     OPERATOR_A,
+    RECEIVER_A,
     bearer,
     create_sale,
     ready_merchant,
@@ -52,6 +54,9 @@ def test_pey_qr_is_stored_with_the_official_id_and_payload(migrated_database_url
     assert detail["status"] == "open"
     assert API_KEY not in text
     assert scalar(migrated_database_url, "SELECT provider FROM payment_attempts") == "pey"
+    sent = json.loads(fake.requests[0].content)
+    assert sent["bankAccountId"] == RECEIVER_A["provider_account_id"]
+    assert sent["metadata"]["tappy_attempt_id"] == attempt["id"]
 
 
 def test_definitive_rejection_fails_the_attempt_with_its_code(

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -36,6 +37,8 @@ from tappy.sales.models import (
     SaleStatus,
 )
 from tappy.sales.service import AttemptView, accessible_sale, describe_attempt
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -165,6 +168,11 @@ def record_issued_qr(
                 attempt.updated_at = now
         except IntegrityError as error:
             if is_unique_violation(error, PROVIDER_REQUEST_CONSTRAINT):
+                logger.warning(
+                    "QR provider id %s is already linked to another attempt; attempt %s kept",
+                    issued.provider_request_id,
+                    attempt_id,
+                )
                 raise ProviderUnavailableError("duplicate_provider_id") from None
             raise
     return describe_attempt(attempt)

@@ -82,9 +82,6 @@ class PeyQrProvider:
         self.settings = settings
         self.transport = transport
 
-    def __repr__(self) -> str:
-        return f"PeyQrProvider(base_url={self.settings.base_url!r})"
-
     def post(self, order: QrOrder) -> httpx2.Response:
         headers = {"Authorization": f"Bearer {self.settings.api_key.get_secret_value()}"}
         with httpx2.Client(
