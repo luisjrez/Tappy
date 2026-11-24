@@ -72,6 +72,7 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
     assert attempt == {
         "id": attempt["id"],
         "sale_id": sale_id,
+        "sale_reference": sale["reference"],
         "method": "phone",
         "status": "creating",
         "simulated": True,

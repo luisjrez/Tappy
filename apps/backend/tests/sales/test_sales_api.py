@@ -343,6 +343,7 @@ def test_unknown_or_malformed_sale_ids(client: TestClient) -> None:
         "reference = 'AAAAAAAAAA'",
         "beneficiary_name = 'Otro'",
         "account_last4 = '0000'",
+        "receiver_account = 'otra-cuenta'",
         "created_by = gen_random_uuid()",
     ],
 )
@@ -379,11 +380,11 @@ def test_database_rejects_non_positive_amounts(
             connection.execute(
                 text(
                     "INSERT INTO sales (id, merchant_id, created_by, amount_cents, currency, "
-                    "reference, status, receiving_account_id, beneficiary_name, "
-                    "account_last4, created_at) "
+                    "reference, status, receiving_account_id, receiver_account, "
+                    "beneficiary_name, account_last4, created_at) "
                     "SELECT gen_random_uuid(), merchant_id, created_by, :amount, currency, "
-                    "'BBBBBBBBBB', status, receiving_account_id, beneficiary_name, "
-                    "account_last4, created_at FROM sales"
+                    "'BBBBBBBBBB', status, receiving_account_id, receiver_account, "
+                    "beneficiary_name, account_last4, created_at FROM sales"
                 ),
                 {"amount": amount},
             )

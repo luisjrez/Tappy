@@ -8,9 +8,14 @@ class ProviderName(StrEnum):
     SIMULATED = "simulated"
 
 
+class ProviderUnavailableError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class QrOrder:
     attempt_id: uuid.UUID
+    reference: str
     amount_cents: int
     concept: str | None
     receiver_account: str

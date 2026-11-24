@@ -48,6 +48,7 @@ class SaleRequest:
 class AttemptView:
     id: str
     sale_id: str
+    sale_reference: str
     method: AttemptMethod
     status: AttemptStatus
     simulated: bool
@@ -111,6 +112,7 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
     return AttemptView(
         id=str(attempt.id),
         sale_id=str(attempt.sale_id),
+        sale_reference=attempt.sale.reference,
         method=attempt.method,
         status=attempt.status,
         simulated=attempt.simulated,
@@ -163,6 +165,7 @@ def create_sale(db: Session, request: SaleRequest, maximum: int, now: datetime) 
         concept=concept,
         status=SaleStatus.OPEN,
         receiving_account_id=receiver.id,
+        receiver_account=receiver.provider_account_id,
         beneficiary_name=receiver.beneficiary_name,
         account_last4=receiver.account_last4,
         created_at=now,

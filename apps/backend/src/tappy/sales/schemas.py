@@ -25,6 +25,7 @@ class AttemptResponse(BaseModel):
 
     id: str
     sale_id: str
+    sale_reference: str
     method: AttemptMethod
     status: AttemptStatus
     simulated: bool

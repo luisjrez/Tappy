@@ -4,7 +4,6 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
-from tappy.payments.provider import QrProvider
 from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
@@ -40,11 +39,3 @@ def get_session(database: DatabaseDependency) -> Iterator[Session]:
 
 
 SessionDependency = Annotated[Session, Depends(get_session)]
-
-
-def get_qr_provider(request: Request) -> QrProvider:
-    provider: QrProvider = request.app.state.qr_provider
-    return provider
-
-
-QrProviderDependency = Annotated[QrProvider, Depends(get_qr_provider)]

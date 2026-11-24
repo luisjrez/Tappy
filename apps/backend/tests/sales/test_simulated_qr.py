@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from tappy.payments.provider import IssuedQr, QrOrder
+from tappy.payments.provider import IssuedQr, ProviderUnavailableError, QrOrder
 from tappy.payments.simulator import SimulatedQrProvider, provider_from
 from tappy.platform.config import Settings
 from tests.sales.support import (
@@ -26,13 +26,32 @@ from tests.support import build_settings, scalar
 Q1 = "Q1"
 
 
-@pytest.fixture
-def simulator() -> SimulatedQrProvider:
-    return SimulatedQrProvider(id_factory=lambda: Q1)
+UNAVAILABLE = "The QR provider is unavailable; the attempt is kept for reconciliation"
+
+
+class RecordingSimulator(SimulatedQrProvider):
+    def __init__(self) -> None:
+        super().__init__(id_factory=lambda: Q1)
+        self.orders: list[QrOrder] = []
+
+    def create_qr(self, order: QrOrder) -> IssuedQr:
+        self.orders.append(order)
+        return super().create_qr(order)
+
+
+class UnavailableProvider(RecordingSimulator):
+    def create_qr(self, order: QrOrder) -> IssuedQr:
+        self.orders.append(order)
+        raise ProviderUnavailableError
 
 
 @pytest.fixture
-def client(migrated_database_url: str, simulator: SimulatedQrProvider) -> Iterator[TestClient]:
+def simulator() -> RecordingSimulator:
+    return RecordingSimulator()
+
+
+@pytest.fixture
+def client(migrated_database_url: str, simulator: RecordingSimulator) -> Iterator[TestClient]:
     settings = build_settings(database_url=migrated_database_url)
     with start_client(settings, migrated_database_url, simulator) as client:
         yield client
@@ -57,14 +76,23 @@ def open_sale(client: TestClient, database_url: str) -> tuple[str, dict[str, str
     return sale["id"], operator_a
 
 
-def expected_payload(attempt_id: str) -> str:
-    return f"SIMULATED-CODI-QR|attempt={attempt_id}|amount_cents={AMOUNT}|concept=Dos tacos"
+def reference_of(client: TestClient, headers: dict[str, str], sale_id: str) -> str:
+    reference: str = client.get(f"/sales/{sale_id}", headers=headers).json()["reference"]
+    return reference
+
+
+def expected_payload(reference: str, attempt_id: str) -> str:
+    return (
+        f"SIMULATED-CODI-QR|ref={reference}|attempt={attempt_id}"
+        f"|amount_cents={AMOUNT}|concept=Dos tacos"
+    )
 
 
 def test_creating_a_qr_returns_the_simulated_payload_pending(
-    client: TestClient, migrated_database_url: str, simulator: SimulatedQrProvider
+    client: TestClient, migrated_database_url: str, simulator: RecordingSimulator
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
+    reference = reference_of(client, operator_a, sale_id)
 
     created = create_qr(client, operator_a, sale_id)
     sale = client.get(f"/sales/{sale_id}", headers=operator_a).json()
@@ -74,11 +102,12 @@ def test_creating_a_qr_returns_the_simulated_payload_pending(
     assert attempt == {
         "id": attempt["id"],
         "sale_id": sale_id,
+        "sale_reference": reference,
         "method": "qr",
         "status": "pending",
         "simulated": True,
         "provider_request_id": Q1,
-        "qr_payload": expected_payload(attempt["id"]),
+        "qr_payload": expected_payload(reference, attempt["id"]),
         "created_at": attempt["created_at"],
     }
     assert sale["attempts"] == [attempt]
@@ -87,6 +116,7 @@ def test_creating_a_qr_returns_the_simulated_payload_pending(
     assert order.amount_cents == AMOUNT
     assert order.concept == "Dos tacos"
     assert order.receiver_account == "bank-account-demo-a"
+    assert order.reference == reference
     assert str(order.attempt_id) == attempt["id"]
 
 
@@ -94,6 +124,7 @@ def test_stored_qr_keeps_the_exact_payload_and_identifier(
     client: TestClient, migrated_database_url: str
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
+    reference = reference_of(client, operator_a, sale_id)
     attempt = create_qr(client, operator_a, sale_id).json()
 
     stored = scalar(
@@ -101,7 +132,7 @@ def test_stored_qr_keeps_the_exact_payload_and_identifier(
         "SELECT provider || ':' || provider_request_id || ':' || qr_payload FROM payment_attempts",
     )
 
-    assert stored == f"simulated:{Q1}:{expected_payload(attempt['id'])}"
+    assert stored == f"simulated:{Q1}:{expected_payload(reference, attempt['id'])}"
 
 
 def test_simulated_acceptance_never_shows_a_payment(
@@ -121,14 +152,15 @@ def test_simulated_acceptance_never_shows_a_payment(
 
 
 def test_repeating_or_reopening_the_session_reuses_the_same_qr(
-    client: TestClient, migrated_database_url: str, simulator: SimulatedQrProvider
+    client: TestClient, migrated_database_url: str, simulator: RecordingSimulator
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
     key = str(uuid.uuid4())
     first = create_qr(client, operator_a, sale_id, key=key).json()
 
     repeated = create_qr(client, operator_a, sale_id, key=key)
-    client.post("/auth/logout", headers=operator_a)
+    logout = client.post("/auth/logout", headers=operator_a)
+    stale = client.get(f"/sales/{sale_id}", headers=operator_a)
     reopened = client.post("/auth/login", json={"email": OPERATOR_A, "password": PASSWORD})
     fresh = {"Authorization": f"Bearer {reopened.json()['access_token']}"}
     read_again = client.get(f"/sales/{sale_id}", headers=fresh).json()
@@ -136,7 +168,10 @@ def test_repeating_or_reopening_the_session_reuses_the_same_qr(
 
     assert repeated.status_code == HTTPStatus.OK
     assert repeated.json() == first
+    assert logout.status_code == HTTPStatus.NO_CONTENT
+    assert stale.status_code == HTTPStatus.UNAUTHORIZED
     assert read_again["attempts"] == [first]
+    assert read_again["reference"] == first["sale_reference"]
     assert second_key.status_code == HTTPStatus.CONFLICT
     assert len(simulator.orders) == 1
     assert scalar(migrated_database_url, "SELECT count(*) FROM payment_attempts") == 1
@@ -162,7 +197,7 @@ def test_default_simulator_issues_distinct_labelled_identifiers(
 
 @pytest.mark.parametrize("method", ["phone", "link"])
 def test_other_channels_stay_reserved_without_calling_the_qr_provider(
-    client: TestClient, migrated_database_url: str, simulator: SimulatedQrProvider, method: str
+    client: TestClient, migrated_database_url: str, simulator: RecordingSimulator, method: str
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
 
@@ -209,12 +244,22 @@ def test_reservation_is_committed_before_the_provider_is_called(
     assert created.json()["status"] == "pending"
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"beneficiary_name": "Otra Razon Social", "clabe": CLABE_B},
+        {"provider_account_id": "bank-account-demo-a2"},
+    ],
+)
 def test_qr_is_refused_when_the_receiver_changed_after_the_sale(
-    client: TestClient, migrated_database_url: str, simulator: SimulatedQrProvider
+    client: TestClient,
+    migrated_database_url: str,
+    simulator: RecordingSimulator,
+    changes: dict[str, object],
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
     merchant_id = client.get(f"/sales/{sale_id}", headers=operator_a).json()["merchant_id"]
-    configure(client, merchant_id, beneficiary_name="Otra Razon Social", clabe=CLABE_B)
+    configure(client, merchant_id, **changes)
 
     refused = create_qr(client, operator_a, sale_id)
 
@@ -231,3 +276,25 @@ def test_provider_setting_selects_the_simulator_and_rejects_unknown_values() -> 
     assert isinstance(provider_from(build_settings()), SimulatedQrProvider)
     with pytest.raises(ValueError, match="payment_provider"):
         Settings.model_validate({**build_settings().model_dump(), "payment_provider": "other"})
+
+
+def test_unavailable_provider_fails_closed_and_keeps_the_reservation(
+    migrated_database_url: str,
+) -> None:
+    unavailable = UnavailableProvider()
+    settings = build_settings(database_url=migrated_database_url)
+    with start_client(settings, migrated_database_url, unavailable) as client:
+        sale_id, operator_a = open_sale(client, migrated_database_url)
+        key = str(uuid.uuid4())
+
+        failed = create_qr(client, operator_a, sale_id, key=key)
+        retried = create_qr(client, operator_a, sale_id, key=key)
+        sale = client.get(f"/sales/{sale_id}", headers=operator_a).json()
+
+    assert failed.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert failed.json() == {"detail": UNAVAILABLE}
+    assert retried.status_code == HTTPStatus.OK
+    assert retried.json()["status"] == "creating"
+    assert [attempt["status"] for attempt in sale["attempts"]] == ["creating"]
+    assert sale["attempts"][0]["qr_payload"] is None
+    assert len(unavailable.orders) == 1

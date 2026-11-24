@@ -77,7 +77,8 @@ def ensure_no_active_attempt(db: Session, sale_id: uuid.UUID) -> None:
 
 
 def ensure_same_receiver(sale: Sale, receiver: ReceivingAccount) -> None:
-    if (receiver.beneficiary_name, receiver.account_last4) != (
+    if (receiver.provider_account_id, receiver.beneficiary_name, receiver.account_last4) != (
+        sale.receiver_account,
         sale.beneficiary_name,
         sale.account_last4,
     ):
@@ -105,7 +106,7 @@ def reserve_attempt(
         status=AttemptStatus.CREATING,
         provider=provider.name,
         simulated=provider.simulated,
-        receiver_account=receiver.provider_account_id,
+        receiver_account=held.receiver_account,
         created_at=now,
         updated_at=now,
     )
@@ -119,7 +120,9 @@ def pending_qr_order(db: Session, attempt_id: uuid.UUID) -> QrOrder | None:
     if attempt.method is not AttemptMethod.QR or attempt.status is not AttemptStatus.CREATING:
         return None
     sale = db.get_one(Sale, attempt.sale_id)
-    return QrOrder(attempt.id, sale.amount_cents, sale.concept, attempt.receiver_account)
+    return QrOrder(
+        attempt.id, sale.reference, sale.amount_cents, sale.concept, attempt.receiver_account
+    )
 
 
 def record_issued_qr(

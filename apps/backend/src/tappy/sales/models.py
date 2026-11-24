@@ -74,11 +74,14 @@ class Sale(Base):
         enum_column(SaleStatus, "sale_status"), default=SaleStatus.OPEN
     )
     receiving_account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("receiving_accounts.id"))
+    receiver_account: Mapped[str] = mapped_column(String(PROVIDER_ACCOUNT_ID_MAX_LENGTH))
     beneficiary_name: Mapped[str] = mapped_column(String(BENEFICIARY_NAME_MAX_LENGTH))
     account_last4: Mapped[str] = mapped_column(String(4))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[list[PaymentAttempt]] = relationship(
-        order_by=lambda: [PaymentAttempt.created_at, PaymentAttempt.id], lazy="selectin"
+        back_populates="sale",
+        order_by=lambda: [PaymentAttempt.created_at, PaymentAttempt.id],
+        lazy="selectin",
     )
 
 
@@ -106,6 +109,7 @@ class PaymentAttempt(Base):
     receiver_account: Mapped[str] = mapped_column(String(PROVIDER_ACCOUNT_ID_MAX_LENGTH))
     provider_request_id: Mapped[str | None] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
     qr_payload: Mapped[str | None] = mapped_column(Text)
+    sale: Mapped[Sale] = relationship(back_populates="attempts")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     version: Mapped[int] = mapped_column(Integer)

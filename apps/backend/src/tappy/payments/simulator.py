@@ -15,13 +15,12 @@ class SimulatedQrProvider:
 
     def __init__(self, id_factory: Callable[[], str] = simulated_identifier) -> None:
         self.id_factory = id_factory
-        self.orders: list[QrOrder] = []
 
     def create_qr(self, order: QrOrder) -> IssuedQr:
-        self.orders.append(order)
         payload = "|".join(
             [
                 "SIMULATED-CODI-QR",
+                f"ref={order.reference}",
                 f"attempt={order.attempt_id}",
                 f"amount_cents={order.amount_cents}",
                 f"concept={order.concept or ''}",
