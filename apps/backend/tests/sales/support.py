@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from tappy.identity.models import Role
+from tappy.identity.models import IdentityStatus, Role
+from tappy.identity.provisioning import IdentitySummary
 from tappy.main import create_app
 from tappy.platform.config import Settings
 from tests.support import create_identity, scalar
@@ -36,7 +37,18 @@ def start_client(settings: Settings, database_url: str) -> TestClient:
     create_identity(database_url, ADMIN, PASSWORD, role=Role.ADMIN)
     create_identity(database_url, OPERATOR_A, PASSWORD)
     create_identity(database_url, OPERATOR_B, PASSWORD)
+    return app_client(settings)
+
+
+def app_client(settings: Settings) -> TestClient:
     return TestClient(create_app(settings))
+
+
+def actor_of(client: TestClient, headers: dict[str, str]) -> IdentitySummary:
+    me = client.get("/auth/me", headers=headers).json()
+    return IdentitySummary(
+        me["reference"], me["email"], Role(me["role"]), IdentityStatus(me["status"])
+    )
 
 
 def bearer(client: TestClient, email: str) -> dict[str, str]:

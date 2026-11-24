@@ -15,3 +15,13 @@ class InvalidAmountError(SaleError):
 class InvalidConceptError(SaleError):
     def __init__(self, max_length: int) -> None:
         super().__init__(f"Concept must have at most {max_length} characters")
+
+
+class SaleNotOpenError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("The sale is not open")
+
+
+class ActiveAttemptError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("The sale already has an active payment attempt")

@@ -23,6 +23,9 @@ from tappy.sales.models import (
     CONCEPT_MAX_LENGTH,
     REFERENCE_CONSTRAINT,
     REFERENCE_LENGTH,
+    AttemptMethod,
+    AttemptStatus,
+    PaymentAttempt,
     Sale,
     SaleStatus,
 )
@@ -42,6 +45,15 @@ class SaleRequest:
 
 
 @dataclass(frozen=True)
+class AttemptView:
+    id: str
+    sale_id: str
+    method: AttemptMethod
+    status: AttemptStatus
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class SaleView:
     id: str
     merchant_id: str
@@ -53,6 +65,7 @@ class SaleView:
     beneficiary_name: str
     masked_account: str
     created_at: datetime
+    attempts: list[AttemptView]
 
 
 @dataclass(frozen=True)
@@ -91,6 +104,16 @@ def insert_with_fresh_reference(db: Session, sale: Sale) -> None:
                 raise
 
 
+def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
+    return AttemptView(
+        id=str(attempt.id),
+        sale_id=str(attempt.sale_id),
+        method=attempt.method,
+        status=attempt.status,
+        created_at=attempt.created_at,
+    )
+
+
 def describe_sale(sale: Sale) -> SaleView:
     return SaleView(
         id=str(sale.id),
@@ -103,6 +126,7 @@ def describe_sale(sale: Sale) -> SaleView:
         beneficiary_name=sale.beneficiary_name,
         masked_account=masked_account(sale.account_last4),
         created_at=sale.created_at,
+        attempts=[describe_attempt(attempt) for attempt in sale.attempts],
     )
 
 
@@ -141,10 +165,14 @@ def create_sale(db: Session, request: SaleRequest, maximum: int, now: datetime) 
     return SaleCreation(describe_sale(sale), replayed=False)
 
 
-def read_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> SaleView:
+def accessible_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> Sale:
     sale = db.scalar(
         select(Sale).where(Sale.id == sale_id, Sale.merchant_id.in_(scoped_ids(actor)))
     )
     if sale is None:
         raise SaleNotFoundError
-    return describe_sale(sale)
+    return sale
+
+
+def read_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> SaleView:
+    return describe_sale(accessible_sale(db, actor, sale_id))

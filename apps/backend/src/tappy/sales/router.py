@@ -7,9 +7,21 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
 from tappy.platform.dependencies import ClockDependency, SessionDependency, SettingsDependency
-from tappy.sales.errors import InvalidAmountError, InvalidConceptError, SaleNotFoundError
+from tappy.sales.attempts import AttemptRequest, reserve_attempt
+from tappy.sales.errors import (
+    ActiveAttemptError,
+    InvalidAmountError,
+    InvalidConceptError,
+    SaleNotFoundError,
+    SaleNotOpenError,
+)
 from tappy.sales.idempotency import KEY_PATTERN, IdempotencyConflictError
-from tappy.sales.schemas import SaleCreateRequest, SaleResponse
+from tappy.sales.schemas import (
+    AttemptCreateRequest,
+    AttemptResponse,
+    SaleCreateRequest,
+    SaleResponse,
+)
 from tappy.sales.service import SaleRequest, create_sale, read_sale
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -65,3 +77,48 @@ def read_one(sale_id: uuid.UUID, actor: CurrentIdentity, db: SessionDependency) 
         return SaleResponse.model_validate(read_sale(db, actor, sale_id))
     except SaleNotFoundError as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
+
+
+def attempt_request(
+    sale_id: uuid.UUID,
+    payload: AttemptCreateRequest,
+    idempotency_key: Annotated[str, Header(pattern=KEY_PATTERN)],
+    actor: CurrentOperator,
+) -> AttemptRequest:
+    return AttemptRequest(actor, sale_id, payload.method, idempotency_key)
+
+
+@router.post(
+    "/{sale_id}/attempts",
+    status_code=HTTPStatus.CREATED,
+    responses={
+        HTTPStatus.OK: {
+            "model": AttemptResponse,
+            "description": "Repeated request: the attempt reserved with this key",
+        },
+        HTTPStatus.NOT_FOUND: {"description": "Sale not found"},
+        HTTPStatus.CONFLICT: {
+            "description": "Active attempt, sale not open, charges blocked or key reused"
+        },
+    },
+)
+def reserve(
+    request: Annotated[AttemptRequest, Depends(attempt_request)],
+    response: Response,
+    db: SessionDependency,
+    clock: ClockDependency,
+) -> AttemptResponse:
+    try:
+        reservation = reserve_attempt(db, request, clock.now())
+    except SaleNotFoundError as error:
+        raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
+    except (
+        ActiveAttemptError,
+        SaleNotOpenError,
+        IssuanceBlockedError,
+        IdempotencyConflictError,
+    ) as error:
+        raise HTTPException(HTTPStatus.CONFLICT, detail=str(error)) from None
+    if reservation.replayed:
+        response.status_code = HTTPStatus.OK
+    return AttemptResponse.model_validate(reservation.attempt)

@@ -7,8 +7,6 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from tappy.identity.models import IdentityStatus, Role
-from tappy.identity.provisioning import IdentitySummary
 from tappy.platform.database import Database
 from tappy.sales.service import SaleRequest, create_sale
 from tests.sales.support import (
@@ -19,6 +17,7 @@ from tests.sales.support import (
     IDEMPOTENCY_HEADER,
     OPERATOR_A,
     OPERATOR_B,
+    actor_of,
     bearer,
     configure,
     create_sale_with_key,
@@ -187,10 +186,7 @@ def race(
     client: TestClient, database_url: str, merchant_a: str, **fields: object
 ) -> tuple[Response, uuid.UUID]:
     operator_a = bearer(client, OPERATOR_A)
-    actor = client.get("/auth/me", headers=operator_a).json()
-    summary = IdentitySummary(
-        actor["reference"], actor["email"], Role(actor["role"]), IdentityStatus(actor["status"])
-    )
+    summary = actor_of(client, operator_a)
     database = Database.from_settings(build_settings(database_url=database_url))
     try:
         with database.session_factory() as racing, racing.begin():

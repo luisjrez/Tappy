@@ -59,6 +59,7 @@ def test_operator_creates_and_reads_sale_with_exact_amount(
         "beneficiary_name": "Tienda Demo A SA de CV",
         "masked_account": "**************6782",
         "created_at": body["created_at"],
+        "attempts": [],
     }
     assert type(body["amount_cents"]) is int
     assert REFERENCE.fullmatch(body["reference"])

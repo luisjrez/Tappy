@@ -80,3 +80,10 @@ name = "sale-read-unauthenticated"
 method = "GET"
 path = "/sales/00000000-0000-0000-0000-000000000000"
 database = "migrated"
+
+[[cases]]
+name = "attempt-reserve-unauthenticated"
+method = "POST"
+path = "/sales/00000000-0000-0000-0000-000000000000/attempts"
+database = "migrated"
+body = { method = "qr" }

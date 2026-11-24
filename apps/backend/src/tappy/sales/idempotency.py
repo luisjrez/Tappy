@@ -19,6 +19,7 @@ KEY_CONSTRAINT = "uq_idempotency_requests_key"
 
 class IdempotentOperation(StrEnum):
     CREATE_SALE = "create_sale"
+    CREATE_ATTEMPT = "create_attempt"
 
 
 class IdempotencyRequest(Base):

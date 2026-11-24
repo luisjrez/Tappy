@@ -1,9 +1,21 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from types import MappingProxyType
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tappy.merchants.models import BENEFICIARY_NAME_MAX_LENGTH
 from tappy.platform.persistence import Base, enum_column
@@ -12,12 +24,31 @@ CONCEPT_MAX_LENGTH = 40
 REFERENCE_LENGTH = 10
 CURRENCY = "MXN"
 REFERENCE_CONSTRAINT = "uq_sales_reference"
+ACTIVE_ATTEMPT_INDEX = "uq_payment_attempts_active_sale"
 
 
 class SaleStatus(StrEnum):
     OPEN = "open"
     PAID = "paid"
     REVIEW = "review"
+
+
+class AttemptMethod(StrEnum):
+    QR = "qr"
+    PHONE = "phone"
+    LINK = "link"
+
+
+class AttemptStatus(StrEnum):
+    CREATING = "creating"
+    PENDING = "pending"
+    RECONCILING = "reconciling"
+    EXPIRED = "expired"
+    PAID = "paid"
+    FAILED = "failed"
+
+
+ACTIVE_ATTEMPT_STATUSES = (AttemptStatus.CREATING, AttemptStatus.PENDING, AttemptStatus.RECONCILING)
 
 
 class Sale(Base):
@@ -42,3 +73,31 @@ class Sale(Base):
     beneficiary_name: Mapped[str] = mapped_column(String(BENEFICIARY_NAME_MAX_LENGTH))
     account_last4: Mapped[str] = mapped_column(String(4))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[list[PaymentAttempt]] = relationship(
+        order_by="(PaymentAttempt.created_at, PaymentAttempt.id)", lazy="selectin"
+    )
+
+
+class PaymentAttempt(Base):
+    __tablename__ = "payment_attempts"
+    __table_args__ = (
+        Index(
+            ACTIVE_ATTEMPT_INDEX,
+            "sale_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN (" + ", ".join(f"'{status}'" for status in ACTIVE_ATTEMPT_STATUSES) + ")"
+            ),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    sale_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sales.id"), index=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("identities.id"))
+    method: Mapped[AttemptMethod] = mapped_column(enum_column(AttemptMethod, "attempt_method"))
+    status: Mapped[AttemptStatus] = mapped_column(enum_column(AttemptStatus, "attempt_status"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    version: Mapped[int] = mapped_column(Integer)
+
+    __mapper_args__ = MappingProxyType({"version_id_col": version})

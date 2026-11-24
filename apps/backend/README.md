@@ -102,11 +102,13 @@ A sale is the commercial obligation to receive a fixed amount. Creating one does
 | --- | --- | --- |
 | `POST /sales {"merchant_id", "amount_cents", "concept"?}` with `Idempotency-Key` | Operators of that merchant | `201` with the sale; `200` with the same sale when the key is repeated with the same content; `409` when the key was used with other content; `404` for a merchant outside the caller's memberships; `409` with the reason when the merchant has no enabled receiving account; `403` for administrators |
 | `GET /sales/{id}` | Operators of the sale's merchant and administrators | The stored sale; `404` for unknown sales or sales of other merchants |
+| `POST /sales/{id}/attempts {"method": "qr" \| "phone" \| "link"}` with `Idempotency-Key` | Operators of the sale's merchant | `201` reserves a payment attempt in `creating`; `200` with the same attempt when the key is repeated; `409` when the sale already has an active attempt, is not `open`, its merchant cannot issue charges, or the key was used with other content |
 
 - `amount_cents` is a JSON integer of MXN centavos between 1 and `TAPPY_SALE_MAX_AMOUNT_CENTS` (default and upper bound 100000000, the provider's documented maximum). Decimals, strings and booleans are rejected; nothing is rounded.
 - `concept` is optional, collapses whitespace and has at most 40 characters (the provider's limit for the text shown to the payer).
 - Every sale gets a unique 10-character `reference`, starts as `open` and keeps a snapshot of the beneficiary and masked account it was created for, so later receiver changes do not rewrite it. The body accepts no receiver, currency, status or reference.
 - `Idempotency-Key` is required (8–128 letters, digits, `-` or `_`; a UUID works). Generate one when the operator confirms the sale and resend it on every retry. Keys belong to the identity that used them and are stored in Postgres, so repeats are recognised across restarts, processes and concurrent requests: a concurrent repeat waits for the first request and then returns its sale. A request that fails (validation, blocked receiver) does not consume its key.
+- A sale has at most one active payment attempt (`creating`, `pending` or `reconciling`), enforced by a partial unique index; `expired` and `failed` attempts allow a new one. Reserving locks the sale row only for that short transaction and never calls the provider, so an interrupted process leaves the attempt in `creating`, visible in `GET /sales/{id}` under `attempts`. Reserving an attempt does not request money yet.
 - Amount, currency, concept, merchant, reference and receiver snapshot cannot change after creation: there is no update route and the database rejects such updates.
 
 ## Back office
