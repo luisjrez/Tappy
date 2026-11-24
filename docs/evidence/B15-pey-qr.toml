@@ -1,0 +1,62 @@
+ticket = "B15"
+revision = "4983d4a"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B15-pey-qr.md#b15-vc01--resultado-inicial-contra-el-contrato-http"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B15-AC01"
+use_cases = ["B15-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B15-TC01"
+mode = "automated"
+tests = [
+    "tests/payments/test_pey_adapter.py::test_sends_exact_peso_amounts_and_keeps_the_official_id_and_payload",
+    "tests/payments/test_pey_adapter.py::test_amounts_that_would_lose_precision_are_never_sent",
+    "tests/payments/test_pey_adapter.py::test_omits_the_concept_when_the_sale_has_none",
+    "tests/sales/test_pey_qr_flow.py::test_pey_qr_is_stored_with_the_official_id_and_payload",
+]
+
+[[criteria]]
+id = "B15-AC02"
+use_cases = ["B15-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B15-TC02"
+mode = "automated"
+tests = [
+    "tests/payments/test_pey_adapter.py::test_invalid_creation_responses_never_invent_an_identifier",
+    "tests/payments/test_pey_adapter.py::test_official_rejections_are_classified_by_type",
+    "tests/payments/test_pey_adapter.py::test_rate_limit_is_a_definitive_rejection",
+    "tests/payments/test_pey_adapter.py::test_server_errors_and_unknown_errors_are_uncertain",
+    "tests/payments/test_pey_adapter.py::test_timeouts_and_connection_failures_are_uncertain",
+    "tests/sales/test_pey_qr_flow.py::test_definitive_rejection_fails_the_attempt_with_its_code",
+    "tests/sales/test_pey_qr_flow.py::test_uncertain_response_keeps_the_attempt_creating",
+    "tests/sales/test_pey_qr_flow.py::test_a_provider_id_already_linked_to_another_attempt_is_uncertain",
+]
+
+[[criteria]]
+id = "B15-AC03"
+use_cases = ["B15-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B15-TC03"
+mode = "automated"
+tests = [
+    "tests/payments/test_pey_adapter.py::test_request_targets_the_snapshotted_receiver_and_links_the_attempt",
+    "tests/payments/test_pey_adapter.py::test_credentials_never_reach_logs_errors_or_representations",
+    "tests/payments/test_pey_adapter.py::test_adapter_is_labelled_as_the_real_provider",
+    "tests/sales/test_pey_qr_flow.py::test_pey_settings_require_a_server_side_key",
+    "tests/sales/test_pey_qr_flow.py::test_pey_base_url_requires_tls_outside_loopback",
+]
