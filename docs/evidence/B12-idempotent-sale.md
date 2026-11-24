@@ -34,7 +34,7 @@ Ticket: [#20](https://github.com/luisjrez/Tappy/issues/20) · Historia: [H4 #4](
 
 | Comportamiento | Red | Green |
 | --- | --- | --- |
-| Repetición, conflicto, clave obligatoria y carrera | 12 de 14 tests fallan (p. ej. `assert 201 == 200` en la repetición: se creaba una segunda venta; la clave no era obligatoria) | `idempotency_requests`, `claim_or_replay`, cabecera obligatoria |
+| Repetición, conflicto, clave obligatoria y carrera | 12 de 14 tests fallan antes de implementar (aún no existían la cabecera obligatoria, la tabla de claves ni la repetición) | `idempotency_requests`, `claim_or_replay`, cabecera obligatoria |
 | Claves por identidad / fallo no consume la clave | Pasaban antes de implementar (no había claves): son guardas de regresión | Mutación con clave sin `identity_id` → `assert 200 == 201` en `test_keys_belong_to_the_identity_that_used_them` |
 | Carrera sin esperar al índice | Mutación sin `ON CONFLICT DO NOTHING` (insertar y fallar): `UniqueViolation uq_idempotency_requests_key` (500) en los dos tests concurrentes | `INSERT … ON CONFLICT DO NOTHING RETURNING` + relectura |
 
