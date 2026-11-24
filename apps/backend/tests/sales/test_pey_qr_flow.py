@@ -121,3 +121,46 @@ def test_pey_base_url_requires_tls_outside_loopback(url: str, accepted: bool) ->
     else:
         with pytest.raises(ValueError, match="pey_base_url"):
             Settings.model_validate(candidate)
+
+
+def test_a_provider_id_already_linked_to_another_attempt_is_uncertain(
+    migrated_database_url: str,
+) -> None:
+    fake = FakePey()
+    settings = build_settings(database_url=migrated_database_url)
+    with start_client(settings, migrated_database_url, fake.provider()) as client:
+        merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+        operator_a = bearer(client, OPERATOR_A)
+        responses = []
+        for _ in range(2):
+            sale = create_sale(client, operator_a, merchant_a, amount_cents=AMOUNT).json()
+            responses.append(
+                client.post(
+                    f"/sales/{sale['id']}/attempts",
+                    json={"method": "qr"},
+                    headers={**operator_a, IDEMPOTENCY_HEADER: str(uuid.uuid4())},
+                )
+            )
+
+    assert responses[0].status_code == HTTPStatus.CREATED
+    assert responses[1].status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert responses[1].json() == {
+        "detail": (
+            "The QR provider is unavailable (duplicate_provider_id); "
+            "the attempt is kept for reconciliation"
+        )
+    }
+    assert (
+        scalar(
+            migrated_database_url,
+            "SELECT count(*) FROM payment_attempts WHERE provider_request_id = :id",
+            {"id": CREATED["id"]},
+        )
+        == 1
+    )
+    assert (
+        scalar(
+            migrated_database_url, "SELECT count(*) FROM payment_attempts WHERE status = 'creating'"
+        )
+        == 1
+    )

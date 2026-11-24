@@ -4,7 +4,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from psycopg.errors import UniqueViolation
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +11,7 @@ from sqlalchemy.orm import Session
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.receivers import held_issuing_receiver, masked_account
 from tappy.merchants.service import accessible_merchant, scoped_ids
+from tappy.platform.persistence import is_unique_violation
 from tappy.sales.errors import InvalidConceptError, SaleNotFoundError
 from tappy.sales.idempotency import (
     IdempotencyClaim,
@@ -90,13 +90,6 @@ def new_reference() -> str:
     return "".join(secrets.choice(REFERENCE_ALPHABET) for _ in range(REFERENCE_LENGTH))
 
 
-def is_reference_collision(error: IntegrityError) -> bool:
-    return (
-        isinstance(error.orig, UniqueViolation)
-        and error.orig.diag.constraint_name == REFERENCE_CONSTRAINT
-    )
-
-
 def insert_with_fresh_reference(db: Session, sale: Sale) -> None:
     for attempt in range(1, REFERENCE_ATTEMPTS + 1):
         sale.reference = new_reference()
@@ -105,7 +98,10 @@ def insert_with_fresh_reference(db: Session, sale: Sale) -> None:
                 db.add(sale)
             return
         except IntegrityError as error:
-            if not is_reference_collision(error) or attempt == REFERENCE_ATTEMPTS:
+            if (
+                not is_unique_violation(error, REFERENCE_CONSTRAINT)
+                or attempt == REFERENCE_ATTEMPTS
+            ):
                 raise
 
 

@@ -3,7 +3,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from psycopg.errors import UniqueViolation
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +23,7 @@ from tappy.merchants.models import (
     ReceivingAccount,
 )
 from tappy.merchants.service import accessible_merchant, collapsed_text
+from tappy.platform.persistence import is_unique_violation
 
 CLABE = re.compile(r"\d{18}")
 CLABE_WEIGHTS = (3, 7, 1)
@@ -127,10 +127,7 @@ def configure_receiver(
             receiver.updated_at = now
             db.add(receiver)
     except IntegrityError as error:
-        if (
-            isinstance(error.orig, UniqueViolation)
-            and error.orig.diag.constraint_name == PROVIDER_ACCOUNT_CONSTRAINT
-        ):
+        if is_unique_violation(error, PROVIDER_ACCOUNT_CONSTRAINT):
             raise ReceiverAccountTakenError from None
         raise
     return describe_receiver(receiver)

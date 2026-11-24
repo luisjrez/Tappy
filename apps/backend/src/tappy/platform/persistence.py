@@ -1,6 +1,8 @@
 from enum import StrEnum
 
+from psycopg.errors import UniqueViolation
 from sqlalchemy import Enum
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -17,3 +19,7 @@ def enum_column(enum: type[StrEnum], name: str) -> Enum:
         length=16,
         values_callable=lambda members: [member.value for member in members],
     )
+
+
+def is_unique_violation(error: IntegrityError, constraint: str) -> bool:
+    return isinstance(error.orig, UniqueViolation) and error.orig.diag.constraint_name == constraint

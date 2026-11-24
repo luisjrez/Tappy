@@ -3,14 +3,22 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.models import ReceivingAccount
 from tappy.merchants.receivers import held_issuing_receiver
-from tappy.payments.provider import IssuedQr, ProviderRejectedError, QrOrder, QrProvider
+from tappy.payments.provider import (
+    IssuedQr,
+    ProviderRejectedError,
+    ProviderUnavailableError,
+    QrOrder,
+    QrProvider,
+)
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
+from tappy.platform.persistence import is_unique_violation
 from tappy.sales.errors import ActiveAttemptError, ReceiverChangedError, SaleNotOpenError
 from tappy.sales.idempotency import (
     IdempotencyClaim,
@@ -20,6 +28,7 @@ from tappy.sales.idempotency import (
 )
 from tappy.sales.models import (
     ACTIVE_ATTEMPT_STATUSES,
+    PROVIDER_REQUEST_CONSTRAINT,
     AttemptMethod,
     AttemptStatus,
     PaymentAttempt,
@@ -148,11 +157,16 @@ def record_issued_qr(
 ) -> AttemptView:
     attempt = held_attempt(db, attempt_id)
     if attempt.status is AttemptStatus.CREATING:
-        attempt.provider_request_id = issued.provider_request_id
-        attempt.qr_payload = issued.payload
-        attempt.status = AttemptStatus.PENDING
-        attempt.updated_at = now
-        db.flush()
+        try:
+            with db.begin_nested():
+                attempt.provider_request_id = issued.provider_request_id
+                attempt.qr_payload = issued.payload
+                attempt.status = AttemptStatus.PENDING
+                attempt.updated_at = now
+        except IntegrityError as error:
+            if is_unique_violation(error, PROVIDER_REQUEST_CONSTRAINT):
+                raise ProviderUnavailableError("duplicate_provider_id") from None
+            raise
     return describe_attempt(attempt)
 
 
