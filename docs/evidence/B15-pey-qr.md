@@ -98,4 +98,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `4983d4a` + `8b4d132` | CHANGES_REQUESTED | APPROVE | Standards (hard): faltaba el antes/después de las superficies de B14 que cambian (`failure_code`, motivo del `503`). Juicios: mensaje de clave obligatoria duplicado, `__repr__` innecesario, id duplicado sin registro en el log, downgrade que borraba intentos pey, fixture sin el esquema de la petición, 429 como supuesto. Spec (menores): esquema de la petición en el contrato versionado, `bankAccountId` no comprobado por la API, motivo inexacto en un test, riesgo del QR sin vencimiento sin nombrar |
+| 2 | `55c57e9` + `8a00f71` | APPROVE | APPROVE | Antes/después añadido; menores aplicados; supuesto del 429 registrado para B35 (#43) y riesgo de vencimiento para B24 (#32). Sin regresiones (130 tests de pagos y cobros) |
+
+Hallazgos pendientes: 0.

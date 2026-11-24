@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B15-pey-qr.md#b15-vc01--resultado-inicial-contra-el-contrato-http"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
