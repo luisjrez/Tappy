@@ -1,5 +1,5 @@
 ticket = "B12"
-revision = "97333cf"
+revision = "28e7058"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B12-idempotent-sale.md#b12-vc01--antesdespués-de-la-creación"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]

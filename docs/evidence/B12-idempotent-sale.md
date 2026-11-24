@@ -6,7 +6,7 @@ Ticket: [#20](https://github.com/luisjrez/Tappy/issues/20) · Historia: [H4 #4](
 
 - Ticket, UC/AC/TC y comprobación: B12-UC01–UC03, B12-AC01–AC03, B12-TC01–TC03, B12-VC01.
 - Modalidad: **antes/después** para `POST /sales` (contrato existente de B11: ahora exige `Idempotency-Key` y responde `200`/`409` en repeticiones) y **resultado inicial** para la repetición idempotente. Contratos aprobados sin diferencias (los 401 sin sesión no cambian).
-- Base: rama B11 `f676cde` (PR #66), stack de H4. Revisiones: candidato `c4d292c` → correcciones de review `97333cf` (revisión final). La VC01 se ejecutó sobre `c4d292c`; `97333cf` no cambia ninguna de sus respuestas (solo añade la comprobación de pertenencia en la repetición, normaliza el digest y declara el esquema del `200`).
+- Base: rama B11 `f676cde` (PR #66), stack de H4. Revisiones: candidato `c4d292c` → correcciones de review `97333cf` (código final) → `28e7058` (solo una constante en un test). La VC01 se ejecutó primero sobre `c4d292c` y se repitió sobre `97333cf` con respuestas idénticas salvo la referencia aleatoria; la tabla muestra la ejecución final.
 - Entorno: macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-24. Ejecutor: sesión local de desarrollo del autor del PR.
 - Datos: comercio «Tienda Demo A», identidades sintéticas `@tappy.example`, receptor ficticio. Sin integración bancaria: crear un cobro no llama al proveedor.
 
@@ -47,17 +47,17 @@ Refactor con suite verde: `SaleRequest` agrupa operador, contenido y clave (evit
 
 **Antes** (última evidencia aprobada, [B11-VC01](B11-sale.md#b11-vc01--resultado-inicial-de-api), revisión `6629897`): `POST /sales {A, 30000, …}` sin cabecera → `201`. Repetirla creaba otra venta con otra referencia (en B11 la creación no era idempotente; `test_each_sale_gets_its_own_reference`).
 
-**Después** (proceso real `python -m tappy` sobre `c4d292c`, DB en `0008_idempotency_requests`; ids y fechas normalizados):
+**Después** (proceso real `python -m tappy` sobre `97333cf`, DB en `0008_idempotency_requests`; ids y fechas normalizados):
 
 | Petición | Status | Respuesta |
 | --- | --- | --- |
 | `POST /sales {A, 30000}` sin `Idempotency-Key` | 422 | `{"detail": [{"type": "missing", "loc": ["header", "idempotency-key"], "msg": "Field required"}]}` |
 | `POST /sales {A, 30000}` con `Idempotency-Key: short` | 422 | `{"detail": [{"type": "string_pattern_mismatch", "loc": ["header", "idempotency-key"], "msg": "String should match pattern '^[A-Za-z0-9_-]{8,128}$'"}]}` |
-| `POST /sales {A, 30000}` con K (primera vez) | 201 | `{"id": "<sale-1>", "merchant_id": "<uuid>", "reference": "NJ5ND61YY5", "amount_cents": 30000, "currency": "MXN", "concept": null, "status": "open", "beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "created_at": "<fecha UTC>"}` |
-| `POST /sales {A, 30000}` con K (repetición) | 200 | `{"id": "<sale-1>", "merchant_id": "<uuid>", "reference": "NJ5ND61YY5", "amount_cents": 30000, "currency": "MXN", "concept": null, "status": "open", "beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "created_at": "<fecha UTC>"}` |
+| `POST /sales {A, 30000}` con K (primera vez) | 201 | `{"id": "<sale-1>", "merchant_id": "<uuid>", "reference": "YZ4QXW7SY3", "amount_cents": 30000, "currency": "MXN", "concept": null, "status": "open", "beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "created_at": "<fecha UTC>"}` |
+| `POST /sales {A, 30000}` con K (repetición) | 200 | `{"id": "<sale-1>", "merchant_id": "<uuid>", "reference": "YZ4QXW7SY3", "amount_cents": 30000, "currency": "MXN", "concept": null, "status": "open", "beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "created_at": "<fecha UTC>"}` |
 | `POST /sales {A, 45000}` con K | 409 | `{"detail": "Idempotency key already used with different content"}` |
 | 8 × `POST /sales {A, 1500}` con K2 en paralelo | [200, 200, 200, 200, 200, 200, 200, 201] | 1 cobro distinto en las 8 respuestas |
-| `GET /sales/{id}` del cobro de K | 200 | `{"id": "<sale-1>", "merchant_id": "<uuid>", "reference": "NJ5ND61YY5", "amount_cents": 30000, "currency": "MXN", "concept": null, "status": "open", "beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "created_at": "<fecha UTC>"}` |
+| `GET /sales/{id}` del cobro de K | 200 | `{"id": "<sale-1>", "merchant_id": "<uuid>", "reference": "YZ4QXW7SY3", "amount_cents": 30000, "currency": "MXN", "concept": null, "status": "open", "beneficiary_name": "Tienda Demo A SA de CV", "masked_account": "**************6782", "created_at": "<fecha UTC>"}` |
 
 En la base quedaron 2 cobros (30000 y 1500) y 2 claves. Logs sin CLABE. Datos de prueba eliminados al terminar. Diferencias esperadas frente a B11: sin clave → `422` (`loc: header.idempotency-key`); repetir → `200` con el mismo cobro; mismo K con otro contenido → `409`. Estado VC01: **PASS**.
 
@@ -116,7 +116,7 @@ Clasificación: **cambio incompatible** para clientes de `POST /sales` (cabecera
 
 ## Checks
 
-`uv run python -m quality.check` sobre `97333cf` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (235 passed, Postgres real aislado), api (14 contratos sin diferencias: cubren respuestas sin sesión; el cambio autenticado está en el diff OpenAPI de arriba). Mutaciones comprobadas: sin `ON CONFLICT` → fallan las carreras; clave sin `identity_id` → falla el aislamiento por identidad.
+`uv run python -m quality.check` sobre `28e7058` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (235 passed, Postgres real aislado), api (14 contratos sin diferencias: cubren respuestas sin sesión; el cambio autenticado está en el diff OpenAPI de arriba). Mutaciones comprobadas: sin `ON CONFLICT` → fallan las carreras; clave sin `identity_id` → falla el aislamiento por identidad.
 
 ## Supresiones
 
@@ -128,4 +128,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `c4d292c` + `73e1fd9` | CHANGES_REQUESTED | APPROVE | Hard: la repetición devolvía el cobro sin comprobar pertenencia (quien perdiera la membresía lo vería; `GET` daba 404); la evidencia no incluía el diff OpenAPI ni la clasificación de compatibilidad. Juicios: digest sobre texto crudo, operación como texto libre, tabla con FK a identidades dentro de `platform`. Spec: desviación del §6 de arquitectura sin documentar |
+| 2 | `97333cf` + `d8b2226` | APPROVE | APPROVE | Corregido con Red/Green y documentado. Menores aplicados: constante `ADMIN` en el test y VC01 repetida sobre el código final. Se mantiene el `DELETE FROM memberships` del test porque aún no existe una ruta para retirar membresías |
+
+Hallazgos pendientes: 0.
