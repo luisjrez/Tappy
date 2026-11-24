@@ -1,0 +1,56 @@
+ticket = "B13"
+revision = "b875cb0"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B13-attempt-reservation.md#b13-vc01--resultado-inicial-de-api-e-interrupción"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B13-AC01"
+use_cases = ["B13-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B13-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_attempt_reservation.py::test_reserving_an_attempt_leaves_it_creating_on_the_sale",
+    "tests/sales/test_attempt_reservation.py::test_repeating_a_reservation_returns_the_same_attempt",
+    "tests/sales/test_attempt_reservation.py::test_reservation_requires_an_open_sale_and_an_enabled_receiver",
+    "tests/sales/test_attempt_reservation.py::test_reservation_is_limited_to_operators_of_the_sale",
+    "tests/sales/test_attempt_reservation.py::test_malformed_reservations_are_rejected",
+]
+
+[[criteria]]
+id = "B13-AC02"
+use_cases = ["B13-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B13-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_attempt_reservation.py::test_second_attempt_with_another_key_or_channel_conflicts",
+    "tests/sales/test_attempt_reservation.py::test_pending_and_reconciling_attempts_stay_active",
+    "tests/sales/test_attempt_reservation.py::test_finished_attempts_allow_a_new_reservation",
+    "tests/sales/test_attempt_reservation.py::test_database_allows_only_one_active_attempt_per_sale",
+]
+
+[[criteria]]
+id = "B13-AC03"
+use_cases = ["B13-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B13-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_attempt_reservation.py::test_concurrent_reservations_leave_a_single_active_attempt",
+    "tests/sales/test_attempt_reservation.py::test_interrupted_reservation_stays_recoverable_after_a_restart",
+]
