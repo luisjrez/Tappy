@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from tappy.merchants.models import BENEFICIARY_NAME_MAX_LENGTH
@@ -11,6 +11,7 @@ from tappy.platform.persistence import Base, enum_column
 CONCEPT_MAX_LENGTH = 40
 REFERENCE_LENGTH = 10
 CURRENCY = "MXN"
+REFERENCE_CONSTRAINT = "uq_sales_reference"
 
 
 class SaleStatus(StrEnum):
@@ -24,6 +25,7 @@ class Sale(Base):
     __table_args__ = (
         CheckConstraint("amount_cents > 0", name="ck_sales_amount_cents_positive"),
         CheckConstraint(f"currency = '{CURRENCY}'", name="ck_sales_currency_mxn"),
+        UniqueConstraint("reference", name=REFERENCE_CONSTRAINT),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -32,7 +34,7 @@ class Sale(Base):
     amount_cents: Mapped[int] = mapped_column(Integer)
     currency: Mapped[str] = mapped_column(String(3), default=CURRENCY)
     concept: Mapped[str | None] = mapped_column(String(CONCEPT_MAX_LENGTH))
-    reference: Mapped[str] = mapped_column(String(REFERENCE_LENGTH), unique=True)
+    reference: Mapped[str] = mapped_column(String(REFERENCE_LENGTH))
     status: Mapped[SaleStatus] = mapped_column(
         enum_column(SaleStatus, "sale_status"), default=SaleStatus.OPEN
     )

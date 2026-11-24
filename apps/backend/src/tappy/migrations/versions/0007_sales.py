@@ -60,7 +60,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["merchant_id"], ["merchants.id"]),
         sa.ForeignKeyConstraint(["receiving_account_id"], ["receiving_accounts.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("reference"),
+        sa.UniqueConstraint("reference", name="uq_sales_reference"),
     )
     op.create_index("ix_sales_merchant_id", "sales", ["merchant_id"])
     op.execute(FREEZE_TERMS)

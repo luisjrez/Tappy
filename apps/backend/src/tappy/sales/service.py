@@ -3,17 +3,26 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
+from psycopg.errors import UniqueViolation
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from tappy.identity.provisioning import IdentitySummary
-from tappy.merchants.receivers import MASKED_DIGITS, held_issuing_receiver
+from tappy.merchants.receivers import held_issuing_receiver, masked_account
 from tappy.merchants.service import scoped_ids
 from tappy.sales.errors import InvalidConceptError, SaleNotFoundError
-from tappy.sales.models import CONCEPT_MAX_LENGTH, REFERENCE_LENGTH, Sale, SaleStatus
+from tappy.sales.models import (
+    CONCEPT_MAX_LENGTH,
+    REFERENCE_CONSTRAINT,
+    REFERENCE_LENGTH,
+    Sale,
+    SaleStatus,
+)
 from tappy.sales.money import validated_amount
 
 REFERENCE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+REFERENCE_ATTEMPTS = 3
 
 
 @dataclass(frozen=True)
@@ -48,6 +57,25 @@ def new_reference() -> str:
     return "".join(secrets.choice(REFERENCE_ALPHABET) for _ in range(REFERENCE_LENGTH))
 
 
+def is_reference_collision(error: IntegrityError) -> bool:
+    return (
+        isinstance(error.orig, UniqueViolation)
+        and error.orig.diag.constraint_name == REFERENCE_CONSTRAINT
+    )
+
+
+def insert_with_fresh_reference(db: Session, sale: Sale) -> None:
+    for attempt in range(1, REFERENCE_ATTEMPTS + 1):
+        sale.reference = new_reference()
+        try:
+            with db.begin_nested():
+                db.add(sale)
+            return
+        except IntegrityError as error:
+            if not is_reference_collision(error) or attempt == REFERENCE_ATTEMPTS:
+                raise
+
+
 def describe_sale(sale: Sale) -> SaleView:
     return SaleView(
         id=str(sale.id),
@@ -58,7 +86,7 @@ def describe_sale(sale: Sale) -> SaleView:
         concept=sale.concept,
         status=sale.status,
         beneficiary_name=sale.beneficiary_name,
-        masked_account="*" * MASKED_DIGITS + sale.account_last4,
+        masked_account=masked_account(sale.account_last4),
         created_at=sale.created_at,
     )
 
@@ -74,15 +102,13 @@ def create_sale(
         created_by=uuid.UUID(actor.reference),
         amount_cents=amount_cents,
         concept=concept,
-        reference=new_reference(),
         status=SaleStatus.OPEN,
         receiving_account_id=receiver.id,
         beneficiary_name=receiver.beneficiary_name,
         account_last4=receiver.account_last4,
         created_at=now,
     )
-    db.add(sale)
-    db.flush()
+    insert_with_fresh_reference(db, sale)
     return describe_sale(sale)
 
 

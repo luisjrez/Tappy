@@ -88,10 +88,14 @@ def issuance_block(receiver: ReceivingAccount | None) -> str | None:
     return None if receiver.enabled else DISABLED_REASON
 
 
+def masked_account(account_last4: str) -> str:
+    return "*" * MASKED_DIGITS + account_last4
+
+
 def describe_receiver(receiver: ReceivingAccount) -> ReceiverView:
     return ReceiverView(
         beneficiary_name=receiver.beneficiary_name,
-        masked_account="*" * MASKED_DIGITS + receiver.account_last4,
+        masked_account=masked_account(receiver.account_last4),
         provider_account_id=receiver.provider_account_id,
         enabled=receiver.enabled,
         blocked_reason=issuance_block(receiver),

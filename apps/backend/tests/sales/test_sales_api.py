@@ -449,3 +449,20 @@ def test_database_rejects_non_positive_amounts(
             )
     finally:
         engine.dispose()
+
+
+def test_reference_collision_is_retried_with_a_new_reference(
+    client: TestClient, migrated_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+    operator_a = bearer(client, OPERATOR_A)
+    references = iter(["AAAAAAAAAA", "AAAAAAAAAA", "BBBBBBBBBB"])
+    monkeypatch.setattr("tappy.sales.service.new_reference", lambda: next(references))
+
+    first = create_sale(client, operator_a, merchant_a, amount_cents=AMOUNT)
+    second = create_sale(client, operator_a, merchant_a, amount_cents=AMOUNT)
+
+    assert first.json()["reference"] == "AAAAAAAAAA"
+    assert second.status_code == HTTPStatus.CREATED
+    assert second.json()["reference"] == "BBBBBBBBBB"
+    assert sale_count(migrated_database_url) == len([first, second])
