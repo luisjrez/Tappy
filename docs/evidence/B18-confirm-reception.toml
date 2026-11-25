@@ -38,7 +38,7 @@ tests = [
     "tests/sales/test_reception.py::test_insufficient_evidence_never_marks_the_sale_received",
     "tests/sales/test_reception.py::test_an_invalid_signature_leaves_the_pending_attempt_untouched",
     "tests/sales/test_reception.py::test_extreme_values_are_treated_as_insufficient_not_as_failures",
-    "tests/sales/test_reception.py::test_a_transaction_id_already_recorded_for_another_sale_is_unmatched",
+    "tests/sales/test_reception.py::test_a_transaction_id_already_recorded_for_another_sale_opens_a_review",
 ]
 
 [[criteria]]
