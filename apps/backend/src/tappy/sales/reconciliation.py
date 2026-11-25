@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import ColumnElement
 
 from tappy.payments.provider import (
     PaymentEvidence,
@@ -85,21 +86,26 @@ def evidence_of(target: QueryTarget, payment: QrPayment, environment: str) -> Pa
     )
 
 
-def close_jobs_if_paid(db: Session, attempt_id: uuid.UUID) -> None:
+def close_paid_jobs(db: Session, *criteria: ColumnElement[bool]) -> int:
     paid = (
         select(PaymentAttempt.id)
-        .where(PaymentAttempt.id == attempt_id, PaymentAttempt.status == AttemptStatus.PAID)
+        .where(
+            PaymentAttempt.id == ReconciliationJob.attempt_id,
+            PaymentAttempt.status == AttemptStatus.PAID,
+        )
         .exists()
     )
-    db.execute(
+    closed = db.scalars(
         update(ReconciliationJob)
         .where(
-            ReconciliationJob.attempt_id == attempt_id,
-            ReconciliationJob.status == JobStatus.PENDING,
+            ReconciliationJob.status.in_([JobStatus.PENDING, JobStatus.EXHAUSTED]),
             paid,
+            *criteria,
         )
-        .values(status=JobStatus.DONE)
-    )
+        .values(status=JobStatus.DONE, lease_owner=None, lease_until=None)
+        .returning(ReconciliationJob.id)
+    ).all()
+    return len(closed)
 
 
 def report_for(
@@ -164,5 +170,5 @@ def reconcile_attempt(
             apply_evidence(db, evidence_of(target, payment, environment), None, clock.now())
             for payment in payments
         ]
-        close_jobs_if_paid(db, attempt_id)
+        close_paid_jobs(db, ReconciliationJob.attempt_id == attempt_id)
         return report_for(db, attempt_id, outcomes)

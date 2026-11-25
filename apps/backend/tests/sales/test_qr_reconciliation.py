@@ -201,7 +201,7 @@ def test_a_confirmed_reconciliation_closes_its_pending_job(
     assert result == (ReconciliationResult.CONFIRMED, 1)
     assert scalar(migrated_database_url, "SELECT status FROM reconciliation_jobs") == "done"
     assert run_sales(migrated_database_url, "reconciliations").stdout.strip() == (
-        "No pending reconciliations"
+        "No open reconciliations"
     )
 
 

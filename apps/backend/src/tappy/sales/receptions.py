@@ -107,12 +107,15 @@ def process_stored(database: Database, event: ReceivedEvent, clock: Clock) -> Ev
     return process_safely(database, event_id, clock)
 
 
-def process_received_events(database: Database, clock: Clock) -> ProcessingSummary:
+def process_received_events(
+    database: Database, clock: Clock, limit: int | None = None
+) -> ProcessingSummary:
     with database.transaction() as db:
         pending = db.scalars(
             select(WebhookEvent.id)
             .where(WebhookEvent.status == EventStatus.RECEIVED)
             .order_by(WebhookEvent.received_at, WebhookEvent.id)
+            .limit(limit)
         ).all()
     outcomes = [process_safely(database, event_id, clock) for event_id in pending]
     return ProcessingSummary(

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import case, or_, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -18,12 +18,14 @@ from tappy.sales.receptions import ProcessingSummary, process_received_events
 from tappy.sales.reconciliation import (
     ReconciliationReport,
     ReconciliationResult,
+    close_paid_jobs,
     reconcile_attempt,
 )
 
 logger = logging.getLogger(__name__)
 
 LEASE_EXPIRED = "lease_expired"
+OPERATOR_RESULTS = (ReconciliationResult.NOT_QUERYABLE,)
 
 
 class JobOutcome(StrEnum):
@@ -31,7 +33,7 @@ class JobOutcome(StrEnum):
     IN_REVIEW = "in_review"
     RESCHEDULED = "rescheduled"
     EXHAUSTED = "exhausted"
-    LOST = "lost"
+    LEASE_LOST = "lease_lost"
     FAILED = "failed"
 
 
@@ -83,7 +85,8 @@ class JobRunSummary:
     in_review: int = 0
     rescheduled: int = 0
     exhausted: int = 0
-    lost: int = 0
+    lease_lost: int = 0
+    closed: int = 0
     failed: int = 0
 
 
@@ -99,7 +102,10 @@ def exhaust_abandoned(db: Session, policy: JobPolicy, now: datetime) -> int:
             status=JobStatus.EXHAUSTED,
             lease_owner=None,
             lease_until=None,
-            last_problem=LEASE_EXPIRED,
+            last_problem=case(
+                (ReconciliationJob.lease_until.is_not(None), LEASE_EXPIRED),
+                else_=ReconciliationJob.last_problem,
+            ),
         )
         .returning(ReconciliationJob.id)
     ).all()
@@ -138,19 +144,29 @@ def claim_jobs(db: Session, policy: JobPolicy, now: datetime) -> list[ClaimedJob
 def held_claim(db: Session, job: ClaimedJob) -> ReconciliationJob | None:
     return db.scalar(
         select(ReconciliationJob)
-        .where(ReconciliationJob.id == job.id, ReconciliationJob.lease_owner == job.owner)
+        .where(
+            ReconciliationJob.id == job.id,
+            ReconciliationJob.lease_owner == job.owner,
+        )
         .with_for_update()
         .execution_options(populate_existing=True)
     )
 
 
 def finish_job(db: Session, job: ClaimedJob) -> bool:
-    held = held_claim(db, job)
-    if held is None:
+    current = db.scalars(
+        select(ReconciliationJob)
+        .where(ReconciliationJob.id == job.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one()
+    if current.status is JobStatus.DONE:
+        return True
+    if current.status is not JobStatus.PENDING or current.lease_owner != job.owner:
         return False
-    held.status = JobStatus.DONE
-    held.lease_owner = None
-    held.lease_until = None
+    current.status = JobStatus.DONE
+    current.lease_owner = None
+    current.lease_until = None
     return True
 
 
@@ -163,11 +179,11 @@ def reschedule_job(
 ) -> JobOutcome:
     held = held_claim(db, job)
     if held is None:
-        return JobOutcome.LOST
+        return JobOutcome.LEASE_LOST
     held.last_problem = report.problem or report.result
     held.lease_owner = None
     held.lease_until = None
-    if held.tries >= policy.max_tries:
+    if held.tries >= policy.max_tries or report.result in OPERATOR_RESULTS:
         held.status = JobStatus.EXHAUSTED
         return JobOutcome.EXHAUSTED
     held.run_at = now + policy.delay(held.tries, report.retry_after)
@@ -183,9 +199,10 @@ class JobRunner:
     clock: Clock
 
     def run(self) -> JobRunSummary:
-        events = process_received_events(self.database, self.clock)
+        events = process_received_events(self.database, self.clock, self.policy.batch_size)
         now = self.clock.now()
         with self.database.transaction() as db:
+            closed = close_paid_jobs(db)
             recovered = recover_interrupted(db, now - self.policy.creation_timeout, now)
             abandoned = exhaust_abandoned(db, self.policy, now)
             claimed = claim_jobs(db, self.policy, now)
@@ -198,7 +215,8 @@ class JobRunner:
             in_review=outcomes.count(JobOutcome.IN_REVIEW),
             rescheduled=outcomes.count(JobOutcome.RESCHEDULED),
             exhausted=outcomes.count(JobOutcome.EXHAUSTED) + abandoned,
-            lost=outcomes.count(JobOutcome.LOST),
+            lease_lost=outcomes.count(JobOutcome.LEASE_LOST),
+            closed=closed,
             failed=outcomes.count(JobOutcome.FAILED),
         )
 
@@ -221,14 +239,4 @@ class JobRunner:
             finished = FINISHED.get(report.result)
             if finished is None:
                 return reschedule_job(db, job, self.policy, self.clock.now(), report)
-            return finished if finish_job(db, job) else JobOutcome.LOST
-
-
-def run_jobs(
-    database: Database,
-    provider: QrProvider,
-    environment: str,
-    policy: JobPolicy,
-    clock: Clock,
-) -> JobRunSummary:
-    return JobRunner(database, provider, environment, policy, clock).run()
+            return finished if finish_job(db, job) else JobOutcome.LEASE_LOST

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from tappy.payments.events import ReceivedEvent, store_event
 from tappy.payments.provider import ProviderName, QrProvider
 from tappy.platform.database import Database
-from tappy.sales.jobs import JobPolicy, claim_jobs, finish_job, run_jobs
+from tappy.sales.jobs import JobOutcome, JobPolicy, JobRunner, claim_jobs, finish_job
 from tappy.sales.reconciliation import reconcile_attempt
 from tests.payments.pey_support import FakePey
 from tests.payments.webhook_support import settings_for
@@ -114,8 +114,12 @@ def detail(client: TestClient, headers: dict[str, str], sale: dict[str, Any]) ->
     return read
 
 
+def runner(database: Database, provider: QrProvider, clock: MovableClock) -> JobRunner:
+    return JobRunner(database, provider, "test", POLICY, clock)
+
+
 def run(database: Database, provider: QrProvider, clock: MovableClock) -> Any:
-    return run_jobs(database, provider, "test", POLICY, clock)
+    return runner(database, provider, clock).run()
 
 
 def store_unprocessed_event(database: Database, sale: dict[str, Any]) -> None:
@@ -165,23 +169,60 @@ def test_a_due_job_is_reconciled_and_its_result_is_visible(
     assert (summary.claimed, summary.confirmed) == (1, 1)
     assert detail(client, operator_a, sale)["status"] == "paid"
     assert job(migrated_database_url)[:2] == ("done", "1")
-    assert listed.stdout.strip() == "No pending reconciliations"
+    assert listed.stdout.strip() == "No open reconciliations"
 
 
-def test_an_interrupted_creation_is_recovered_and_reconciled_in_the_same_batch(
+def test_an_interrupted_creation_without_a_qr_id_goes_to_an_operator_at_once(
     client: TestClient, migrated_database_url: str, database: Database, fake: FakePey
 ) -> None:
     sale, operator_a = pending_qr(client, migrated_database_url)
     execute(
         migrated_database_url,
-        "UPDATE payment_attempts SET status = 'creating', updated_at = :old",
+        "UPDATE payment_attempts SET status = 'creating', provider_request_id = NULL, "
+        "qr_payload = NULL, updated_at = :old",
         {"old": START - timedelta(minutes=5)},
     )
-    fake.pages = [paid_page()]
 
     summary = run(database, fake.provider(), MovableClock(START))
 
-    assert (summary.recovered, summary.claimed, summary.confirmed) == (1, 1, 1)
+    assert (summary.recovered, summary.claimed, summary.exhausted) == (1, 1, 1)
+    assert job(migrated_database_url)[:3] == ("exhausted", "1", "not_queryable")
+    assert fake.queries() == []
+    assert detail(client, operator_a, sale)["attempts"][0]["status"] == "reconciling"
+
+
+def test_jobs_of_attempts_paid_by_a_webhook_are_closed_by_the_next_batch(
+    client: TestClient, migrated_database_url: str, database: Database, fake: FakePey
+) -> None:
+    sale, _ = pending_qr(client, migrated_database_url)
+    waiting_job(migrated_database_url)
+    execute(migrated_database_url, "UPDATE reconciliation_jobs SET status = 'exhausted'")
+    store_unprocessed_event(database, sale)
+
+    summary = run(database, fake.provider(), MovableClock(START))
+
+    assert summary.events.applied == 1
+    assert (summary.closed, summary.claimed) == (1, 0)
+    assert job(migrated_database_url)[0] == "done"
+    assert fake.queries() == []
+
+
+def test_a_job_closed_elsewhere_while_leased_is_never_reopened(
+    client: TestClient, migrated_database_url: str, database: Database
+) -> None:
+    sale, operator_a = pending_qr(client, migrated_database_url)
+    waiting_job(migrated_database_url)
+    with database.transaction() as session:
+        (claimed,) = claim_jobs(session, POLICY, START)
+    clock = MovableClock(START)
+    paying = FakePey(pages=[paid_page()]).provider()
+    reconcile_attempt(database, claimed.attempt_id, paying, "test", clock)
+
+    failing = FakePey(pages=[(500, {})]).provider()
+    outcome = runner(database, failing, clock).run_job(claimed)
+
+    assert outcome is JobOutcome.LEASE_LOST
+    assert job(migrated_database_url)[:2] == ("done", "1")
     assert detail(client, operator_a, sale)["status"] == "paid"
 
 

@@ -11,7 +11,7 @@ from tappy.platform.config import ConfigurationError, Settings, load_settings
 from tappy.platform.database import Database
 from tappy.sales.attempts import OpenReconciliation, open_reconciliations, recover_interrupted
 from tappy.sales.errors import AttemptNotFoundError
-from tappy.sales.jobs import JobPolicy, run_jobs
+from tappy.sales.jobs import JobPolicy, JobRunner
 from tappy.sales.payment_exceptions import OpenException, open_exceptions
 from tappy.sales.receptions import ProcessingSummary, process_received_events
 from tappy.sales.reconciliation import (
@@ -43,7 +43,7 @@ def reconciliations(database: Database, _settings: Settings, _options: argparse.
     with database.transaction() as session:
         listed = open_reconciliations(session)
     if not listed:
-        return "No pending reconciliations"
+        return "No open reconciliations"
     return "\n\n".join(describe(item) for item in listed)
 
 
@@ -143,22 +143,23 @@ def reconcile(database: Database, settings: Settings, options: argparse.Namespac
     return describe_reconciliation(report)
 
 
-def run_batch(database: Database, settings: Settings, _options: argparse.Namespace) -> str:
-    summary = run_jobs(
+def run_jobs(database: Database, settings: Settings, _options: argparse.Namespace) -> str:
+    summary = JobRunner(
         database,
         provider_from(settings),
         settings.environment,
         JobPolicy.from_settings(settings),
         SystemClock(),
-    )
+    ).run()
     return "\n".join(
         [
             f"events: {events_line(summary.events)}",
+            f"jobs of paid attempts closed: {summary.closed}",
             f"interrupted attempts moved to reconciliation: {summary.recovered}",
             f"jobs claimed: {summary.claimed}",
             f"confirmed: {summary.confirmed}, in review: {summary.in_review}, "
             f"rescheduled: {summary.rescheduled}, exhausted: {summary.exhausted}, "
-            f"lease lost: {summary.lost}, failed: {summary.failed}",
+            f"lease lost: {summary.lease_lost}, failed: {summary.failed}",
         ]
     )
 
@@ -169,7 +170,7 @@ COMMANDS: dict[str, Handler] = {
     "process-events": process_events,
     "event-conflicts": conflicts,
     "exceptions": exceptions,
-    "run-jobs": run_batch,
+    "run-jobs": run_jobs,
 }
 
 

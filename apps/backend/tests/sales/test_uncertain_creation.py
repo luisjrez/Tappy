@@ -262,3 +262,20 @@ def test_creation_timeout_must_outlast_every_provider_timeout_phase() -> None:
 @pytest.mark.parametrize("reason", list(UncertainReason))
 def test_every_uncertain_reason_has_a_job_reason(reason: UncertainReason) -> None:
     assert JobReason(reason.value).value == reason.value
+
+
+def test_the_job_lease_must_outlast_a_bounded_query_only_with_pey() -> None:
+    base = {**build_settings().model_dump(), "pey_api_key": "test-pey-secret-0123456789abcdef"}
+    pey = {**base, "payment_provider": "pey", "pey_timeout_seconds": 10}
+    longest_query = 400
+    short_lease = 30
+
+    with pytest.raises(ValueError, match="TAPPY_JOB_LEASE_SECONDS"):
+        Settings.model_validate({**pey, "job_lease_seconds": longest_query})
+    with pytest.raises(ValueError, match="TAPPY_JOB_BACKOFF_MAX_SECONDS"):
+        Settings.model_validate({**base, "job_backoff_seconds": 120, "job_backoff_max_seconds": 60})
+
+    accepted = Settings.model_validate({**pey, "job_lease_seconds": longest_query + 1})
+    simulated = Settings.model_validate({**base, "job_lease_seconds": short_lease})
+    assert accepted.job_lease_seconds > longest_query
+    assert simulated.job_lease_seconds == short_lease

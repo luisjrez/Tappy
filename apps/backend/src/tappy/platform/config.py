@@ -85,7 +85,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def lease_outlasts_a_query(self) -> Self:
         query_seconds = MAX_QUERY_PAGES * PROVIDER_TIMEOUT_PHASES * self.pey_timeout_seconds
-        if self.job_lease_seconds <= query_seconds:
+        if self.payment_provider == "pey" and self.job_lease_seconds <= query_seconds:
             raise ValueError(
                 "TAPPY_JOB_LEASE_SECONDS must exceed "
                 f"{MAX_QUERY_PAGES * PROVIDER_TIMEOUT_PHASES} times TAPPY_PEY_TIMEOUT_SECONDS"
