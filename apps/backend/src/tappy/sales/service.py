@@ -183,6 +183,8 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
 def next_action(attempt: PaymentAttempt) -> NextAction:
     if attempt.withdrawn_at is not None and attempt.status is not AttemptStatus.PAID:
         return NextAction.HIDE_QR
+    if attempt.sale.status is not SaleStatus.OPEN and attempt.status is not AttemptStatus.PAID:
+        return NextAction.NONE
     if attempt.status is AttemptStatus.EXPIRED and attempt.verified_at is not None:
         return NextAction.NEW_ATTEMPT
     return NEXT_ACTIONS[attempt.status]

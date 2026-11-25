@@ -158,9 +158,7 @@ def verified_reception(evidence: PaymentEvidence) -> VerifiedReception | None:
     )
 
 
-def classify_doubt(
-    evidence: PaymentEvidence, attempt: PaymentAttempt, sale: Sale
-) -> ExceptionReason | None:
+def classify_doubt(evidence: PaymentEvidence, attempt: PaymentAttempt) -> ExceptionReason | None:
     if evidence.receiver_account != attempt.receiver_account:
         return ExceptionReason.RECEIVER_MISMATCH
     if verified_reception(evidence) is None:
@@ -213,20 +211,21 @@ def recorded_by_this_event(db: Session, existing: Transfer, event_id: uuid.UUID 
     )
 
 
-def withdraw_other_presentations(
-    db: Session, attempt: PaymentAttempt, sale: Sale, now: datetime
-) -> None:
+def withdraw_other_presentations(attempt: PaymentAttempt, sale: Sale, now: datetime) -> None:
     for other in sale.attempts:
         if other.id != attempt.id and other.status in ACTIVE_ATTEMPT_STATUSES:
             other.withdrawn_at = now
             other.updated_at = now
-    db.flush()
 
 
-def cover_sale(db: Session, attempt: PaymentAttempt, sale: Sale, now: datetime) -> EvidenceOutcome:
-    move(attempt, AttemptStatus.PAID, now)
+def pay_attempt(attempt: PaymentAttempt, sale: Sale, now: datetime) -> None:
+    if move(attempt, AttemptStatus.PAID, now):
+        withdraw_other_presentations(attempt, sale, now)
+
+
+def cover_sale(attempt: PaymentAttempt, sale: Sale, now: datetime) -> EvidenceOutcome:
+    pay_attempt(attempt, sale, now)
     sale.status = SaleStatus.PAID
-    withdraw_other_presentations(db, attempt, sale, now)
     return EvidenceOutcome.APPLIED
 
 
@@ -234,7 +233,7 @@ def receive_again(
     db: Session, application: Application, attempt: PaymentAttempt, sale: Sale, transfer: Transfer
 ) -> EvidenceOutcome:
     if transfer.amount_cents == sale.amount_cents:
-        move(attempt, AttemptStatus.PAID, application.now)
+        pay_attempt(attempt, sale, application.now)
     sale.status = SaleStatus.REVIEW
     incident = Incident(
         ExceptionReason.DOUBLE_RECEPTION,
@@ -271,7 +270,7 @@ def receive_for_attempt(
     db: Session, application: Application, attempt: PaymentAttempt
 ) -> EvidenceOutcome:
     sale = held_sale(db, attempt.sale_id)
-    reason = classify_doubt(application.evidence, attempt, sale)
+    reason = classify_doubt(application.evidence, attempt)
     reception = verified_reception(application.evidence)
     if reason is not None or reception is None:
         incident = Incident(
@@ -296,6 +295,6 @@ def receive_for_attempt(
             expected_amount_cents=sale.amount_cents,
         )
         return open_exception(db, application, incident)
-    outcome = cover_sale(db, attempt, sale, application.now)
+    outcome = cover_sale(attempt, sale, application.now)
     db.flush()
     return outcome

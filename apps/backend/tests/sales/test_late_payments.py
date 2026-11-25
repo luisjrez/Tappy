@@ -12,6 +12,7 @@ from httpx2 import Response
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.sales.jobs import JobPolicy, JobRunner
+from tappy.sales.reconciliation import reconcile_attempt
 from tests.payments.pey_support import CREATED, FakePey
 from tests.payments.webhook_support import Delivery, deliver, settings_for
 from tests.sales.support import (
@@ -244,3 +245,96 @@ def test_an_exact_payment_after_a_short_one_is_kept_and_covers_the_sale_in_revie
         "amount_mismatch",
         "double_reception",
     ]
+
+
+def short_payment(client: TestClient, attempt: dict[str, Any], clock: MovableClock) -> None:
+    short = {
+        "type": "codi.qr.payment_received",
+        "amount": (AMOUNT - 5000) / 100,
+        "bankAccountId": RECEIVER_A["provider_account_id"],
+        "codiQrId": attempt["provider_request_id"],
+        "datePaid": PAID_AT,
+        "transactionId": "TX-SHORT-OLD",
+        "metadata": {"tappy_attempt_id": attempt["id"]},
+    }
+    body = json.dumps(short, separators=(",", ":")).encode()
+    deliver(client, body, Delivery("msg_short_old", int(clock.now().timestamp())))
+
+
+def test_covering_through_a_second_reception_also_withdraws_newer_presentations(
+    client: TestClient, migrated_database_url: str, clock: MovableClock, fake: SequentialPey
+) -> None:
+    sale, old, _, operator_a = retry_after_expiry(client, migrated_database_url, clock, fake)
+    short_payment(client, old, clock)
+    before = follow(client, operator_a, sale)
+
+    pay(client, old, "TX-EXACT-OLD", clock)
+    read = follow(client, operator_a, sale)
+
+    assert (before["status"], before["covered"]) == ("review", False)
+    assert (read["status"], read["covered"]) == ("review", True)
+    assert attempt_states(read) == [("paid", "none"), ("pending", "hide_qr")]
+
+
+def test_a_foreign_account_payment_for_a_paid_sale_is_never_recorded(
+    client: TestClient, migrated_database_url: str, clock: MovableClock
+) -> None:
+    merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+    operator_a = bearer(client, OPERATOR_A)
+    sale = create_sale(client, operator_a, merchant_a, amount_cents=AMOUNT).json()
+    attempt = request_qr(client, operator_a, sale)
+    pay(client, attempt, "TX-FIRST", clock)
+    foreign = {
+        "type": "codi.qr.payment_received",
+        "amount": AMOUNT / 100,
+        "bankAccountId": "01HZZFOREIGNACCOUNT00000",
+        "codiQrId": attempt["provider_request_id"],
+        "datePaid": PAID_AT,
+        "transactionId": "TX-FOREIGN",
+        "metadata": {"tappy_attempt_id": attempt["id"]},
+    }
+    body = json.dumps(foreign, separators=(",", ":")).encode()
+    deliver(client, body, Delivery("msg_foreign", int(clock.now().timestamp())))
+    read = follow(client, operator_a, sale)
+
+    assert read["confirmed_amount_cents"] == AMOUNT
+    assert read["status"] == "paid"
+    assert [item["reason"] for item in read["exceptions"]] == ["receiver_mismatch"]
+
+
+def test_a_second_reception_found_by_reconciliation_is_kept_once(
+    client: TestClient, migrated_database_url: str, clock: MovableClock
+) -> None:
+    merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+    operator_a = bearer(client, OPERATOR_A)
+    sale = create_sale(client, operator_a, merchant_a, amount_cents=AMOUNT).json()
+    attempt = request_qr(client, operator_a, sale)
+    pay(client, attempt, "TX-FIRST", clock)
+    items = [
+        {"id": transaction, "status": "PAID", "amount": AMOUNT / 100, "datePaid": PAID_AT}
+        for transaction in ("TX-SECOND", "TX-FIRST")
+    ]
+    page = (200, {"items": items, "nextToken": None})
+    database = Database.from_settings(build_settings(database_url=migrated_database_url))
+    try:
+        for _ in range(2):
+            provider = FakePey(pages=[page]).provider()
+            reconcile_attempt(database, uuid.UUID(attempt["id"]), provider, "test", clock)
+    finally:
+        database.dispose()
+    read = follow(client, operator_a, sale)
+
+    assert read["confirmed_amount_cents"] == 2 * AMOUNT
+    assert (read["status"], read["covered"]) == ("review", True)
+    assert [item["reason"] for item in read["exceptions"]] == ["double_reception"]
+
+
+def test_an_older_verified_attempt_suggests_nothing_once_the_sale_is_covered(
+    client: TestClient, migrated_database_url: str, clock: MovableClock, fake: SequentialPey
+) -> None:
+    sale, _, new, operator_a = retry_after_expiry(client, migrated_database_url, clock, fake)
+
+    pay(client, new, "TX-NEW", clock)
+    read = follow(client, operator_a, sale)
+
+    assert attempt_states(read) == [("expired", "none"), ("paid", "none")]
