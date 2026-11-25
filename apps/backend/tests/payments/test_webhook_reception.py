@@ -11,7 +11,6 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
-from pydantic import SecretStr
 
 from tappy.main import create_app
 from tappy.platform.config import Settings
@@ -34,8 +33,8 @@ MAX_BODY = 256 * 1024
 
 
 def settings_for(database_url: str) -> Settings:
-    return build_settings(database_url=database_url).model_copy(
-        update={"pey_webhook_secret": SecretStr(SECRET)}
+    return Settings.model_validate(
+        {**build_settings(database_url=database_url).model_dump(), "pey_webhook_secret": SECRET}
     )
 
 
@@ -232,3 +231,15 @@ def test_secret_is_never_echoed(client: TestClient) -> None:
 
     assert SECRET not in response.text
     assert OTHER_SECRET not in response.text
+
+
+def test_webhook_secret_setting_is_validated_like_any_configuration() -> None:
+    base = build_settings().model_dump()
+
+    configured = Settings.model_validate({**base, "pey_webhook_secret": SECRET})
+    assert configured.pey_webhook_secret is not None
+    assert configured.pey_webhook_secret.get_secret_value() == SECRET
+    assert SECRET not in repr(configured)
+    for invalid in ("not-a-secret", "whsec_short", "whsec_" + "!" * 40):
+        with pytest.raises(ValueError, match="pey_webhook_secret"):
+            Settings.model_validate({**base, "pey_webhook_secret": invalid})

@@ -1,7 +1,8 @@
+import re
 from collections.abc import Sequence
 from typing import Literal, Self
 
-from pydantic import Field, SecretStr, ValidationError, model_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -9,6 +10,7 @@ ENV_PREFIX = "TAPPY_"
 PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
 PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
 PROVIDER_TIMEOUT_PHASES = 4
+WEBHOOK_SECRET = re.compile(r"whsec_[A-Za-z0-9+/]{24,}={0,2}")
 PEY_BASE_URL = r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))"
 
 
@@ -28,14 +30,19 @@ class Settings(BaseSettings):
     pey_api_key: SecretStr | None = Field(default=None, min_length=16)
     pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
     attempt_creation_timeout_seconds: int = Field(default=60, ge=1)
-    pey_webhook_secret: SecretStr | None = Field(
-        default=None, pattern=r"^whsec_[A-Za-z0-9+/=]{24,}$"
-    )
+    pey_webhook_secret: SecretStr | None = None
     webhook_tolerance_seconds: int = Field(default=300, ge=1, le=3600)
     webhook_max_body_bytes: int = Field(default=256 * 1024, ge=1024, le=1024 * 1024)
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
+
+    @field_validator("pey_webhook_secret")
+    @classmethod
+    def webhook_secret_format(cls, secret: SecretStr | None) -> SecretStr | None:
+        if secret is not None and not WEBHOOK_SECRET.fullmatch(secret.get_secret_value()):
+            raise ValueError("must be a Standard Webhooks secret (whsec_ followed by base64)")
+        return secret
 
     @model_validator(mode="after")
     def pey_needs_a_key(self) -> Self:
