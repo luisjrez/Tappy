@@ -31,7 +31,7 @@ PROVIDER_REQUEST_CONSTRAINT = "uq_payment_attempts_provider_request"
 PROVIDER_REQUEST_ID_MAX_LENGTH = 64
 FAILURE_CODE_MAX_LENGTH = 32
 JOB_CONSTRAINT = "uq_reconciliation_jobs_attempt_reason"
-INTERRUPTED_CREATION = "interrupted_creation"
+JOB_REASON_MAX_LENGTH = 32
 
 
 class SaleStatus(StrEnum):
@@ -56,6 +56,15 @@ class AttemptStatus(StrEnum):
 
 
 ACTIVE_ATTEMPT_STATUSES = (AttemptStatus.CREATING, AttemptStatus.PENDING, AttemptStatus.RECONCILING)
+
+
+class JobReason(StrEnum):
+    TIMEOUT = "timeout"
+    CONNECTION = "connection"
+    SERVER_ERROR = "server_error"
+    INVALID_RESPONSE = "invalid_response"
+    DUPLICATE_PROVIDER_ID = "duplicate_provider_id"
+    INTERRUPTED_CREATION = "interrupted_creation"
 
 
 class JobStatus(StrEnum):
@@ -131,10 +140,10 @@ class ReconciliationJob(Base):
     __table_args__ = (UniqueConstraint("attempt_id", "reason", name=JOB_CONSTRAINT),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    attempt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payment_attempts.id"), index=True)
-    reason: Mapped[str] = mapped_column(String(FAILURE_CODE_MAX_LENGTH))
+    attempt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payment_attempts.id"))
+    reason: Mapped[JobReason] = mapped_column(
+        enum_column(JobReason, "reconciliation_job_reason", length=JOB_REASON_MAX_LENGTH)
+    )
     status: Mapped[JobStatus] = mapped_column(enum_column(JobStatus, "reconciliation_job_status"))
     run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    tries: Mapped[int] = mapped_column(Integer)
-    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -11,6 +11,7 @@ from tappy.payments.provider import (
     ProviderRejectedError,
     ProviderUnavailableError,
     QrOrder,
+    UncertainReason,
 )
 
 logger = logging.getLogger(__name__)
@@ -63,14 +64,14 @@ def rejection_code(response: httpx2.Response) -> str:
     try:
         return ErrorBody.model_validate_json(response.content).error.type
     except ValidationError:
-        raise ProviderUnavailableError("invalid_response") from None
+        raise ProviderUnavailableError(UncertainReason.INVALID_RESPONSE) from None
 
 
 def issued_qr(response: httpx2.Response) -> IssuedQr:
     try:
         created = CreatedQr.model_validate_json(response.content)
     except ValidationError:
-        raise ProviderUnavailableError("invalid_response") from None
+        raise ProviderUnavailableError(UncertainReason.INVALID_RESPONSE) from None
     return IssuedQr(created.id, created.qr_string)
 
 
@@ -92,9 +93,9 @@ class PeyQrProvider:
             try:
                 return client.post("/codi/qr", json=qr_request(order), headers=headers)
             except httpx2.TimeoutException:
-                raise ProviderUnavailableError("timeout") from None
+                raise ProviderUnavailableError(UncertainReason.TIMEOUT) from None
             except httpx2.TransportError:
-                raise ProviderUnavailableError("connection") from None
+                raise ProviderUnavailableError(UncertainReason.CONNECTION) from None
 
     def create_qr(self, order: QrOrder) -> IssuedQr:
         response = self.post(order)
@@ -105,4 +106,4 @@ class PeyQrProvider:
             return issued_qr(response)
         if response.status_code in REJECTED_STATUSES:
             raise ProviderRejectedError(rejection_code(response))
-        raise ProviderUnavailableError("server_error")
+        raise ProviderUnavailableError(UncertainReason.SERVER_ERROR)

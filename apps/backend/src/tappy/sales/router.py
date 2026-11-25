@@ -14,7 +14,7 @@ from tappy.platform.dependencies import (
     SessionDependency,
     SettingsDependency,
 )
-from tappy.sales.attempts import AttemptRequest, request_attempt
+from tappy.sales.attempts import AttemptOutcome, AttemptRequest, request_attempt
 from tappy.sales.errors import (
     ActiveAttemptError,
     InvalidAmountError,
@@ -33,6 +33,11 @@ from tappy.sales.schemas import (
 from tappy.sales.service import SaleRequest, create_sale, read_sale
 
 router = APIRouter(prefix="/sales", tags=["sales"])
+OUTCOME_STATUS = {
+    AttemptOutcome.CREATED: HTTPStatus.CREATED,
+    AttemptOutcome.REPLAYED: HTTPStatus.OK,
+    AttemptOutcome.UNCERTAIN: HTTPStatus.ACCEPTED,
+}
 
 
 def sale_request(
@@ -139,8 +144,5 @@ def reserve(
         IdempotencyConflictError,
     ) as error:
         raise HTTPException(HTTPStatus.CONFLICT, detail=str(error)) from None
-    if reservation.replayed:
-        response.status_code = HTTPStatus.OK
-    if reservation.uncertain:
-        response.status_code = HTTPStatus.ACCEPTED
+    response.status_code = OUTCOME_STATUS[reservation.outcome]
     return AttemptResponse.model_validate(reservation.attempt)

@@ -9,8 +9,16 @@ class ProviderName(StrEnum):
     PEY = "pey"
 
 
+class UncertainReason(StrEnum):
+    TIMEOUT = "timeout"
+    CONNECTION = "connection"
+    SERVER_ERROR = "server_error"
+    INVALID_RESPONSE = "invalid_response"
+    DUPLICATE_PROVIDER_ID = "duplicate_provider_id"
+
+
 class ProviderUnavailableError(Exception):
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: UncertainReason) -> None:
         super().__init__(f"QR provider unavailable: {reason}")
         self.reason = reason
 

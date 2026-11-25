@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 ENV_PREFIX = "TAPPY_"
 PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
 PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
+PROVIDER_TIMEOUT_PHASES = 4
 PEY_BASE_URL = r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))"
 
 
@@ -35,6 +36,18 @@ class Settings(BaseSettings):
     def pey_needs_a_key(self) -> Self:
         if self.payment_provider == "pey" and self.pey_api_key is None:
             raise ValueError(PEY_KEY_REQUIRED)
+        return self
+
+    @model_validator(mode="after")
+    def creation_outlasts_provider_calls(self) -> Self:
+        if (
+            self.attempt_creation_timeout_seconds
+            <= PROVIDER_TIMEOUT_PHASES * self.pey_timeout_seconds
+        ):
+            raise ValueError(
+                "TAPPY_ATTEMPT_CREATION_TIMEOUT_SECONDS must exceed "
+                f"{PROVIDER_TIMEOUT_PHASES} times TAPPY_PEY_TIMEOUT_SECONDS"
+            )
         return self
 
 

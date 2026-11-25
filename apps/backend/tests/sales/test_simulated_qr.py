@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from httpx2 import Response
 
 from tappy.payments.factory import provider_from
-from tappy.payments.provider import IssuedQr, ProviderUnavailableError, QrOrder
+from tappy.payments.provider import IssuedQr, ProviderUnavailableError, QrOrder, UncertainReason
 from tappy.payments.simulator import SimulatedQrProvider
 from tappy.platform.config import Settings
 from tests.sales.support import (
@@ -40,7 +40,7 @@ class RecordingSimulator(SimulatedQrProvider):
 class UnavailableProvider(RecordingSimulator):
     def create_qr(self, order: QrOrder) -> IssuedQr:
         self.orders.append(order)
-        raise ProviderUnavailableError("server_error")
+        raise ProviderUnavailableError(UncertainReason.SERVER_ERROR)
 
 
 @pytest.fixture

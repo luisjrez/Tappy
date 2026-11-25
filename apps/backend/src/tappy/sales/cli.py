@@ -47,17 +47,21 @@ COMMANDS: dict[str, Handler] = {
 }
 
 
-def main(arguments: Sequence[str]) -> int:
+def parse(arguments: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="python -m tappy.sales")
     commands = parser.add_subparsers(dest="command", required=True)
     for name, handler in COMMANDS.items():
         commands.add_parser(name).set_defaults(handler=handler)
-    options = parser.parse_args(arguments)
+    return parser.parse_args(arguments)
+
+
+def main(arguments: Sequence[str]) -> int:
+    options = parse(arguments)
     try:
         settings = load_settings()
     except ConfigurationError as error:
         print(error, file=sys.stderr)
-        return 2
+        return 1
     database = Database.from_settings(settings)
     try:
         command: Handler = options.handler

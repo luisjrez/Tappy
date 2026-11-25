@@ -2,6 +2,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +17,7 @@ from tappy.payments.provider import (
     ProviderUnavailableError,
     QrOrder,
     QrProvider,
+    UncertainReason,
 )
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
@@ -29,10 +31,10 @@ from tappy.sales.idempotency import (
 )
 from tappy.sales.models import (
     ACTIVE_ATTEMPT_STATUSES,
-    INTERRUPTED_CREATION,
     PROVIDER_REQUEST_CONSTRAINT,
     AttemptMethod,
     AttemptStatus,
+    JobReason,
     JobStatus,
     PaymentAttempt,
     ReconciliationJob,
@@ -52,17 +54,22 @@ class AttemptRequest:
     idempotency_key: str
 
 
+class AttemptOutcome(StrEnum):
+    CREATED = "created"
+    REPLAYED = "replayed"
+    UNCERTAIN = "uncertain"
+
+
 @dataclass(frozen=True)
 class AttemptReservation:
     attempt: AttemptView
-    replayed: bool
-    uncertain: bool = False
+    outcome: AttemptOutcome
 
 
 @dataclass(frozen=True)
 class PendingReconciliation:
     attempt: AttemptView
-    reason: str
+    reason: JobReason
     status: JobStatus
     run_at: datetime
 
@@ -117,7 +124,7 @@ def reserve_attempt(
     replayed_id = claim_or_replay(db, reservation_claim(request, sale), attempt_id, now)
     if replayed_id is not None:
         replayed = db.get_one(PaymentAttempt, replayed_id)
-        return AttemptReservation(describe_attempt(replayed), replayed=True)
+        return AttemptReservation(describe_attempt(replayed), AttemptOutcome.REPLAYED)
     held = held_open_sale(db, sale.id)
     receiver = held_issuing_receiver(db, held.merchant_id)
     ensure_same_receiver(held, receiver)
@@ -136,7 +143,7 @@ def reserve_attempt(
     )
     db.add(attempt)
     db.flush()
-    return AttemptReservation(describe_attempt(attempt), replayed=False)
+    return AttemptReservation(describe_attempt(attempt), AttemptOutcome.CREATED)
 
 
 def pending_qr_order(db: Session, attempt_id: uuid.UUID) -> QrOrder | None:
@@ -167,31 +174,44 @@ def record_rejected_qr(db: Session, attempt_id: uuid.UUID, code: str, now: datet
         db.flush()
 
 
+def attach_issued_qr(
+    db: Session, attempt: PaymentAttempt, issued: IssuedQr, status: AttemptStatus, now: datetime
+) -> None:
+    try:
+        with db.begin_nested():
+            attempt.provider_request_id = issued.provider_request_id
+            attempt.qr_payload = issued.payload
+            attempt.status = status
+            attempt.updated_at = now
+    except IntegrityError as error:
+        if is_unique_violation(error, PROVIDER_REQUEST_CONSTRAINT):
+            logger.warning(
+                "QR provider id %s is already linked to another attempt; attempt %s kept",
+                issued.provider_request_id,
+                attempt.id,
+            )
+            raise ProviderUnavailableError(UncertainReason.DUPLICATE_PROVIDER_ID) from None
+        raise
+
+
 def record_issued_qr(
     db: Session, attempt_id: uuid.UUID, issued: IssuedQr, now: datetime
 ) -> AttemptView:
     attempt = held_attempt(db, attempt_id)
     if attempt.status is AttemptStatus.CREATING:
-        try:
-            with db.begin_nested():
-                attempt.provider_request_id = issued.provider_request_id
-                attempt.qr_payload = issued.payload
-                attempt.status = AttemptStatus.PENDING
-                attempt.updated_at = now
-        except IntegrityError as error:
-            if is_unique_violation(error, PROVIDER_REQUEST_CONSTRAINT):
-                logger.warning(
-                    "QR provider id %s is already linked to another attempt; attempt %s kept",
-                    issued.provider_request_id,
-                    attempt_id,
-                )
-                raise ProviderUnavailableError("duplicate_provider_id") from None
-            raise
+        attach_issued_qr(db, attempt, issued, AttemptStatus.PENDING, now)
+    elif attempt.status is AttemptStatus.RECONCILING and attempt.provider_request_id is None:
+        logger.warning(
+            "QR %s arrived after attempt %s was moved to reconciliation; kept as evidence",
+            issued.provider_request_id,
+            attempt.id,
+        )
+        attach_issued_qr(db, attempt, issued, AttemptStatus.RECONCILING, now)
     return describe_attempt(attempt)
 
 
 def keep_for_reconciliation(
-    db: Session, attempt: PaymentAttempt, reason: str, now: datetime
+    db: Session, attempt: PaymentAttempt, reason: JobReason, now: datetime
 ) -> None:
     attempt.status = AttemptStatus.RECONCILING
     attempt.updated_at = now
@@ -201,7 +221,6 @@ def keep_for_reconciliation(
             reason=reason,
             status=JobStatus.PENDING,
             run_at=now,
-            tries=0,
             created_at=now,
         )
     )
@@ -209,11 +228,11 @@ def keep_for_reconciliation(
 
 
 def record_uncertain_qr(
-    db: Session, attempt_id: uuid.UUID, reason: str, now: datetime
+    db: Session, attempt_id: uuid.UUID, reason: UncertainReason, now: datetime
 ) -> AttemptView:
     attempt = held_attempt(db, attempt_id)
     if attempt.status is AttemptStatus.CREATING:
-        keep_for_reconciliation(db, attempt, reason, now)
+        keep_for_reconciliation(db, attempt, JobReason(reason.value), now)
     return describe_attempt(attempt)
 
 
@@ -224,7 +243,7 @@ def request_attempt(
         reservation = reserve_attempt(db, request, provider, clock.now())
         order = (
             None
-            if reservation.replayed
+            if reservation.outcome is AttemptOutcome.REPLAYED
             else pending_qr_order(db, uuid.UUID(reservation.attempt.id))
         )
     if order is None:
@@ -240,8 +259,10 @@ def request_attempt(
     except ProviderUnavailableError as uncertainty:
         with database.transaction() as db:
             kept = record_uncertain_qr(db, order.attempt_id, uncertainty.reason, clock.now())
-        return AttemptReservation(kept, replayed=False, uncertain=True)
-    return AttemptReservation(recorded, replayed=False)
+        return AttemptReservation(kept, AttemptOutcome.UNCERTAIN)
+    if recorded.status is AttemptStatus.RECONCILING:
+        return AttemptReservation(recorded, AttemptOutcome.UNCERTAIN)
+    return AttemptReservation(recorded, AttemptOutcome.CREATED)
 
 
 def recover_interrupted(db: Session, cutoff: datetime, now: datetime) -> int:
@@ -254,22 +275,18 @@ def recover_interrupted(db: Session, cutoff: datetime, now: datetime) -> int:
         .with_for_update(skip_locked=True)
     ).all()
     for attempt in interrupted:
-        keep_for_reconciliation(db, attempt, INTERRUPTED_CREATION, now)
+        keep_for_reconciliation(db, attempt, JobReason.INTERRUPTED_CREATION, now)
     return len(interrupted)
 
 
 def pending_reconciliations(db: Session) -> list[PendingReconciliation]:
-    jobs = db.scalars(
-        select(ReconciliationJob)
+    rows = db.execute(
+        select(ReconciliationJob, PaymentAttempt)
+        .join(PaymentAttempt, PaymentAttempt.id == ReconciliationJob.attempt_id)
         .where(ReconciliationJob.status == JobStatus.PENDING)
         .order_by(ReconciliationJob.run_at, ReconciliationJob.id)
-    ).all()
+    ).tuples()
     return [
-        PendingReconciliation(
-            describe_attempt(db.get_one(PaymentAttempt, job.attempt_id)),
-            job.reason,
-            job.status,
-            job.run_at,
-        )
-        for job in jobs
+        PendingReconciliation(describe_attempt(attempt), job.reason, job.status, job.run_at)
+        for job, attempt in rows
     ]

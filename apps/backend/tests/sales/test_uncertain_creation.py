@@ -1,16 +1,17 @@
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
-from tappy.payments.provider import IssuedQr, ProviderUnavailableError, QrOrder
+from tappy.payments.provider import IssuedQr, ProviderUnavailableError, QrOrder, UncertainReason
 from tappy.payments.simulator import SimulatedQrProvider
+from tappy.platform.config import Settings
 from tappy.platform.database import Database
-from tappy.sales.attempts import AttemptRequest, reserve_attempt
+from tappy.sales.attempts import AttemptRequest, recover_interrupted, reserve_attempt
 from tappy.sales.models import AttemptMethod
 from tests.sales.support import (
     AMOUNT,
@@ -25,11 +26,12 @@ from tests.sales.support import (
 )
 from tests.support import build_settings, execute, run_sales, scalar
 
+PHASES = 4
 RESERVED_AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 
 
 class LostResponseProvider(SimulatedQrProvider):
-    def __init__(self, reason: str = "timeout") -> None:
+    def __init__(self, reason: UncertainReason = UncertainReason.TIMEOUT) -> None:
         super().__init__()
         self.reason = reason
         self.orders: list[QrOrder] = []
@@ -133,9 +135,12 @@ def test_uncertainty_and_job_survive_a_restart_and_show_in_the_operations_comman
     assert "failed" not in listed.stdout
 
 
-@pytest.mark.parametrize("reason", ["server_error", "invalid_response", "connection"])
+@pytest.mark.parametrize(
+    "reason",
+    [UncertainReason.SERVER_ERROR, UncertainReason.INVALID_RESPONSE, UncertainReason.CONNECTION],
+)
 def test_every_uncertain_outcome_is_kept_for_reconciliation(
-    migrated_database_url: str, reason: str
+    migrated_database_url: str, reason: UncertainReason
 ) -> None:
     settings = build_settings(database_url=migrated_database_url)
     with start_client(settings, migrated_database_url, LostResponseProvider(reason)) as client:
@@ -203,3 +208,50 @@ def test_recovery_runs_are_idempotent(client: TestClient, migrated_database_url:
 
     assert "0 interrupted attempts moved to reconciliation" in second.stdout
     assert scalar(migrated_database_url, "SELECT count(*) FROM reconciliation_jobs") == 1
+
+
+class RecoveredDuringCallProvider(SimulatedQrProvider):
+    def __init__(self, database_url: str) -> None:
+        super().__init__(id_factory=lambda: "LATE-QR-1")
+        self.database_url = database_url
+
+    def create_qr(self, order: QrOrder) -> IssuedQr:
+        database = Database.from_settings(build_settings(database_url=self.database_url))
+        try:
+            with database.transaction() as session:
+                recover_interrupted(session, datetime.now(UTC) + timedelta(minutes=1), RESERVED_AT)
+        finally:
+            database.dispose()
+        return super().create_qr(order)
+
+
+def test_a_late_qr_for_a_recovered_attempt_is_kept_as_evidence(
+    migrated_database_url: str,
+) -> None:
+    settings = build_settings(database_url=migrated_database_url)
+    provider = RecoveredDuringCallProvider(migrated_database_url)
+    with start_client(settings, migrated_database_url, provider) as client:
+        sale_id, operator_a = open_sale(client, migrated_database_url)
+
+        created = create_qr(client, operator_a, sale_id)
+
+    assert created.status_code == HTTPStatus.ACCEPTED
+    attempt = created.json()
+    assert attempt["status"] == "reconciling"
+    assert attempt["provider_request_id"] == "LATE-QR-1"
+    assert attempt["qr_payload"].startswith("SIMULATED-CODI-QR|")
+    assert job_of(migrated_database_url) == f"interrupted_creation:pending:{attempt['id']}"
+
+
+def test_creation_timeout_must_outlast_every_provider_timeout_phase() -> None:
+    base = build_settings().model_dump()
+
+    with pytest.raises(ValueError, match="TAPPY_ATTEMPT_CREATION_TIMEOUT_SECONDS"):
+        Settings.model_validate(
+            {**base, "pey_timeout_seconds": 20, "attempt_creation_timeout_seconds": 60}
+        )
+
+    accepted = Settings.model_validate(
+        {**base, "pey_timeout_seconds": 10, "attempt_creation_timeout_seconds": 41}
+    )
+    assert accepted.attempt_creation_timeout_seconds > PHASES * accepted.pey_timeout_seconds

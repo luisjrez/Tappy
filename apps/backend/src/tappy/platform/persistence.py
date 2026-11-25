@@ -10,13 +10,13 @@ class Base(DeclarativeBase):
     pass
 
 
-def enum_column(enum: type[StrEnum], name: str) -> Enum:
+def enum_column(enum: type[StrEnum], name: str, length: int = 16) -> Enum:
     return Enum(
         enum,
         name=name,
         native_enum=False,
         create_constraint=True,
-        length=16,
+        length=length,
         values_callable=lambda members: [member.value for member in members],
     )
 
