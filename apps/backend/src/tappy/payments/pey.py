@@ -27,6 +27,10 @@ CENTS_PER_PESO = Decimal(100)
 REJECTED_STATUSES = frozenset({400, 429})
 MAX_QUERY_PAGES = 10
 PAID = "PAID"
+NETWORK_PROBLEMS = {
+    UncertainReason.TIMEOUT: QueryProblem.TIMEOUT,
+    UncertainReason.CONNECTION: QueryProblem.CONNECTION,
+}
 QUERY_PROBLEMS: dict[int, QueryProblem] = {
     httpx2.codes.NOT_FOUND: QueryProblem.NOT_FOUND,
     httpx2.codes.TOO_MANY_REQUESTS: QueryProblem.RATE_LIMITED,
@@ -109,7 +113,7 @@ def query_page(response: httpx2.Response) -> QueryPage:
         )
     try:
         return QueryPage.model_validate(json.loads(response.content, parse_float=Decimal))
-    except ValueError, ValidationError:
+    except ValueError:
         raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
 
 
@@ -149,25 +153,19 @@ class PeyQrProvider:
             return client.post("/codi/qr", json=qr_request(order))
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
-        try:
-            return self.query(provider_request_id)
-        except ProviderUnavailableError as error:
-            raise PaymentsQueryError(QueryProblem(error.reason.value)) from None
-
-    def query(self, provider_request_id: str) -> list[QrPayment]:
+        path = f"/transaction/codi/qr/{quote(provider_request_id, safe='')}"
         payments: list[QrPayment] = []
         params: dict[str, str] = {}
-        with self.client() as client:
-            for _ in range(MAX_QUERY_PAGES):
-                page = query_page(
-                    client.get(
-                        f"/transaction/codi/qr/{quote(provider_request_id, safe='')}", params=params
-                    )
-                )
-                payments.extend(paid_payments(page))
-                if page.next_token is None:
-                    return payments
-                params = {"nextToken": page.next_token}
+        try:
+            with self.client() as client:
+                for _ in range(MAX_QUERY_PAGES):
+                    page = query_page(client.get(path, params=params))
+                    payments.extend(paid_payments(page))
+                    if page.next_token is None:
+                        return payments
+                    params = {"nextToken": page.next_token}
+        except ProviderUnavailableError as error:
+            raise PaymentsQueryError(NETWORK_PROBLEMS[error.reason]) from None
         raise PaymentsQueryError(QueryProblem.TOO_MANY_PAGES)
 
     def create_qr(self, order: QrOrder) -> IssuedQr:

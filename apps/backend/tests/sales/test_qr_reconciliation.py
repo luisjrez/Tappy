@@ -182,15 +182,17 @@ def test_an_uncertain_answer_keeps_a_reconciling_attempt_waiting(
     assert scalar(migrated_database_url, "SELECT status FROM reconciliation_jobs") == "pending"
 
 
+@pytest.mark.parametrize("reason", ["timeout", "duplicate_provider_id"])
 def test_a_confirmed_reconciliation_closes_its_pending_job(
-    client: TestClient, migrated_database_url: str, fake: FakePey
+    client: TestClient, migrated_database_url: str, fake: FakePey, reason: str
 ) -> None:
     sale, _ = pending_qr(client, migrated_database_url)
     execute(migrated_database_url, "UPDATE payment_attempts SET status = 'reconciling'")
     execute(
         migrated_database_url,
         "INSERT INTO reconciliation_jobs (id, attempt_id, reason, status, run_at, created_at) "
-        "SELECT gen_random_uuid(), id, 'timeout', 'pending', now(), now() FROM payment_attempts",
+        "SELECT gen_random_uuid(), id, :reason, 'pending', now(), now() FROM payment_attempts",
+        {"reason": reason},
     )
     fake.pages = [page(paid())]
 

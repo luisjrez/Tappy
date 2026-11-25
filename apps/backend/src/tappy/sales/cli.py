@@ -35,7 +35,7 @@ def describe(pending: PendingReconciliation) -> str:
     )
 
 
-def reconciliations(database: Database, _settings: Settings, _: argparse.Namespace) -> str:
+def reconciliations(database: Database, _settings: Settings, _options: argparse.Namespace) -> str:
     with database.transaction() as session:
         pending = pending_reconciliations(session)
     if not pending:
@@ -43,7 +43,7 @@ def reconciliations(database: Database, _settings: Settings, _: argparse.Namespa
     return "\n\n".join(describe(item) for item in pending)
 
 
-def recover(database: Database, settings: Settings, _: argparse.Namespace) -> str:
+def recover(database: Database, settings: Settings, _options: argparse.Namespace) -> str:
     now = SystemClock().now()
     cutoff = now - timedelta(seconds=settings.attempt_creation_timeout_seconds)
     with database.transaction() as session:
@@ -52,7 +52,7 @@ def recover(database: Database, settings: Settings, _: argparse.Namespace) -> st
     return f"{moved} interrupted {noun} moved to reconciliation"
 
 
-def process_events(database: Database, _settings: Settings, _: argparse.Namespace) -> str:
+def process_events(database: Database, _settings: Settings, _options: argparse.Namespace) -> str:
     summary = process_received_events(database, SystemClock())
     noun = "event" if summary.applied == 1 else "events"
     duplicates = "duplicate" if summary.duplicates == 1 else "duplicates"
@@ -76,7 +76,7 @@ def describe_exception(open_exception: OpenException) -> str:
     )
 
 
-def exceptions(database: Database, _settings: Settings, _: argparse.Namespace) -> str:
+def exceptions(database: Database, _settings: Settings, _options: argparse.Namespace) -> str:
     with database.transaction() as session:
         found = [describe_exception(item) for item in open_exceptions(session)]
     return "\n\n".join(found) if found else "No open payment exceptions"
@@ -94,7 +94,7 @@ def describe_conflict(event: WebhookEvent, conflict: WebhookEventConflict) -> st
     )
 
 
-def conflicts(database: Database, _settings: Settings, _: argparse.Namespace) -> str:
+def conflicts(database: Database, _settings: Settings, _options: argparse.Namespace) -> str:
     with database.transaction() as session:
         found = [describe_conflict(event, conflict) for event, conflict in event_conflicts(session)]
     return "\n\n".join(found) if found else "No event conflicts"

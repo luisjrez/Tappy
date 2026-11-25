@@ -83,12 +83,18 @@ def evidence_of(target: QueryTarget, payment: QrPayment, environment: str) -> Pa
     )
 
 
-def close_jobs(db: Session, attempt_id: uuid.UUID) -> None:
+def close_jobs_if_paid(db: Session, attempt_id: uuid.UUID) -> None:
+    paid = (
+        select(PaymentAttempt.id)
+        .where(PaymentAttempt.id == attempt_id, PaymentAttempt.status == AttemptStatus.PAID)
+        .exists()
+    )
     db.execute(
         update(ReconciliationJob)
         .where(
             ReconciliationJob.attempt_id == attempt_id,
             ReconciliationJob.status == JobStatus.PENDING,
+            paid,
         )
         .values(status=JobStatus.DONE)
     )
@@ -97,8 +103,8 @@ def close_jobs(db: Session, attempt_id: uuid.UUID) -> None:
 def report_for(
     db: Session,
     attempt_id: uuid.UUID,
-    result: ReconciliationResult,
     outcomes: list[EvidenceOutcome],
+    result: ReconciliationResult | None = None,
     problem: QueryProblem | None = None,
 ) -> ReconciliationReport:
     attempt = db.scalars(
@@ -110,7 +116,7 @@ def report_for(
     return ReconciliationReport(
         describe_attempt(attempt),
         sale_status,
-        result,
+        result or settled_result(attempt, outcomes),
         found=len(outcomes),
         applied=outcomes.count(EvidenceOutcome.APPLIED),
         duplicates=outcomes.count(EvidenceOutcome.DUPLICATE),
@@ -120,15 +126,9 @@ def report_for(
 
 
 def settled_result(
-    db: Session, attempt_id: uuid.UUID, outcomes: list[EvidenceOutcome]
+    attempt: PaymentAttempt, outcomes: list[EvidenceOutcome]
 ) -> ReconciliationResult:
-    status = db.scalars(
-        select(PaymentAttempt.status)
-        .where(PaymentAttempt.id == attempt_id)
-        .execution_options(populate_existing=True)
-    ).one()
-    if status is AttemptStatus.PAID:
-        close_jobs(db, attempt_id)
+    if attempt.status is AttemptStatus.PAID:
         return ReconciliationResult.CONFIRMED
     if EvidenceOutcome.REVIEW in outcomes:
         return ReconciliationResult.REVIEW
@@ -145,7 +145,7 @@ def reconcile_attempt(
     with database.transaction() as db:
         target = query_target(db, attempt_id, provider)
         if target is None:
-            return report_for(db, attempt_id, ReconciliationResult.NOT_QUERYABLE, [])
+            return report_for(db, attempt_id, [], ReconciliationResult.NOT_QUERYABLE)
     try:
         payments = provider.qr_payments(target.provider_request_id)
     except PaymentsQueryError as error:
@@ -155,11 +155,11 @@ def reconcile_attempt(
             error.problem,
         )
         with database.transaction() as db:
-            return report_for(db, attempt_id, ReconciliationResult.UNCERTAIN, [], error.problem)
+            return report_for(db, attempt_id, [], ReconciliationResult.UNCERTAIN, error.problem)
     with database.transaction() as db:
         outcomes = [
             apply_evidence(db, evidence_of(target, payment, environment), None, clock.now())
             for payment in payments
         ]
-        result = settled_result(db, attempt_id, outcomes)
-        return report_for(db, attempt_id, result, outcomes)
+        close_jobs_if_paid(db, attempt_id)
+        return report_for(db, attempt_id, outcomes)
