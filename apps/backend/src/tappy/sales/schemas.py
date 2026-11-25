@@ -4,11 +4,14 @@ from typing import Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
+from tappy.sales.exception_review import RequestOutcome
 from tappy.sales.history import HistoryQuery
 from tappy.sales.models import (
+    NOTE_MAX_LENGTH,
     AttemptMethod,
     AttemptStatus,
     ExceptionReason,
+    JobStatus,
     SaleStatus,
 )
 from tappy.sales.periods import PeriodKind
@@ -209,3 +212,50 @@ class PeriodSummaryResponse(BaseModel):
     open_exception_count: int
     reception_dated_transfer_count: int
     days: list[DayTotalsResponse]
+
+
+class NoteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(max_length=NOTE_MAX_LENGTH)
+
+
+class NoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    author: str
+    text: str
+    created_at: datetime
+
+
+class ReviewJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    status: JobStatus
+    run_at: datetime
+    tries: int
+    last_problem: str | None
+
+
+class RequestedReconciliationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    outcome: RequestOutcome
+    job: ReviewJobResponse
+
+
+class ExceptionDetailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    reason: ExceptionReason
+    sale_id: str | None
+    sale_reference: str | None
+    event_id: str | None
+    provider_transaction_id: str | None
+    expected_amount_cents: int | None
+    received_amount_cents: int | None
+    created_at: datetime
+    resolved_at: datetime | None
+    notes: list[NoteResponse]
+    reconciliation: ReviewJobResponse | None

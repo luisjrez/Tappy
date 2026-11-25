@@ -47,3 +47,18 @@ class UnverifiedAttemptError(SaleError):
 class NoReceptionError(SaleError):
     def __init__(self) -> None:
         super().__init__("The sale has no confirmed reception")
+
+
+class ExceptionNotFoundError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("Incident not found")
+
+
+class InvalidNoteError(SaleError):
+    def __init__(self, max_length: int) -> None:
+        super().__init__(f"A note needs between 1 and {max_length} characters")
+
+
+class NothingToReconcileError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("The incident has no QR attempt to reconcile")

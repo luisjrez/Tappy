@@ -9,6 +9,7 @@ from starlette.responses import Response
 from starlette_admin.routing import route
 from starlette_admin.views import CustomView
 
+from tappy.backoffice.auth import admin_identity
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.errors import MerchantNotFoundError
 from tappy.platform.clock import Clock
@@ -24,13 +25,6 @@ INVALID_FILTERS = "Invalid filters"
 
 def pesos(amount_cents: int) -> str:
     return f"{amount_cents // 100:,}.{amount_cents % 100:02d}"
-
-
-def admin_identity(request: Request) -> IdentitySummary:
-    identity = getattr(request.state, "admin_identity", None)
-    if not isinstance(identity, IdentitySummary):
-        raise RuntimeError("The back office view needs an authenticated administrator")
-    return identity
 
 
 class SalesView(CustomView):

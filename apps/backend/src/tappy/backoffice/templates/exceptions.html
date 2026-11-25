@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block header %}
+    <h2 class="page-title">Open incidents</h2>
+{% endblock %}
+{% block content %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table card-table">
+                <thead><tr><th>Opened</th><th>Reason</th><th>Sale</th><th>Expected (MXN)</th><th>Received (MXN)</th><th></th></tr></thead>
+                <tbody>
+                {% for incident in exceptions %}
+                    <tr data-incident="{{ incident.id }}">
+                        <td>{{ incident.created_at.isoformat() }}</td>
+                        <td>{{ incident.reason }}</td>
+                        <td>{{ incident.sale_reference or "unassociated" }}</td>
+                        <td>{{ pesos(incident.expected_amount_cents) if incident.expected_amount_cents is not none else "—" }}</td>
+                        <td>{{ pesos(incident.received_amount_cents) if incident.received_amount_cents is not none else "—" }}</td>
+                        <td><a href="{{ exceptions_url }}/{{ incident.id }}">Review</a></td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No open incidents.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endblock %}

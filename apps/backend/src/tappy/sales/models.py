@@ -73,6 +73,7 @@ class JobReason(StrEnum):
     DUPLICATE_PROVIDER_ID = "duplicate_provider_id"
     INTERRUPTED_CREATION = "interrupted_creation"
     EXPIRED = "expired"
+    REVIEW_REQUESTED = "review_requested"
 
 
 class JobStatus(StrEnum):
@@ -253,3 +254,16 @@ class PaymentException(Base):
     received_amount_cents: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+NOTE_MAX_LENGTH = 1000
+
+
+class ExceptionNote(Base):
+    __tablename__ = "exception_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    exception_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payment_exceptions.id"), index=True)
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("identities.id"))
+    text: Mapped[str] = mapped_column(String(NOTE_MAX_LENGTH))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

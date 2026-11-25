@@ -10,6 +10,7 @@ from tappy.sales.models import ExceptionReason, PaymentException, Sale
 
 @dataclass(frozen=True)
 class OpenException:
+    id: str
     reason: ExceptionReason
     sale_reference: str | None
     event_id: str | None
@@ -25,9 +26,10 @@ def open_exceptions(db: Session) -> list[OpenException]:
         .outerjoin(WebhookEvent, WebhookEvent.id == PaymentException.webhook_event_id)
         .where(PaymentException.resolved_at.is_(None))
         .order_by(PaymentException.created_at, PaymentException.id)
-    ).tuples()
+    ).all()
     return [
         OpenException(
+            str(exception.id),
             exception.reason,
             reference,
             event_id,

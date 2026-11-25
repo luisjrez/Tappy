@@ -16,7 +16,7 @@ from tappy.platform.clock import Clock, SystemClock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.platform.validation import validation_error_response
-from tappy.sales import reports_router
+from tappy.sales import exceptions_router, reports_router
 from tappy.sales import router as sales_router
 
 
@@ -44,6 +44,7 @@ def create_app(
     app.include_router(merchants_router.router)
     app.include_router(sales_router.router)
     app.include_router(reports_router.router)
+    app.include_router(exceptions_router.router)
     app.include_router(webhooks_router.router)
     mount_admin(app, settings, database, app.state.clock)
     return app

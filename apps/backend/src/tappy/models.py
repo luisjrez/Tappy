@@ -4,6 +4,7 @@ from tappy.payments.events import WebhookEvent, WebhookEventConflict
 from tappy.platform.persistence import Base
 from tappy.sales.idempotency import IdempotencyRequest
 from tappy.sales.models import (
+    ExceptionNote,
     PaymentAttempt,
     PaymentException,
     ReconciliationJob,
@@ -13,6 +14,7 @@ from tappy.sales.models import (
 
 __all__ = [
     "AccessSession",
+    "ExceptionNote",
     "IdempotencyRequest",
     "Identity",
     "Membership",

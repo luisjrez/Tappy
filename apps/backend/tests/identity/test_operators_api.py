@@ -180,4 +180,6 @@ def test_there_is_no_public_sign_up_route(client: TestClient) -> None:
         "/sales",
         "/sales/{sale_id}/attempts",
         "/webhooks/pey",
+        "/exceptions/{exception_id}/notes",
+        "/exceptions/{exception_id}/reconciliation",
     }
