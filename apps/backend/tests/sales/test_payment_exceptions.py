@@ -1,12 +1,17 @@
 import json
 import uuid
 from collections.abc import Iterator
+from dataclasses import replace
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from tappy.payments.provider import PaymentEvidence, ProviderName
+from tappy.platform.database import Database
+from tappy.sales.evidence import apply_evidence
 from tests.payments.pey_support import FakePey
 from tests.payments.webhook_support import Delivery, deliver, settings_for
 from tests.sales.support import (
@@ -19,7 +24,7 @@ from tests.sales.support import (
     ready_merchant,
     start_client,
 )
-from tests.support import execute, run_sales, scalar
+from tests.support import build_settings, execute, run_sales, scalar
 
 PAID_AT = 1795000000
 SHORT = 25000
@@ -217,3 +222,40 @@ def test_a_sale_in_review_accepts_no_new_attempts(
     )
 
     assert retried.status_code == HTTPStatus.CONFLICT
+
+
+def test_reprocessing_keeps_the_event_in_review(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, _ = pending_qr(client, migrated_database_url)
+    send(client, sale, "msg_short", amount=250.0)
+    execute(migrated_database_url, "UPDATE webhook_events SET status = 'received'")
+
+    run_sales(migrated_database_url, "process-events")
+
+    assert event_status(migrated_database_url, "msg_short") == "review"
+
+
+def test_incidents_without_an_event_are_not_duplicated(migrated_database_url: str) -> None:
+    evidence = PaymentEvidence(
+        provider=ProviderName.PEY,
+        environment="test",
+        provider_request_id="UNKNOWN-QR",
+        attempt_id=None,
+        provider_transaction_id="TX-QUERY",
+        amount_cents=AMOUNT,
+        receiver_account=str(RECEIVER_A["provider_account_id"]),
+        occurred_at=datetime.fromtimestamp(PAID_AT, UTC),
+    )
+    database = Database.from_settings(build_settings(database_url=migrated_database_url))
+    other = replace(evidence, provider_transaction_id="TX-OTHER-QUERY")
+    try:
+        for item in (evidence, evidence, other):
+            with database.transaction() as session:
+                apply_evidence(session, item, None, datetime.now(UTC))
+    finally:
+        database.dispose()
+
+    assert scalar(migrated_database_url, "SELECT count(*) FROM payment_exceptions") == len(
+        {evidence.provider_transaction_id, other.provider_transaction_id}
+    )

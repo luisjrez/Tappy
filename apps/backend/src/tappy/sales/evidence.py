@@ -49,6 +49,13 @@ class Incident:
 
 
 @dataclass(frozen=True)
+class VerifiedReception:
+    transaction_id: str
+    amount_cents: int
+    occurred_at: datetime
+
+
+@dataclass(frozen=True)
 class Application:
     evidence: PaymentEvidence
     event_id: uuid.UUID | None
@@ -92,12 +99,13 @@ def same_transfer(existing: Transfer, attempt: PaymentAttempt, evidence: Payment
     )
 
 
-def flag(db: Session, application: Application, incident: Incident) -> EvidenceOutcome:
+def open_exception(db: Session, application: Application, incident: Incident) -> EvidenceOutcome:
     values = {
         "id": uuid.uuid4(),
         "sale_id": incident.sale_id,
         "transfer_id": incident.transfer_id,
         "webhook_event_id": application.event_id,
+        "provider_transaction_id": application.evidence.provider_transaction_id,
         "reason": incident.reason,
         "expected_amount_cents": incident.expected_amount_cents,
         "received_amount_cents": application.evidence.amount_cents,
@@ -111,14 +119,24 @@ def flag(db: Session, application: Application, incident: Incident) -> EvidenceO
     return EvidenceOutcome.REVIEW
 
 
-def doubt(evidence: PaymentEvidence, attempt: PaymentAttempt, sale: Sale) -> ExceptionReason | None:
-    if evidence.receiver_account != attempt.receiver_account:
-        return ExceptionReason.RECEIVER_MISMATCH
+def verified_reception(evidence: PaymentEvidence) -> VerifiedReception | None:
     if (
         evidence.provider_transaction_id is None
         or evidence.amount_cents is None
         or evidence.occurred_at is None
     ):
+        return None
+    return VerifiedReception(
+        evidence.provider_transaction_id, evidence.amount_cents, evidence.occurred_at
+    )
+
+
+def classify_doubt(
+    evidence: PaymentEvidence, attempt: PaymentAttempt, sale: Sale
+) -> ExceptionReason | None:
+    if evidence.receiver_account != attempt.receiver_account:
+        return ExceptionReason.RECEIVER_MISMATCH
+    if verified_reception(evidence) is None:
         return ExceptionReason.INCOMPLETE_EVIDENCE
     if attempt.status not in PAYABLE_ATTEMPT_STATUSES or sale.status is not SaleStatus.OPEN:
         return ExceptionReason.SALE_NOT_OPEN
@@ -126,25 +144,21 @@ def doubt(evidence: PaymentEvidence, attempt: PaymentAttempt, sale: Sale) -> Exc
 
 
 def record_reception(
-    db: Session, application: Application, attempt: PaymentAttempt, sale: Sale
+    db: Session,
+    application: Application,
+    reception: VerifiedReception,
+    attempt: PaymentAttempt,
 ) -> Transfer | None:
-    evidence = application.evidence
-    if (
-        evidence.provider_transaction_id is None
-        or evidence.amount_cents is None
-        or evidence.occurred_at is None
-    ):
-        return None
     transfer = Transfer(
-        sale_id=sale.id,
+        sale_id=attempt.sale_id,
         attempt_id=attempt.id,
-        provider=evidence.provider,
-        environment=evidence.environment,
-        provider_transaction_id=evidence.provider_transaction_id,
-        amount_cents=evidence.amount_cents,
+        provider=application.evidence.provider,
+        environment=application.evidence.environment,
+        provider_transaction_id=reception.transaction_id,
+        amount_cents=reception.amount_cents,
         currency=CURRENCY,
         receiver_account=attempt.receiver_account,
-        occurred_at=evidence.occurred_at,
+        occurred_at=reception.occurred_at,
         received_at=application.now,
         webhook_event_id=application.event_id,
     )
@@ -156,6 +170,20 @@ def record_reception(
             return None
         raise
     return transfer
+
+
+def recorded_by_this_event(db: Session, existing: Transfer, event_id: uuid.UUID | None) -> bool:
+    if event_id is None or existing.webhook_event_id != event_id:
+        return False
+    return (
+        db.scalar(
+            select(PaymentException.id).where(
+                PaymentException.webhook_event_id == event_id,
+                PaymentException.resolved_at.is_(None),
+            )
+        )
+        is not None
+    )
 
 
 def cover_sale(attempt: PaymentAttempt, sale: Sale, now: datetime) -> EvidenceOutcome:
@@ -171,13 +199,19 @@ def apply_evidence(
     application = Application(evidence, event_id, now)
     attempt = evidenced_attempt(db, evidence)
     if attempt is None:
-        return flag(db, application, Incident(ExceptionReason.UNASSOCIATED))
+        return open_exception(db, application, Incident(ExceptionReason.UNASSOCIATED))
     existing = recorded_transfer(db, evidence)
     if existing is not None:
-        if same_transfer(existing, attempt, evidence):
-            return EvidenceOutcome.DUPLICATE
-        incident = Incident(ExceptionReason.CONFLICTING_TRANSFER, attempt.sale_id, existing.id)
-        return flag(db, application, incident)
+        if not same_transfer(existing, attempt, evidence):
+            incident = Incident(
+                ExceptionReason.CONFLICTING_TRANSFER,
+                sale_id=attempt.sale_id,
+                transfer_id=existing.id,
+            )
+            return open_exception(db, application, incident)
+        if recorded_by_this_event(db, existing, event_id):
+            return EvidenceOutcome.REVIEW
+        return EvidenceOutcome.DUPLICATE
     return receive_for_attempt(db, application, attempt)
 
 
@@ -185,18 +219,28 @@ def receive_for_attempt(
     db: Session, application: Application, attempt: PaymentAttempt
 ) -> EvidenceOutcome:
     sale = held_sale(db, attempt.sale_id)
-    reason = doubt(application.evidence, attempt, sale)
-    if reason is not None:
-        return flag(db, application, Incident(reason, sale.id, None, sale.amount_cents))
-    transfer = record_reception(db, application, attempt, sale)
+    reason = classify_doubt(application.evidence, attempt, sale)
+    reception = verified_reception(application.evidence)
+    if reason is not None or reception is None:
+        incident = Incident(
+            reason or ExceptionReason.INCOMPLETE_EVIDENCE,
+            sale_id=sale.id,
+            expected_amount_cents=sale.amount_cents,
+        )
+        return open_exception(db, application, incident)
+    transfer = record_reception(db, application, reception, attempt)
     if transfer is None:
-        return flag(db, application, Incident(ExceptionReason.CONFLICTING_TRANSFER, sale.id))
+        incident = Incident(ExceptionReason.CONFLICTING_TRANSFER, sale_id=sale.id)
+        return open_exception(db, application, incident)
     if transfer.amount_cents != sale.amount_cents:
         sale.status = SaleStatus.REVIEW
         incident = Incident(
-            ExceptionReason.AMOUNT_MISMATCH, sale.id, transfer.id, sale.amount_cents
+            ExceptionReason.AMOUNT_MISMATCH,
+            sale_id=sale.id,
+            transfer_id=transfer.id,
+            expected_amount_cents=sale.amount_cents,
         )
-        return flag(db, application, incident)
+        return open_exception(db, application, incident)
     outcome = cover_sale(attempt, sale, application.now)
     db.flush()
     return outcome

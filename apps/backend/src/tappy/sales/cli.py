@@ -8,7 +8,7 @@ from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, Settings, load_settings
 from tappy.platform.database import Database
 from tappy.sales.attempts import PendingReconciliation, pending_reconciliations, recover_interrupted
-from tappy.sales.exceptions import OpenException, open_exceptions
+from tappy.sales.payment_exceptions import OpenException, open_exceptions
 from tappy.sales.receptions import process_received_events
 
 Handler = Callable[[Database, Settings], str]

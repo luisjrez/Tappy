@@ -42,6 +42,7 @@ def upgrade() -> None:
             ),
             nullable=False,
         ),
+        sa.Column("provider_transaction_id", sa.String(length=64), nullable=True),
         sa.Column("expected_amount_cents", sa.Integer(), nullable=True),
         sa.Column("received_amount_cents", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -51,7 +52,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["webhook_event_id"], ["webhook_events.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "webhook_event_id", "reason", name="uq_payment_exceptions_event_reason"
+            "webhook_event_id",
+            "reason",
+            "provider_transaction_id",
+            name="uq_payment_exceptions_evidence_reason",
+            postgresql_nulls_not_distinct=True,
         ),
     )
     op.create_index("ix_payment_exceptions_sale_id", "payment_exceptions", ["sale_id"])

@@ -33,7 +33,7 @@ FAILURE_CODE_MAX_LENGTH = 32
 JOB_CONSTRAINT = "uq_reconciliation_jobs_attempt_reason"
 JOB_REASON_MAX_LENGTH = 32
 TRANSFER_CONSTRAINT = "uq_transactions_provider_transaction"
-EXCEPTION_CONSTRAINT = "uq_payment_exceptions_event_reason"
+EXCEPTION_CONSTRAINT = "uq_payment_exceptions_evidence_reason"
 
 
 class SaleStatus(StrEnum):
@@ -192,7 +192,15 @@ class Transfer(Base):
 
 class PaymentException(Base):
     __tablename__ = "payment_exceptions"
-    __table_args__ = (UniqueConstraint("webhook_event_id", "reason", name=EXCEPTION_CONSTRAINT),)
+    __table_args__ = (
+        UniqueConstraint(
+            "webhook_event_id",
+            "reason",
+            "provider_transaction_id",
+            name=EXCEPTION_CONSTRAINT,
+            postgresql_nulls_not_distinct=True,
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     sale_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sales.id"), index=True)
@@ -200,6 +208,9 @@ class PaymentException(Base):
     webhook_event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("webhook_events.id"))
     reason: Mapped[ExceptionReason] = mapped_column(
         enum_column(ExceptionReason, "payment_exception_reason", length=32)
+    )
+    provider_transaction_id: Mapped[str | None] = mapped_column(
+        String(PROVIDER_REQUEST_ID_MAX_LENGTH)
     )
     expected_amount_cents: Mapped[int | None] = mapped_column(Integer)
     received_amount_cents: Mapped[int | None] = mapped_column(Integer)

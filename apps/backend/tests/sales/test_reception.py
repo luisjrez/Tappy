@@ -134,6 +134,7 @@ def test_insufficient_evidence_never_marks_the_sale_received(
     assert status == HTTPStatus.NO_CONTENT
     assert read["status"] == sale_status
     assert read["confirmed_amount_cents"] == confirmed
+    assert len(read["transfers"]) == (1 if confirmed else 0)
     assert read["attempts"][0]["status"] == "pending"
     assert event_status(migrated_database_url) == event_outcome
 
