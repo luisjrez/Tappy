@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B19-dedupe-evidence.md#b19-vc01--antesdespués-de-duplicados-y-conflicto"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]

@@ -77,7 +77,9 @@ Estado final: `events [('msg_vc01_e1', 'local', 'applied'), ('msg_vc01_e2', 'loc
 | --- | --- | --- | --- | --- |
 | Variante con el mismo id | Confirmada y descartada | Confirmada, original intacto, variante en `webhook_event_conflicts` y listada | Comportamiento | Aceptada (AC02) |
 | Otro evento de una transferencia ya registrada | `unmatched` | `duplicate` si coinciden importe y cuenta; si no, `unmatched` | Comportamiento | Aceptada (AC01/AC03) |
-| Salida de `process-events` | `1 event applied, 0 unmatched, 0 failed` | `1 event applied, 0 unmatched, 0 duplicates, 0 failed` | Cambio de formato del comando operativo | Aceptada: añade el conteo de duplicados; ningún consumidor la analiza | Datos eliminados al terminar (esquema de desarrollo recreado). Estado VC01: **PASS**.
+| Salida de `process-events` | `1 event applied, 0 unmatched, 0 failed` | `1 event applied, 0 unmatched, 0 duplicates, 0 failed` | Cambio de formato del comando operativo | Aceptada: añade el conteo de duplicados; ningún consumidor la analiza |
+
+Datos eliminados al terminar (esquema de desarrollo recreado). Estado VC01: **PASS**.
 
 ## Checks
 
@@ -93,4 +95,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `085acb6` + `3ac434b` | CHANGES_REQUESTED | APPROVE | Standards: un segundo evento con el mismo `transactionId` pero otro importe/cuenta se ocultaba como `duplicate`; `TAPPY_ENVIRONMENT` sin límite (500 en inserción, deduplicación dividida por mayúsculas); downgrade sin guarda de ids compartidos; registro TDD que no declaraba que los tests se escribieron juntos; faltaba el antes de la salida de `process-events`. Spec (menores): tests de unicidad de transferencias por entorno y de conflicto sobre un evento sin aplicar; reentrega de un evento atascado |
+| 2 | `8ff2289` + `79a8b2b` | APPROVE | APPROVE | Corregido con Red/Green; desviación TDD declarada; tabla de diferencias; VC01 repetida |
+
+Hallazgos pendientes: 0.
