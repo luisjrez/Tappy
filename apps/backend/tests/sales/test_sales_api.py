@@ -60,7 +60,7 @@ def test_operator_creates_and_reads_sale_with_exact_amount(
         "masked_account": "**************6782",
         "created_at": body["created_at"],
         "attempts": [],
-        "received_amount_cents": 0,
+        "confirmed_amount_cents": 0,
         "transfers": [],
     }
     assert type(body["amount_cents"]) is int

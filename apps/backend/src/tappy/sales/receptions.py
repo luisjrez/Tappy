@@ -3,6 +3,7 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from tappy.payments.events import EventStatus, WebhookEvent
@@ -53,9 +54,24 @@ def stored_event_id(database: Database, provider: ProviderName, message_id: str)
 def process_safely(database: Database, event_id: uuid.UUID, clock: Clock) -> EventStatus | None:
     try:
         return process_event(database, event_id, clock)
-    except Exception:
-        logger.exception("Webhook event %s could not be applied; it stays received", event_id)
+    except SQLAlchemyError as error:
+        logger.error(
+            "Webhook event %s could not be applied (%s); it stays received",
+            event_id,
+            type(error).__name__,
+        )
         return None
+
+
+def process_stored(
+    database: Database, provider: ProviderName, message_id: str, clock: Clock
+) -> EventStatus | None:
+    try:
+        event_id = stored_event_id(database, provider, message_id)
+    except SQLAlchemyError as error:
+        logger.error("Stored webhook event could not be read (%s)", type(error).__name__)
+        return None
+    return process_safely(database, event_id, clock)
 
 
 def process_received_events(database: Database, clock: Clock) -> ProcessingSummary:

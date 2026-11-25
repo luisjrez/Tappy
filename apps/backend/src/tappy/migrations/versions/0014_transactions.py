@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.Column("amount_cents", sa.Integer(), nullable=False),
         sa.Column("currency", sa.String(length=3), nullable=False),
         sa.Column("receiver_account", sa.String(length=64), nullable=False),
-        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("webhook_event_id", sa.Uuid(), nullable=True),
         sa.CheckConstraint("amount_cents > 0", name="ck_transactions_amount_cents_positive"),
@@ -55,8 +55,12 @@ def upgrade() -> None:
     op.create_index("ix_transactions_sale_id", "transactions", ["sale_id"])
     op.execute(FREEZE_TRANSFERS)
     op.execute(
-        "CREATE TRIGGER transactions_are_immutable BEFORE UPDATE ON transactions "
+        "CREATE TRIGGER transactions_are_immutable BEFORE UPDATE OR DELETE ON transactions "
         "FOR EACH ROW EXECUTE FUNCTION transactions_are_immutable()"
+    )
+    op.execute(
+        "CREATE TRIGGER transactions_cannot_be_truncated BEFORE TRUNCATE ON transactions "
+        "FOR EACH STATEMENT EXECUTE FUNCTION transactions_are_immutable()"
     )
     op.drop_constraint("webhook_event_status", "webhook_events", type_="check")
     op.create_check_constraint(

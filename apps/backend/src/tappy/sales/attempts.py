@@ -41,7 +41,7 @@ from tappy.sales.models import (
     Sale,
     SaleStatus,
 )
-from tappy.sales.service import AttemptView, accessible_sale, describe_attempt
+from tappy.sales.service import AttemptView, accessible_sale, describe_attempt, held_sale
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +85,7 @@ def reservation_claim(request: AttemptRequest, sale: Sale) -> IdempotencyClaim:
 
 
 def held_open_sale(db: Session, sale_id: uuid.UUID) -> Sale:
-    sale = db.scalars(
-        select(Sale)
-        .where(Sale.id == sale_id)
-        .with_for_update(key_share=True)
-        .execution_options(populate_existing=True)
-    ).one()
+    sale = held_sale(db, sale_id)
     if sale.status is not SaleStatus.OPEN:
         raise SaleNotOpenError
     return sale

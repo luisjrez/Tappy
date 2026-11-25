@@ -10,7 +10,7 @@ from tappy.payments.webhooks import InvalidSignatureError, SignedDelivery, verif
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
 from tappy.platform.dependencies import ClockDependency, DatabaseDependency, SettingsDependency
-from tappy.sales.receptions import process_safely, stored_event_id
+from tappy.sales.receptions import process_stored
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 TOO_LARGE = "Webhook body is too large"
@@ -34,7 +34,7 @@ def persist(database: Database, event: ReceivedEvent, clock: Clock) -> None:
 
 
 def apply_stored(database: Database, event: ReceivedEvent, clock: Clock) -> None:
-    process_safely(database, stored_event_id(database, event.provider, event.message_id), clock)
+    process_stored(database, event.provider, event.message_id, clock)
 
 
 def signed_delivery(request: Request, body: bytes) -> SignedDelivery:

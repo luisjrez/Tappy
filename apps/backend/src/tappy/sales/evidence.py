@@ -2,17 +2,21 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from tappy.payments.provider import PaymentEvidence
+from tappy.platform.persistence import is_unique_violation
 from tappy.sales.models import (
     CURRENCY,
+    TRANSFER_CONSTRAINT,
     AttemptStatus,
     PaymentAttempt,
     Sale,
     SaleStatus,
     Transfer,
 )
+from tappy.sales.service import held_sale
 
 PAYABLE_ATTEMPT_STATUSES = (
     AttemptStatus.CREATING,
@@ -39,23 +43,29 @@ def evidenced_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt 
     return attempt
 
 
-def held_sale(db: Session, sale_id: uuid.UUID) -> Sale:
-    return db.scalars(
-        select(Sale)
-        .where(Sale.id == sale_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    ).one()
-
-
-def matches(evidence: PaymentEvidence, attempt: PaymentAttempt, sale: Sale) -> bool:
-    return (
-        evidence.provider_transaction_id is not None
-        and attempt.status in PAYABLE_ATTEMPT_STATUSES
+def matching_transaction(
+    evidence: PaymentEvidence, attempt: PaymentAttempt, sale: Sale
+) -> str | None:
+    if (
+        attempt.status in PAYABLE_ATTEMPT_STATUSES
         and sale.status is SaleStatus.OPEN
         and evidence.receiver_account == attempt.receiver_account
         and evidence.amount_cents == sale.amount_cents
-    )
+        and evidence.occurred_at is not None
+    ):
+        return evidence.provider_transaction_id
+    return None
+
+
+def record_transfer(db: Session, transfer: Transfer) -> bool:
+    try:
+        with db.begin_nested():
+            db.add(transfer)
+    except IntegrityError as error:
+        if is_unique_violation(error, TRANSFER_CONSTRAINT):
+            return False
+        raise
+    return True
 
 
 def apply_evidence(
@@ -65,22 +75,23 @@ def apply_evidence(
     if attempt is None:
         return False
     sale = held_sale(db, attempt.sale_id)
-    if not matches(evidence, attempt, sale) or evidence.provider_transaction_id is None:
+    transaction_id = matching_transaction(evidence, attempt, sale)
+    if transaction_id is None or evidence.occurred_at is None:
         return False
-    db.add(
-        Transfer(
-            sale_id=sale.id,
-            attempt_id=attempt.id,
-            provider=evidence.provider,
-            provider_transaction_id=evidence.provider_transaction_id,
-            amount_cents=sale.amount_cents,
-            currency=CURRENCY,
-            receiver_account=attempt.receiver_account,
-            occurred_at=evidence.occurred_at,
-            received_at=now,
-            webhook_event_id=event_id,
-        )
+    transfer = Transfer(
+        sale_id=sale.id,
+        attempt_id=attempt.id,
+        provider=evidence.provider,
+        provider_transaction_id=transaction_id,
+        amount_cents=sale.amount_cents,
+        currency=CURRENCY,
+        receiver_account=attempt.receiver_account,
+        occurred_at=evidence.occurred_at,
+        received_at=now,
+        webhook_event_id=event_id,
     )
+    if not record_transfer(db, transfer):
+        return False
     attempt.status = AttemptStatus.PAID
     attempt.updated_at = now
     sale.status = SaleStatus.PAID

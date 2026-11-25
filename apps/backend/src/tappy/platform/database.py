@@ -21,6 +21,7 @@ class Database:
         engine = create_engine(
             settings.database_url.get_secret_value(),
             pool_pre_ping=True,
+            hide_parameters=True,
             connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
         )
         return cls(engine)

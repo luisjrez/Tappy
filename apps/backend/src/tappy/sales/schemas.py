@@ -40,8 +40,10 @@ class TransferResponse(BaseModel):
 
     provider_transaction_id: str
     amount_cents: int
-    occurred_at: datetime | None
+    occurred_at: datetime
     received_at: datetime
+    beneficiary_name: str
+    masked_account: str
 
 
 class SaleResponse(BaseModel):
@@ -58,5 +60,5 @@ class SaleResponse(BaseModel):
     masked_account: str
     created_at: datetime
     attempts: list[AttemptResponse]
-    received_amount_cents: int
+    confirmed_amount_cents: int
     transfers: list[TransferResponse]

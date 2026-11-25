@@ -21,17 +21,20 @@ def cents(value: object) -> int | None:
         return None
     try:
         scaled = Decimal(value) * CENTS_PER_PESO
-    except InvalidOperation:
-        return None
-    if scaled != scaled.to_integral_value() or scaled <= 0:
+        if not scaled.is_finite() or scaled != scaled.to_integral_value() or scaled <= 0:
+            return None
+    except InvalidOperation, ArithmeticError:
         return None
     return int(scaled)
 
 
 def paid_at(value: object) -> datetime | None:
-    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        return None
+    try:
         return datetime.fromtimestamp(value, UTC)
-    return None
+    except OverflowError, OSError, ValueError:
+        return None
 
 
 def attempt_reference(metadata: object) -> uuid.UUID | None:

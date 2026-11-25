@@ -169,6 +169,6 @@ class Transfer(Base):
     amount_cents: Mapped[int] = mapped_column(Integer)
     currency: Mapped[str] = mapped_column(String(3))
     receiver_account: Mapped[str] = mapped_column(String(PROVIDER_ACCOUNT_ID_MAX_LENGTH))
-    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     webhook_event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("webhook_events.id"))

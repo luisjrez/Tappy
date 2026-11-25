@@ -62,8 +62,10 @@ class AttemptView:
 class TransferView:
     provider_transaction_id: str
     amount_cents: int
-    occurred_at: datetime | None
+    occurred_at: datetime
     received_at: datetime
+    beneficiary_name: str
+    masked_account: str
 
 
 @dataclass(frozen=True)
@@ -79,7 +81,7 @@ class SaleView:
     masked_account: str
     created_at: datetime
     attempts: list[AttemptView]
-    received_amount_cents: int
+    confirmed_amount_cents: int
     transfers: list[TransferView]
 
 
@@ -143,13 +145,15 @@ def describe_sale(sale: Sale) -> SaleView:
         masked_account=masked_account(sale.account_last4),
         created_at=sale.created_at,
         attempts=[describe_attempt(attempt) for attempt in sale.attempts],
-        received_amount_cents=sum(transfer.amount_cents for transfer in sale.transfers),
+        confirmed_amount_cents=sum(transfer.amount_cents for transfer in sale.transfers),
         transfers=[
             TransferView(
                 transfer.provider_transaction_id,
                 transfer.amount_cents,
                 transfer.occurred_at,
                 transfer.received_at,
+                sale.beneficiary_name,
+                masked_account(sale.account_last4),
             )
             for transfer in sale.transfers
         ],
@@ -190,6 +194,15 @@ def create_sale(db: Session, request: SaleRequest, maximum: int, now: datetime) 
     )
     insert_with_fresh_reference(db, sale)
     return SaleCreation(describe_sale(sale), replayed=False)
+
+
+def held_sale(db: Session, sale_id: uuid.UUID) -> Sale:
+    return db.scalars(
+        select(Sale)
+        .where(Sale.id == sale_id)
+        .with_for_update(key_share=True)
+        .execution_options(populate_existing=True)
+    ).one()
 
 
 def accessible_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> Sale:

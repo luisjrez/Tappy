@@ -88,13 +88,15 @@ def test_exact_evidence_confirms_the_transfer_and_the_sale(
 
     assert status == HTTPStatus.NO_CONTENT
     assert read["status"] == "paid"
-    assert read["received_amount_cents"] == AMOUNT
+    assert read["confirmed_amount_cents"] == AMOUNT
     assert read["transfers"] == [
         {
             "provider_transaction_id": TRANSACTION,
             "amount_cents": AMOUNT,
             "occurred_at": datetime.fromtimestamp(PAID_AT, UTC).isoformat().replace("+00:00", "Z"),
             "received_at": read["transfers"][0]["received_at"],
+            "beneficiary_name": RECEIVER_A["beneficiary_name"],
+            "masked_account": "**************6782",
         }
     ]
     assert read["attempts"][0]["status"] == "paid"
@@ -114,6 +116,7 @@ def test_exact_evidence_confirms_the_transfer_and_the_sale(
         {"transactionId": None},
         {"metadata": {"tappy_attempt_id": str(uuid.uuid4())}},
         {"type": "codi.pn.payment_received"},
+        {"datePaid": None},
     ],
 )
 def test_insufficient_evidence_never_marks_the_sale_received(
@@ -126,7 +129,7 @@ def test_insufficient_evidence_never_marks_the_sale_received(
 
     assert status == HTTPStatus.NO_CONTENT
     assert read["status"] == "open"
-    assert read["received_amount_cents"] == 0
+    assert read["confirmed_amount_cents"] == 0
     assert read["transfers"] == []
     assert read["attempts"][0]["status"] == "pending"
     assert event_status(migrated_database_url) == "unmatched"
@@ -148,10 +151,10 @@ def test_an_invalid_signature_leaves_the_pending_attempt_untouched(
 
 
 FAULT = """
-CREATE FUNCTION fail_sale_updates() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION fail_event_updates() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'induced failure'; END; $$;
-CREATE TRIGGER fail_sale_updates BEFORE UPDATE ON sales
-FOR EACH ROW EXECUTE FUNCTION fail_sale_updates();
+CREATE TRIGGER fail_event_updates BEFORE UPDATE ON webhook_events
+FOR EACH ROW EXECUTE FUNCTION fail_event_updates();
 """
 
 
@@ -163,7 +166,9 @@ def test_a_failure_inside_the_application_leaves_no_partial_state_and_reprocessi
 
     stored = send(client, payment_event(sale))
     during = detail(client, operator_a, sale)
-    execute(migrated_database_url, "DROP TRIGGER fail_sale_updates ON sales")
+    transfers_during = scalar(migrated_database_url, "SELECT count(*) FROM transactions")
+    status_during = event_status(migrated_database_url)
+    execute(migrated_database_url, "DROP TRIGGER fail_event_updates ON webhook_events")
     processed = run_sales(migrated_database_url, "process-events")
     after = detail(client, operator_a, sale)
     again = run_sales(migrated_database_url, "process-events")
@@ -172,10 +177,12 @@ def test_a_failure_inside_the_application_leaves_no_partial_state_and_reprocessi
     assert during["status"] == "open"
     assert during["transfers"] == []
     assert during["attempts"][0]["status"] == "pending"
+    assert transfers_during == 0
+    assert status_during == "received"
     assert processed.returncode == 0, processed.stderr
     assert "1 event applied, 0 unmatched" in processed.stdout
     assert after["status"] == "paid"
-    assert after["received_amount_cents"] == AMOUNT
+    assert after["confirmed_amount_cents"] == AMOUNT
     assert "0 events applied, 0 unmatched" in again.stdout
     assert scalar(migrated_database_url, "SELECT count(*) FROM transactions") == 1
 
@@ -199,14 +206,22 @@ def test_the_operations_command_applies_stored_events(
     assert detail(client, operator_a, sale)["status"] == "paid"
 
 
-def test_transfers_cannot_be_changed_once_recorded(
-    client: TestClient, migrated_database_url: str
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE transactions SET amount_cents = 1",
+        "DELETE FROM transactions",
+        "TRUNCATE transactions CASCADE",
+    ],
+)
+def test_transfers_cannot_be_changed_or_removed_once_recorded(
+    client: TestClient, migrated_database_url: str, statement: str
 ) -> None:
     sale, _ = pending_qr(client, migrated_database_url)
     send(client, payment_event(sale))
 
     with pytest.raises(Exception, match="recorded transfers are immutable"):
-        execute(migrated_database_url, "UPDATE transactions SET amount_cents = 1")
+        execute(migrated_database_url, statement)
 
 
 def test_epoch_seconds_are_read_as_utc(client: TestClient, migrated_database_url: str) -> None:
@@ -217,3 +232,58 @@ def test_epoch_seconds_are_read_as_utc(client: TestClient, migrated_database_url
 
     occurred = detail(client, operator_a, sale)["transfers"][0]["occurred_at"]
     assert datetime.fromisoformat(occurred) == datetime.fromtimestamp(paid_at, UTC)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"amount": "AMOUNT_OVERFLOW"}, {"datePaid": 10**20}, {"datePaid": -5}],
+)
+def test_extreme_values_are_treated_as_insufficient_not_as_failures(
+    client: TestClient, migrated_database_url: str, changes: dict[str, object]
+) -> None:
+    sale, _ = pending_qr(client, migrated_database_url)
+    event = payment_event(sale, **changes)
+    body = json.dumps(event, separators=(",", ":")).replace('"AMOUNT_OVERFLOW"', "1e999999999")
+
+    status = deliver(client, body.encode(), Delivery(message_id="msg_extreme")).status_code
+    processed = run_sales(migrated_database_url, "process-events")
+
+    assert status == HTTPStatus.NO_CONTENT
+    assert event_status(migrated_database_url) == "unmatched"
+    assert "0 failed" in processed.stdout
+    assert scalar(migrated_database_url, "SELECT count(*) FROM transactions") == 0
+
+
+def test_a_transaction_id_already_recorded_for_another_sale_is_unmatched(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    first, operator_a = pending_qr(client, migrated_database_url)
+    send(client, payment_event(first), message_id="msg_first")
+    second = create_sale(client, operator_a, first["merchant_id"], amount_cents=AMOUNT).json()
+    client.post(
+        f"/sales/{second['id']}/attempts",
+        json={"method": "qr"},
+        headers={**operator_a, IDEMPOTENCY_HEADER: str(uuid.uuid4())},
+    )
+    second = detail(client, operator_a, second)
+    execute(
+        migrated_database_url,
+        "UPDATE payment_attempts SET provider_request_id = 'SECOND-QR' WHERE sale_id = :id",
+        {"id": second["id"]},
+    )
+    second = detail(client, operator_a, second)
+
+    status = send(client, payment_event(second), message_id="msg_second")
+    processed = run_sales(migrated_database_url, "process-events")
+
+    assert status == HTTPStatus.NO_CONTENT
+    assert detail(client, operator_a, second)["status"] == "open"
+    assert (
+        scalar(
+            migrated_database_url,
+            "SELECT status FROM webhook_events WHERE provider_event_id = 'msg_second'",
+        )
+        == "unmatched"
+    )
+    assert "0 failed" in processed.stdout
+    assert scalar(migrated_database_url, "SELECT count(*) FROM transactions") == 1
