@@ -2,6 +2,7 @@ import base64
 import binascii
 from collections.abc import Sequence
 from typing import Literal, Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_core import ErrorDetails
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
     pey_api_key: SecretStr | None = Field(default=None, min_length=16)
     pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
     attempt_creation_timeout_seconds: int = Field(default=60, ge=1)
+    timezone: str = "America/Mexico_City"
     qr_expiration_seconds: int = Field(default=900, ge=PEY_MIN_QR_EXPIRATION_SECONDS, le=24 * 3600)
     job_lease_seconds: int = Field(default=600, ge=1)
     job_batch_size: int = Field(default=20, ge=1, le=100)
@@ -52,6 +54,15 @@ class Settings(BaseSettings):
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
+
+    @field_validator("timezone")
+    @classmethod
+    def known_timezone(cls, name: str) -> str:
+        try:
+            ZoneInfo(name)
+        except ZoneInfoNotFoundError, ValueError:
+            raise ValueError("must be an IANA time zone such as America/Mexico_City") from None
+        return name
 
     @field_validator("pey_webhook_secret")
     @classmethod

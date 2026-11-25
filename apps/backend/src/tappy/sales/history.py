@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.receivers import masked_account
 from tappy.merchants.service import accessible_merchant
-from tappy.sales.models import AttemptStatus, PaymentAttempt, Sale, SaleStatus, Transfer
+from tappy.sales.models import PaymentAttempt, Sale, SaleStatus
+from tappy.sales.received import received_for_sale, sale_is_covered
 from tappy.sales.service import scoped_sales
 
 
@@ -94,21 +95,8 @@ def filtered_sales(db: Session, actor: IdentitySummary, query: HistoryQuery) -> 
 
 
 def sale_history(db: Session, actor: IdentitySummary, query: HistoryQuery) -> HistoryPage:
-    confirmed = (
-        select(func.coalesce(func.sum(Transfer.amount_cents), 0))
-        .where(Transfer.sale_id == Sale.id)
-        .scalar_subquery()
-    )
-    covered = (
-        select(Transfer.id)
-        .join(PaymentAttempt, PaymentAttempt.id == Transfer.attempt_id)
-        .where(
-            Transfer.sale_id == Sale.id,
-            Transfer.amount_cents == Sale.amount_cents,
-            PaymentAttempt.status == AttemptStatus.PAID,
-        )
-        .exists()
-    )
+    confirmed = received_for_sale()
+    covered = sale_is_covered()
     attempts = (
         select(func.count(PaymentAttempt.id)).where(PaymentAttempt.sale_id == Sale.id)
     ).scalar_subquery()

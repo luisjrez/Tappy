@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, model_validator
@@ -147,3 +147,17 @@ class ReceiptResponse(BaseModel):
     received_at: datetime
     simulated: bool
     under_review: bool
+
+
+class DailySummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    merchant_id: str
+    date: date
+    timezone: str
+    received_amount_cents: int
+    currency: str
+    transfer_count: int
+    covered_sale_count: int
+    review_sale_count: int
+    open_exception_count: int
