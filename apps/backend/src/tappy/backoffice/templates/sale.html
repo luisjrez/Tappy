@@ -20,7 +20,7 @@
         <div class="card-header"><h3 class="card-title">Attempts</h3></div>
         <div class="table-responsive">
             <table class="table card-table">
-                <thead><tr><th>Created</th><th>Method</th><th>Status</th><th>Provider QR</th><th>Expires</th><th>Previous attempt</th></tr></thead>
+                <thead><tr><th>Created</th><th>Method</th><th>Status</th><th>Provider QR</th><th>Expires</th><th>Previous attempt</th><th>Notes</th></tr></thead>
                 <tbody>
                 {% for attempt in sale.attempts %}
                     <tr>
@@ -30,9 +30,14 @@
                         <td>{{ attempt.provider_request_id or "—" }}</td>
                         <td>{{ attempt.expires_at.isoformat() if attempt.expires_at else "—" }}</td>
                         <td>{{ attempt.previous_attempt_id or "—" }}</td>
+                        <td>
+                            {% if attempt.failure_code %}failure {{ attempt.failure_code }}{% endif %}
+                            {% if attempt.verified_at %}verified unpaid {{ attempt.verified_at.isoformat() }}{% endif %}
+                            {% if attempt.withdrawn_at %}withdrawn {{ attempt.withdrawn_at.isoformat() }}{% endif %}
+                        </td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="6">No attempts.</td></tr>
+                    <tr><td colspan="7">No attempts.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

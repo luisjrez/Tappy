@@ -4,6 +4,7 @@ from typing import Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
+from tappy.sales.history import HistoryQuery
 from tappy.sales.models import (
     AttemptMethod,
     AttemptStatus,
@@ -106,6 +107,16 @@ class HistoryParams(BaseModel):
         if self.created_from and self.created_to and self.created_from >= self.created_to:
             raise ValueError("created_from must be before created_to")
         return self
+
+    def to_query(self) -> HistoryQuery:
+        return HistoryQuery(
+            merchant_id=self.merchant_id,
+            status=self.status,
+            created_from=self.created_from,
+            created_to=self.created_to,
+            limit=self.limit,
+            cursor=self.cursor,
+        )
 
 
 class SaleRowResponse(BaseModel):

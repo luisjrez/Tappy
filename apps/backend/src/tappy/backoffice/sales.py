@@ -26,15 +26,11 @@ def pesos(amount_cents: int) -> str:
     return f"{amount_cents // 100:,}.{amount_cents % 100:02d}"
 
 
-def history_query(params: HistoryParams) -> HistoryQuery:
-    return HistoryQuery(
-        merchant_id=params.merchant_id,
-        status=params.status,
-        created_from=params.created_from,
-        created_to=params.created_to,
-        limit=params.limit,
-        cursor=params.cursor,
-    )
+def admin_identity(request: Request) -> IdentitySummary:
+    identity = getattr(request.state, "admin_identity", None)
+    if not isinstance(identity, IdentitySummary):
+        raise RuntimeError("The back office view needs an authenticated administrator")
+    return identity
 
 
 class SalesView(CustomView):
@@ -70,7 +66,7 @@ class SalesView(CustomView):
         )
 
     def problem(self, request: Request, message: str, status: int) -> Response:
-        return self.render(request, "panel_problem.html", {"message": message}, status)
+        return self.render(request, "sales_problem.html", {"message": message}, status)
 
     def next_url(self, request: Request, cursor: str | None) -> str | None:
         if cursor is None:
@@ -80,13 +76,13 @@ class SalesView(CustomView):
 
     @route("")
     async def index(self, request: Request) -> Response:
-        actor: IdentitySummary = request.state.admin_identity
+        actor = admin_identity(request)
         try:
             params = HistoryParams.model_validate(dict(request.query_params))
         except ValidationError:
             return self.problem(request, INVALID_FILTERS, HTTPStatus.BAD_REQUEST)
         try:
-            page = await run_in_threadpool(self.history, actor, history_query(params))
+            page = await run_in_threadpool(self.history, actor, params.to_query())
         except InvalidCursorError as error:
             return self.problem(request, str(error), HTTPStatus.BAD_REQUEST)
         except MerchantNotFoundError as error:
@@ -99,7 +95,7 @@ class SalesView(CustomView):
 
     @route("/{sale_id:uuid}")
     async def detail(self, request: Request) -> Response:
-        actor: IdentitySummary = request.state.admin_identity
+        actor = admin_identity(request)
         sale_id: uuid.UUID = request.path_params["sale_id"]
         try:
             sale = await run_in_threadpool(self.sale, actor, sale_id)

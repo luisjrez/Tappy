@@ -25,7 +25,7 @@ from tappy.sales.errors import (
     SaleNotOpenError,
     UnverifiedAttemptError,
 )
-from tappy.sales.history import HistoryQuery, InvalidCursorError, sale_history
+from tappy.sales.history import InvalidCursorError, sale_history
 from tappy.sales.idempotency import KEY_PATTERN, IdempotencyConflictError
 from tappy.sales.schemas import (
     AttemptCreateRequest,
@@ -100,16 +100,8 @@ def create(
 def read_history(
     params: Annotated[HistoryParams, Query()], actor: CurrentIdentity, db: SessionDependency
 ) -> HistoryResponse:
-    query = HistoryQuery(
-        merchant_id=params.merchant_id,
-        status=params.status,
-        created_from=params.created_from,
-        created_to=params.created_to,
-        limit=params.limit,
-        cursor=params.cursor,
-    )
     try:
-        return HistoryResponse.model_validate(sale_history(db, actor, query))
+        return HistoryResponse.model_validate(sale_history(db, actor, params.to_query()))
     except MerchantNotFoundError as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
     except InvalidCursorError as error:
