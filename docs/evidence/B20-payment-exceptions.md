@@ -150,4 +150,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `03e4b7d` + `9be5606` | APPROVE | APPROVE | Sin violaciones duras. Notas aplicadas igualmente: incidencias de evidencia sin evento no deduplicadas (NULL distintos), el evento que abrió la incidencia pasaba a `duplicate` al reprocesar, comprobación duplicada de evidencia completa, nombres (`flag`, `doubt`, módulo `exceptions`), secciones de la plantilla, aserción de transferencias en el test de B18 |
+| 2 | `808c499` + `7c39305` | APPROVE | APPROVE | Cambios verificados sin regresiones. Pendiente aceptado y registrado como arrastre en [#30 (B22)](https://github.com/luisjrez/Tappy/issues/30): evidencia de consulta sin evento ni `transactionId` se fundiría por motivo |
+
+Hallazgos pendientes: 0.

@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B20-payment-exceptions.md#b20-vc01--antesdespués-de-las-incidencias"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
