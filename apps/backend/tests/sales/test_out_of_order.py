@@ -17,6 +17,7 @@ from tappy.payments.provider import (
     ProviderName,
     ProviderUnavailableError,
     QrOrder,
+    QrPayment,
     UncertainReason,
 )
 from tappy.platform.clock import SystemClock
@@ -107,6 +108,9 @@ class EarlyPaymentProvider:
         if self.scenario.then_times_out:
             raise ProviderUnavailableError(UncertainReason.TIMEOUT)
         return IssuedQr(self.scenario.issued_id, PAYLOAD)
+
+    def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
+        return []
 
 
 def client_with(database_url: str, provider: EarlyPaymentProvider) -> TestClient:

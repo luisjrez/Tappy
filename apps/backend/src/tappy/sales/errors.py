@@ -32,3 +32,8 @@ class ReceiverChangedError(SaleError):
         super().__init__(
             "The receiving account changed after the sale was created; create a new sale"
         )
+
+
+class AttemptNotFoundError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("Attempt not found")

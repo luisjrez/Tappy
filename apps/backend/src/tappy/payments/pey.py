@@ -1,22 +1,37 @@
+import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
+from urllib.parse import quote
 
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
+from tappy.payments.pey_events import cents, paid_at
 from tappy.payments.provider import (
     IssuedQr,
+    PaymentsQueryError,
     ProviderName,
     ProviderRejectedError,
     ProviderUnavailableError,
     QrOrder,
+    QrPayment,
+    QueryProblem,
     UncertainReason,
 )
 
 logger = logging.getLogger(__name__)
 CENTS_PER_PESO = Decimal(100)
 REJECTED_STATUSES = frozenset({400, 429})
+MAX_QUERY_PAGES = 10
+PAID = "PAID"
+QUERY_PROBLEMS: dict[int, QueryProblem] = {
+    httpx2.codes.NOT_FOUND: QueryProblem.NOT_FOUND,
+    httpx2.codes.TOO_MANY_REQUESTS: QueryProblem.RATE_LIMITED,
+    httpx2.codes.BAD_REQUEST: QueryProblem.REJECTED,
+}
 
 
 @dataclass(frozen=True)
@@ -39,6 +54,18 @@ class ErrorDetail(BaseModel):
 
 class ErrorBody(BaseModel):
     error: ErrorDetail
+
+
+class QueryItem(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    status: str
+    amount: object = None
+    date_paid: object = Field(default=None, alias="datePaid")
+
+
+class QueryPage(BaseModel):
+    items: list[QueryItem]
+    next_token: str | None = Field(default=None, alias="nextToken", min_length=1)
 
 
 def pesos(amount_cents: int) -> float:
@@ -75,6 +102,25 @@ def issued_qr(response: httpx2.Response) -> IssuedQr:
     return IssuedQr(created.id, created.qr_string)
 
 
+def query_page(response: httpx2.Response) -> QueryPage:
+    if response.status_code != httpx2.codes.OK:
+        raise PaymentsQueryError(
+            QUERY_PROBLEMS.get(response.status_code, QueryProblem.SERVER_ERROR)
+        )
+    try:
+        return QueryPage.model_validate(json.loads(response.content, parse_float=Decimal))
+    except ValueError, ValidationError:
+        raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
+
+
+def paid_payments(page: QueryPage) -> list[QrPayment]:
+    return [
+        QrPayment(item.id, cents(item.amount), paid_at(item.date_paid))
+        for item in page.items
+        if item.status == PAID
+    ]
+
+
 class PeyQrProvider:
     name = ProviderName.PEY
     simulated = False
@@ -83,19 +129,46 @@ class PeyQrProvider:
         self.settings = settings
         self.transport = transport
 
-    def post(self, order: QrOrder) -> httpx2.Response:
-        headers = {"Authorization": f"Bearer {self.settings.api_key.get_secret_value()}"}
+    @contextmanager
+    def client(self) -> Iterator[httpx2.Client]:
         with httpx2.Client(
             base_url=self.settings.base_url,
             timeout=self.settings.timeout_seconds,
             transport=self.transport,
+            headers={"Authorization": f"Bearer {self.settings.api_key.get_secret_value()}"},
         ) as client:
             try:
-                return client.post("/codi/qr", json=qr_request(order), headers=headers)
+                yield client
             except httpx2.TimeoutException:
                 raise ProviderUnavailableError(UncertainReason.TIMEOUT) from None
             except httpx2.TransportError:
                 raise ProviderUnavailableError(UncertainReason.CONNECTION) from None
+
+    def post(self, order: QrOrder) -> httpx2.Response:
+        with self.client() as client:
+            return client.post("/codi/qr", json=qr_request(order))
+
+    def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
+        try:
+            return self.query(provider_request_id)
+        except ProviderUnavailableError as error:
+            raise PaymentsQueryError(QueryProblem(error.reason.value)) from None
+
+    def query(self, provider_request_id: str) -> list[QrPayment]:
+        payments: list[QrPayment] = []
+        params: dict[str, str] = {}
+        with self.client() as client:
+            for _ in range(MAX_QUERY_PAGES):
+                page = query_page(
+                    client.get(
+                        f"/transaction/codi/qr/{quote(provider_request_id, safe='')}", params=params
+                    )
+                )
+                payments.extend(paid_payments(page))
+                if page.next_token is None:
+                    return payments
+                params = {"nextToken": page.next_token}
+        raise PaymentsQueryError(QueryProblem.TOO_MANY_PAGES)
 
     def create_qr(self, order: QrOrder) -> IssuedQr:
         response = self.post(order)

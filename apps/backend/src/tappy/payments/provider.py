@@ -26,6 +26,23 @@ class ProviderUnavailableError(Exception):
         self.reason = reason
 
 
+class QueryProblem(StrEnum):
+    TIMEOUT = "timeout"
+    CONNECTION = "connection"
+    SERVER_ERROR = "server_error"
+    INVALID_RESPONSE = "invalid_response"
+    RATE_LIMITED = "rate_limited"
+    NOT_FOUND = "not_found"
+    REJECTED = "rejected"
+    TOO_MANY_PAGES = "too_many_pages"
+
+
+class PaymentsQueryError(Exception):
+    def __init__(self, problem: QueryProblem) -> None:
+        super().__init__(f"QR payments query failed: {problem}")
+        self.problem = problem
+
+
 class ProviderRejectedError(Exception):
     def __init__(self, code: str) -> None:
         super().__init__(f"QR provider rejected the request: {code}")
@@ -47,6 +64,13 @@ class IssuedQr:
     payload: str
 
 
+@dataclass(frozen=True)
+class QrPayment:
+    transaction_id: str
+    amount_cents: int | None
+    occurred_at: datetime | None
+
+
 class QrProvider(Protocol):
     @property
     def name(self) -> ProviderName: ...
@@ -55,6 +79,8 @@ class QrProvider(Protocol):
     def simulated(self) -> bool: ...
 
     def create_qr(self, order: QrOrder) -> IssuedQr: ...
+
+    def qr_payments(self, provider_request_id: str) -> list[QrPayment]: ...
 
 
 @dataclass(frozen=True)

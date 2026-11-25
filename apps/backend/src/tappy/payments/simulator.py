@@ -1,7 +1,7 @@
 import secrets
 from collections.abc import Callable
 
-from tappy.payments.provider import IssuedQr, ProviderName, QrOrder
+from tappy.payments.provider import IssuedQr, ProviderName, QrOrder, QrPayment
 
 
 def simulated_identifier() -> str:
@@ -26,3 +26,6 @@ class SimulatedQrProvider:
             ]
         )
         return IssuedQr(self.id_factory(), payload)
+
+    def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
+        return []
