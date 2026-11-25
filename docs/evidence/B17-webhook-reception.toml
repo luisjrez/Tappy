@@ -1,5 +1,5 @@
 ticket = "B17"
-revision = "b553a22"
+revision = "5bdfcd6"
 
 [vc01]
 status = "PASS"
@@ -40,6 +40,9 @@ tests = [
     "tests/payments/test_webhook_reception.py::test_signed_events_with_an_invalid_schema_are_rejected",
     "tests/payments/test_webhook_reception.py::test_oversized_bodies_are_rejected_before_verification",
     "tests/payments/test_webhook_reception.py::test_secret_is_never_echoed",
+    "tests/payments/test_webhook_reception.py::test_absurd_timestamps_are_rejected_as_invalid",
+    "tests/payments/test_webhook_reception.py::test_overlong_event_ids_are_rejected_as_invalid",
+    "tests/payments/test_webhook_reception.py::test_secrets_that_do_not_decode_to_a_usable_key_are_refused",
 ]
 
 [[criteria]]
