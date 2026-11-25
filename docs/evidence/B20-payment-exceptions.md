@@ -35,7 +35,7 @@ Ticket: [#28](https://github.com/luisjrez/Tappy/issues/28) · Historia: [H5 #5](
 
 | Comportamiento | Red | Green |
 | --- | --- | --- |
-| Incidencias, recepción propia, no asociación | 11 de 12 fallan antes de implementar: `KeyError: 'exceptions'` (×9) y `assert 'open' == 'review'` (×2); el que pasaba (`test_a_sale_in_review_accepts_no_new_attempts`) lo hacía porque el cobro ya no estaba abierto por otra vía | `PaymentException`, `flag`, `doubt`, `record_reception`/`cover_sale`, migración `0016` |
+| Incidencias, recepción propia, no asociación | 11 de 12 fallan antes de implementar: `KeyError: 'exceptions'` (×9) y `assert 'open' == 'review'` (×2); el que pasaba (`test_a_sale_in_review_accepts_no_new_attempts`) lo hacía por otra razón: el cobro seguía con su intento QR activo (409 por intento activo), no por estar en revisión | `PaymentException`, `flag`, `doubt`, `record_reception`/`cover_sale`, migración `0016` |
 | Importe distinto | Mutación que cubre el cobro aunque el importe no coincida: falla TC01 | Cobertura solo con importe exacto |
 | Receptor ajeno | Mutación sin comprobar la cuenta: fallan los 2 casos de TC02 | `receiver_mismatch` antes de registrar nada |
 
