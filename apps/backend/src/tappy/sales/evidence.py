@@ -24,7 +24,7 @@ from tappy.sales.models import (
     Transfer,
 )
 from tappy.sales.service import held_sale
-from tappy.sales.transitions import PAYABLE_ATTEMPT_STATUSES, move
+from tappy.sales.transitions import AWAITING_QR_STATUSES, PAYABLE_ATTEMPT_STATUSES, move
 
 
 class EvidenceOutcome(StrEnum):
@@ -70,7 +70,7 @@ def locked_attempt(db: Session, *criteria: ColumnElement[bool]) -> PaymentAttemp
     )
 
 
-def awaiting_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt | None:
+def adopting_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt | None:
     if evidence.attempt_id is None:
         return None
     attempt = locked_attempt(
@@ -78,7 +78,9 @@ def awaiting_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt |
         PaymentAttempt.id == evidence.attempt_id,
         PaymentAttempt.provider == evidence.provider,
     )
-    if attempt is None or attempt.provider_request_id not in (None, evidence.provider_request_id):
+    if attempt is None or attempt.provider_request_id == evidence.provider_request_id:
+        return attempt
+    if attempt.provider_request_id is not None or attempt.status not in AWAITING_QR_STATUSES:
         return None
     attempt.provider_request_id = evidence.provider_request_id
     return attempt
@@ -94,7 +96,7 @@ def evidenced_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt 
         PaymentAttempt.provider_request_id == evidence.provider_request_id,
     )
     if attempt is None:
-        return awaiting_attempt(db, evidence)
+        return adopting_attempt(db, evidence)
     if evidence.attempt_id not in (None, attempt.id):
         return None
     return attempt

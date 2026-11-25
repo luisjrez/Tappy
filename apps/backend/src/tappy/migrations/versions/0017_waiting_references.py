@@ -16,6 +16,15 @@ def upgrade() -> None:
         "payment_exceptions",
         sa.Column("provider_request_id", sa.String(length=64), nullable=True),
     )
+    op.execute(
+        "UPDATE payment_exceptions AS e "
+        "SET provider_request_id = convert_from(w.payload, 'UTF8')::jsonb ->> 'codiQrId' "
+        "FROM webhook_events AS w "
+        "WHERE e.webhook_event_id = w.id AND e.reason = 'unassociated' "
+        "AND e.resolved_at IS NULL "
+        "AND jsonb_typeof(convert_from(w.payload, 'UTF8')::jsonb -> 'codiQrId') = 'string' "
+        "AND length(convert_from(w.payload, 'UTF8')::jsonb ->> 'codiQrId') BETWEEN 1 AND 64"
+    )
     op.create_index(
         INDEX,
         "payment_exceptions",

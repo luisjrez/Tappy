@@ -181,7 +181,9 @@ def attach_issued_qr(db: Session, attempt: PaymentAttempt, issued: IssuedQr, now
             attempt.provider_request_id = issued.provider_request_id
             attempt.qr_payload = issued.payload
             attempt.updated_at = now
-            if not move(attempt, AttemptStatus.PENDING, now):
+            if attempt.status is AttemptStatus.CREATING:
+                move(attempt, AttemptStatus.PENDING, now)
+            else:
                 logger.warning(
                     "QR %s arrived after attempt %s was moved to %s; kept as evidence",
                     issued.provider_request_id,
@@ -204,10 +206,15 @@ def record_issued_qr(
 ) -> AttemptView:
     hold_reference(db, attempt_provider(db, attempt_id), issued.provider_request_id)
     attempt = held_attempt(db, attempt_id)
-    if attempt.qr_payload is not None or attempt.provider_request_id not in (
-        None,
-        issued.provider_request_id,
-    ):
+    if attempt.provider_request_id not in (None, issued.provider_request_id):
+        logger.warning(
+            "QR %s differs from QR %s already linked to attempt %s; attempt kept",
+            issued.provider_request_id,
+            attempt.provider_request_id,
+            attempt.id,
+        )
+        raise ProviderUnavailableError(UncertainReason.DUPLICATE_PROVIDER_ID)
+    if attempt.qr_payload is not None:
         return describe_attempt(attempt)
     attach_issued_qr(db, attempt, issued, now)
     apply_waiting_events(db, attempt, now)

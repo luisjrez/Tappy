@@ -6,12 +6,18 @@ ALLOWED_TRANSITIONS: dict[AttemptStatus, frozenset[AttemptStatus]] = {
     AttemptStatus.CREATING: frozenset(
         {AttemptStatus.PENDING, AttemptStatus.RECONCILING, AttemptStatus.FAILED, AttemptStatus.PAID}
     ),
-    AttemptStatus.PENDING: frozenset({AttemptStatus.PAID}),
-    AttemptStatus.RECONCILING: frozenset({AttemptStatus.PAID}),
-    AttemptStatus.EXPIRED: frozenset({AttemptStatus.PAID}),
+    AttemptStatus.PENDING: frozenset(
+        {AttemptStatus.PAID, AttemptStatus.RECONCILING, AttemptStatus.EXPIRED, AttemptStatus.FAILED}
+    ),
+    AttemptStatus.RECONCILING: frozenset(
+        {AttemptStatus.PENDING, AttemptStatus.PAID, AttemptStatus.EXPIRED, AttemptStatus.FAILED}
+    ),
+    AttemptStatus.EXPIRED: frozenset({AttemptStatus.PAID, AttemptStatus.RECONCILING}),
     AttemptStatus.FAILED: frozenset(),
     AttemptStatus.PAID: frozenset(),
 }
+
+AWAITING_QR_STATUSES = (AttemptStatus.CREATING, AttemptStatus.RECONCILING)
 
 PAYABLE_ATTEMPT_STATUSES = tuple(
     source for source, targets in ALLOWED_TRANSITIONS.items() if AttemptStatus.PAID in targets
