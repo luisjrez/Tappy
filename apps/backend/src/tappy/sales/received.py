@@ -14,10 +14,12 @@ def received_for_sale() -> ScalarSelect[int]:
     )
 
 
-def covering() -> ColumnElement[bool]:
+def covering(
+    transfer: type[Transfer] = Transfer, attempt: type[PaymentAttempt] = PaymentAttempt
+) -> ColumnElement[bool]:
     return and_(
-        Transfer.amount_cents == Sale.amount_cents,
-        PaymentAttempt.status == AttemptStatus.PAID,
+        transfer.amount_cents == Sale.amount_cents,
+        attempt.status == AttemptStatus.PAID,
     )
 
 
@@ -36,12 +38,8 @@ def covers_its_sale() -> ColumnElement[bool]:
     first = (
         select(earlier.id)
         .join(attempt, attempt.id == earlier.attempt_id)
-        .where(
-            earlier.sale_id == Transfer.sale_id,
-            earlier.amount_cents == Sale.amount_cents,
-            attempt.status == AttemptStatus.PAID,
-        )
-        .order_by(earlier.received_at, earlier.id)
+        .where(earlier.sale_id == Transfer.sale_id, covering(earlier, attempt))
+        .order_by(earlier.occurred_at, earlier.received_at, earlier.id)
         .limit(1)
         .scalar_subquery()
     )

@@ -222,14 +222,17 @@ def covering_reception(sale: Sale) -> tuple[Transfer, PaymentAttempt] | None:
     paid = {
         attempt.id: attempt for attempt in sale.attempts if attempt.status is AttemptStatus.PAID
     }
-    return next(
-        (
-            (transfer, paid[transfer.attempt_id])
-            for transfer in sale.transfers
-            if transfer.attempt_id in paid and transfer.amount_cents == sale.amount_cents
-        ),
-        None,
+    exact = [
+        transfer
+        for transfer in sale.transfers
+        if transfer.attempt_id in paid and transfer.amount_cents == sale.amount_cents
+    ]
+    first = min(
+        exact,
+        key=lambda transfer: (transfer.occurred_at, transfer.received_at, str(transfer.id)),
+        default=None,
     )
+    return None if first is None else (first, paid[first.attempt_id])
 
 
 def describe_sale(sale: Sale) -> SaleView:
