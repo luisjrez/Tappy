@@ -173,3 +173,24 @@ def test_a_double_reception_receipt_shows_the_covering_transfer_under_review(
     assert body["provider_transaction_id"] == "TX-COVERING"
     assert body["amount_cents"] == AMOUNT
     assert body["under_review"] is True
+
+
+def test_history_detail_and_receipt_agree_on_coverage(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, attempt, operator_a = pending_sale(client, migrated_database_url)
+    pay(client, attempt, AMOUNT - 5000, "TX-SHORT-FIRST")
+    short = (
+        client.get("/sales", headers=operator_a).json()["items"][0]["covered"],
+        client.get(f"/sales/{sale['id']}", headers=operator_a).json()["covered"],
+        receipt(client, operator_a, sale["id"]).status_code,
+    )
+    pay(client, attempt, AMOUNT, "TX-EXACT-LATER")
+    exact = (
+        client.get("/sales", headers=operator_a).json()["items"][0]["covered"],
+        client.get(f"/sales/{sale['id']}", headers=operator_a).json()["covered"],
+        receipt(client, operator_a, sale["id"]).status_code,
+    )
+
+    assert short == (False, False, HTTPStatus.NOT_FOUND)
+    assert exact == (True, True, HTTPStatus.OK)

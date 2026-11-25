@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Select, exists, func, select, tuple_
+from sqlalchemy import Select, func, select, tuple_
 from sqlalchemy.orm import Session
 
 from tappy.identity.provisioning import IdentitySummary
@@ -99,8 +99,15 @@ def sale_history(db: Session, actor: IdentitySummary, query: HistoryQuery) -> Hi
         .where(Transfer.sale_id == Sale.id)
         .scalar_subquery()
     )
-    covered = exists().where(
-        PaymentAttempt.sale_id == Sale.id, PaymentAttempt.status == AttemptStatus.PAID
+    covered = (
+        select(Transfer.id)
+        .join(PaymentAttempt, PaymentAttempt.id == Transfer.attempt_id)
+        .where(
+            Transfer.sale_id == Sale.id,
+            Transfer.amount_cents == Sale.amount_cents,
+            PaymentAttempt.status == AttemptStatus.PAID,
+        )
+        .exists()
     )
     attempts = (
         select(func.count(PaymentAttempt.id)).where(PaymentAttempt.sale_id == Sale.id)

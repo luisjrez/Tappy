@@ -218,11 +218,13 @@ def late_payment_possible(attempt: PaymentAttempt) -> bool:
     return False
 
 
-def covering_transfer(sale: Sale) -> Transfer | None:
-    paid = {attempt.id for attempt in sale.attempts if attempt.status is AttemptStatus.PAID}
+def covering_reception(sale: Sale) -> tuple[Transfer, PaymentAttempt] | None:
+    paid = {
+        attempt.id: attempt for attempt in sale.attempts if attempt.status is AttemptStatus.PAID
+    }
     return next(
         (
-            transfer
+            (transfer, paid[transfer.attempt_id])
             for transfer in sale.transfers
             if transfer.attempt_id in paid and transfer.amount_cents == sale.amount_cents
         ),
@@ -244,7 +246,7 @@ def describe_sale(sale: Sale) -> SaleView:
         created_at=sale.created_at,
         attempts=[describe_attempt(attempt) for attempt in sale.attempts],
         confirmed_amount_cents=sum(transfer.amount_cents for transfer in sale.transfers),
-        covered=covering_transfer(sale) is not None,
+        covered=covering_reception(sale) is not None,
         transfers=[
             TransferView(
                 transfer.provider_transaction_id,
@@ -333,10 +335,10 @@ def read_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID, now: date
 
 def read_receipt(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> ReceiptView:
     sale = accessible_sale(db, actor, sale_id)
-    transfer = covering_transfer(sale)
-    if transfer is None:
+    reception = covering_reception(sale)
+    if reception is None:
         raise NoReceptionError
-    attempt = db.get_one(PaymentAttempt, transfer.attempt_id)
+    transfer, attempt = reception
     return ReceiptView(
         sale_id=str(sale.id),
         sale_reference=sale.reference,
