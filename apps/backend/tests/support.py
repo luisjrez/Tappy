@@ -20,6 +20,7 @@ UNREACHABLE_DATABASE_URL = (
 )
 TAPPY_COMMAND = (sys.executable, "-m", "tappy")
 IDENTITY_COMMAND = (sys.executable, "-m", "tappy.identity")
+SALES_COMMAND = (sys.executable, "-m", "tappy.sales")
 
 
 def build_settings(
@@ -75,8 +76,18 @@ def app_environment(database_url: str) -> dict[str, str]:
 def run_identity(
     database_url: str, *arguments: str, stdin: str = ""
 ) -> subprocess.CompletedProcess[str]:
+    return run_command(IDENTITY_COMMAND, database_url, *arguments, stdin=stdin)
+
+
+def run_sales(database_url: str, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return run_command(SALES_COMMAND, database_url, *arguments)
+
+
+def run_command(
+    command: tuple[str, ...], database_url: str, *arguments: str, stdin: str = ""
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [*IDENTITY_COMMAND, *arguments],
+        [*command, *arguments],
         env=isolated_environment(app_environment(database_url)),
         input=stdin,
         capture_output=True,

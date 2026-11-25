@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     pey_base_url: str = Field(default="https://api.pey.mx", pattern=PEY_BASE_URL)
     pey_api_key: SecretStr | None = Field(default=None, min_length=16)
     pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
+    attempt_creation_timeout_seconds: int = Field(default=60, ge=1)
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )

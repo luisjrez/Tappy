@@ -27,11 +27,6 @@ from tests.support import build_settings, scalar
 Q1 = "Q1"
 
 
-UNAVAILABLE = (
-    "The QR provider is unavailable (server_error); the attempt is kept for reconciliation"
-)
-
-
 class RecordingSimulator(SimulatedQrProvider):
     def __init__(self) -> None:
         super().__init__(id_factory=lambda: Q1)
@@ -282,7 +277,7 @@ def test_provider_setting_selects_the_simulator_and_rejects_unknown_values() -> 
         Settings.model_validate({**build_settings().model_dump(), "payment_provider": "other"})
 
 
-def test_unavailable_provider_fails_closed_and_keeps_the_reservation(
+def test_unavailable_provider_keeps_the_attempt_for_reconciliation(
     migrated_database_url: str,
 ) -> None:
     unavailable = UnavailableProvider()
@@ -295,10 +290,10 @@ def test_unavailable_provider_fails_closed_and_keeps_the_reservation(
         retried = create_qr(client, operator_a, sale_id, key=key)
         sale = client.get(f"/sales/{sale_id}", headers=operator_a).json()
 
-    assert failed.status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert failed.json() == {"detail": UNAVAILABLE}
+    assert failed.status_code == HTTPStatus.ACCEPTED
+    assert failed.json()["status"] == "reconciling"
     assert retried.status_code == HTTPStatus.OK
-    assert retried.json()["status"] == "creating"
-    assert [attempt["status"] for attempt in sale["attempts"]] == ["creating"]
+    assert retried.json() == failed.json()
+    assert [attempt["status"] for attempt in sale["attempts"]] == ["reconciling"]
     assert sale["attempts"][0]["qr_payload"] is None
     assert len(unavailable.orders) == 1

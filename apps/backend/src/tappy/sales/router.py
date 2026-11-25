@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
 from tappy.payments.dependencies import QrProviderDependency
-from tappy.payments.provider import ProviderRejectedError, ProviderUnavailableError
+from tappy.payments.provider import ProviderRejectedError
 from tappy.platform.dependencies import (
     ClockDependency,
     DatabaseDependency,
@@ -109,8 +109,9 @@ def attempt_request(
             "description": "Active attempt, sale not open, charges blocked or key reused"
         },
         HTTPStatus.BAD_GATEWAY: {"description": "QR provider rejected the request; attempt failed"},
-        HTTPStatus.SERVICE_UNAVAILABLE: {
-            "description": "QR provider unavailable or uncertain; the attempt stays creating"
+        HTTPStatus.ACCEPTED: {
+            "model": AttemptResponse,
+            "description": "Provider outcome uncertain: the attempt is kept reconciling",
         },
     },
 )
@@ -125,14 +126,6 @@ def reserve(
         reservation = request_attempt(database, request, provider, clock)
     except SaleNotFoundError as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
-    except ProviderUnavailableError as error:
-        raise HTTPException(
-            HTTPStatus.SERVICE_UNAVAILABLE,
-            detail=(
-                f"The QR provider is unavailable ({error.reason}); "
-                "the attempt is kept for reconciliation"
-            ),
-        ) from None
     except ProviderRejectedError as error:
         raise HTTPException(
             HTTPStatus.BAD_GATEWAY,
@@ -148,4 +141,6 @@ def reserve(
         raise HTTPException(HTTPStatus.CONFLICT, detail=str(error)) from None
     if reservation.replayed:
         response.status_code = HTTPStatus.OK
+    if reservation.uncertain:
+        response.status_code = HTTPStatus.ACCEPTED
     return AttemptResponse.model_validate(reservation.attempt)

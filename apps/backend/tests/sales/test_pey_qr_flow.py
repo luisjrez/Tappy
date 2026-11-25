@@ -76,20 +76,15 @@ def test_definitive_rejection_fails_the_attempt_with_its_code(
     assert API_KEY not in text
 
 
-def test_uncertain_response_keeps_the_attempt_creating(migrated_database_url: str) -> None:
+def test_uncertain_response_keeps_the_attempt_reconciling(migrated_database_url: str) -> None:
     fake = FakePey(201, {"qrString": "payload without id"})
 
     status, body, detail, _ = run_qr(migrated_database_url, fake)
 
-    assert status == HTTPStatus.SERVICE_UNAVAILABLE
-    assert body == {
-        "detail": (
-            "The QR provider is unavailable (invalid_response); "
-            "the attempt is kept for reconciliation"
-        )
-    }
+    assert status == HTTPStatus.ACCEPTED
+    assert body["status"] == "reconciling"
     attempt = detail["attempts"][0]
-    assert attempt["status"] == "creating"
+    assert attempt == body
     assert attempt["provider_request_id"] is None
 
 
@@ -148,13 +143,9 @@ def test_a_provider_id_already_linked_to_another_attempt_is_uncertain(
             )
 
     assert responses[0].status_code == HTTPStatus.CREATED
-    assert responses[1].status_code == HTTPStatus.SERVICE_UNAVAILABLE
-    assert responses[1].json() == {
-        "detail": (
-            "The QR provider is unavailable (duplicate_provider_id); "
-            "the attempt is kept for reconciliation"
-        )
-    }
+    assert responses[1].status_code == HTTPStatus.ACCEPTED
+    assert responses[1].json()["status"] == "reconciling"
+    assert responses[1].json()["provider_request_id"] is None
     assert (
         scalar(
             migrated_database_url,
@@ -165,7 +156,8 @@ def test_a_provider_id_already_linked_to_another_attempt_is_uncertain(
     )
     assert (
         scalar(
-            migrated_database_url, "SELECT count(*) FROM payment_attempts WHERE status = 'creating'"
+            migrated_database_url,
+            "SELECT count(*) FROM reconciliation_jobs WHERE reason = 'duplicate_provider_id'",
         )
         == 1
     )
