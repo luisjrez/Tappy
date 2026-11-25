@@ -1,5 +1,5 @@
 ticket = "B33"
-revision = "cd109cb"
+revision = "0081ba7"
 
 [vc01]
 status = "PASS"
@@ -24,6 +24,8 @@ tests = [
     "tests/sales/test_quotas.py::test_repeated_requests_replay_without_spending_the_quota",
     "tests/sales/test_quotas.py::test_each_merchant_has_its_own_quota",
     "tests/sales/test_quotas.py::test_qr_requests_over_the_quota_get_429_without_calling_the_provider",
+    "tests/sales/test_quotas.py::test_repeated_qr_requests_replay_without_spending_the_quota_or_calling_the_provider",
+    "tests/sales/test_quotas.py::test_a_refused_qr_request_spends_no_quota",
     "tests/sales/test_quotas.py::test_each_actor_has_a_read_quota_that_does_not_block_others",
     "tests/sales/test_quotas.py::test_unauthenticated_reads_are_refused_before_spending_any_quota",
     "tests/sales/test_quotas.py::test_oversized_bodies_are_refused_before_creating_anything",
