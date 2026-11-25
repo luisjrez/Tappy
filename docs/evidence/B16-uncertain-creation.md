@@ -8,7 +8,7 @@ Ticket: [#24](https://github.com/luisjrez/Tappy/issues/24) · Historia: [H4 #4](
 
 - Ticket, UC/AC/TC y comprobación: B16-UC01–UC03, B16-AC01–AC03, B16-TC01–TC03, B16-VC01. Incluye el arrastre de B14 en [#24](https://github.com/luisjrez/Tappy/issues/24) (fallo del proveedor que dejaba el intento `creating` activo y caída entre la llamada y el registro).
 - Modalidad: **antes/después** para el resultado incierto de `POST /sales/{id}/attempts` (B14/B15 respondían `503` y dejaban el intento `creating`) y **resultado inicial** para los trabajos de conciliación y la interfaz operativa (`python -m tappy.sales`).
-- Base: rama B15 `85786d1` (PR #71), stack de H4 #68. Revisiones: candidato `1e3096e` → correcciones de review `ad31e26` (revisión final; VC01 repetida sobre ella). Commit aparte `fb011e1`: el manifiesto de B15 sigue el test renombrado (`…keeps_the_attempt_creating` → `…keeps_the_attempt_reconciling`), con el precedente de B42/B06.
+- Base: rama B15 `85786d1` (PR #71), stack de H4 #68. Revisiones: candidato `1e3096e` → correcciones de review `ad31e26` (VC01 repetida sobre ella) → `27d5fd6` (solo tests: cada motivo incierto tiene su motivo de trabajo). Commit aparte `fb011e1`: el manifiesto de B15 sigue el test renombrado (`…keeps_the_attempt_creating` → `…keeps_the_attempt_reconciling`), con el precedente de B42/B06.
 - Entorno: macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-24 (UTC 2026-11-25). Ejecutor: sesión local de desarrollo del autor del PR.
 - Datos sintéticos (comercios «Tienda Demo A/B», CLABE ficticias, clave de prueba generada por ejecución).
 
@@ -28,7 +28,7 @@ Ticket: [#24](https://github.com/luisjrez/Tappy/issues/24) · Historia: [H4 #4](
 | --- | --- | --- | --- | --- |
 | B16-UC01 | B16-AC01 | B16-TC01 | `test_lost_response_leaves_the_attempt_reconciling_with_a_durable_job` (el proveedor recibió la orden y la respuesta se perdió: `202`, `reconciling`, referencia, sin id inventado; trabajo `timeout:pending`); `test_every_uncertain_outcome_is_kept_for_reconciliation` (`server_error`, `invalid_response`, `connection`); `test_uncertain_response_keeps_the_attempt_reconciling` (pey 201 sin id); `test_a_provider_id_already_linked_to_another_attempt_is_uncertain` | PASS |
 | B16-UC02 | B16-AC02 | B16-TC02 | `test_retry_with_the_same_key_recovers_the_attempt_without_a_second_request` (misma clave → `200` mismo intento; otra clave → `409`; una sola orden al proveedor; 1 intento, 1 trabajo); `test_unavailable_provider_keeps_the_attempt_for_reconciliation` | PASS |
-| B16-UC03 | B16-AC03 | B16-TC03 | `test_uncertainty_and_job_survive_a_restart_and_show_in_the_operations_command` (nueva instancia: sigue `reconciling`; el comando lista intento, referencia, motivo y `pending`; nada `failed`); `test_interrupted_creations_are_moved_to_reconciliation_by_the_operations_command`; `test_recent_creations_are_left_alone`; `test_recovery_runs_are_idempotent`; `test_a_late_qr_for_a_recovered_attempt_is_kept_as_evidence` (la recuperación ocurre durante la llamada: el QR tardío se guarda, el intento sigue `reconciling`, `202`); `test_creation_timeout_must_outlast_every_provider_timeout_phase` | PASS |
+| B16-UC03 | B16-AC03 | B16-TC03 | `test_uncertainty_and_job_survive_a_restart_and_show_in_the_operations_command` (nueva instancia: sigue `reconciling`; el comando lista intento, referencia, motivo y `pending`; nada `failed`); `test_interrupted_creations_are_moved_to_reconciliation_by_the_operations_command`; `test_recent_creations_are_left_alone`; `test_recovery_runs_are_idempotent`; `test_a_late_qr_for_a_recovered_attempt_is_kept_as_evidence` (la recuperación ocurre durante la llamada: el QR tardío se guarda, el intento sigue `reconciling`, `202`); `test_creation_timeout_must_outlast_every_provider_timeout_phase`; `test_every_uncertain_reason_has_a_job_reason` | PASS |
 
 ## TDD
 
@@ -112,7 +112,7 @@ Comprobaciones: pey recibió una sola petición por intento (el reintento no la 
 
 ## Checks
 
-`uv run python -m quality.check` sobre `ad31e26` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (317 passed, Postgres real aislado), api (15 contratos sin diferencias); `evidence` B01–B15 APPROVED.
+`uv run python -m quality.check` sobre `27d5fd6` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (322 passed, Postgres real aislado), api (15 contratos sin diferencias); `evidence` B01–B15 APPROVED.
 
 ## Supresiones
 
@@ -124,4 +124,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `1e3096e` + `ca996fd` | CHANGES_REQUESTED | CHANGES_REQUESTED | Ambos ejes (riesgo financiero): `recover-interrupted` podía mover un intento cuya llamada seguía en curso y, si pey respondía después, el id y el payload del QR se descartaban sin rastro; el umbral no estaba ligado al timeout de pey. Juicios: dos banderas para el status, `reason` como texto libre, índice redundante, `tries`/`lease_until` sin uso, CLI distinto del de identidad, N+1 en el listado, SHA del «antes» |
+| 2 | `ad31e26` + `f282dec` | APPROVE | APPROVE | QR tardío guardado como evidencia (Red→Green), umbral > 4 × timeout de pey, motivos tipados, `AttemptOutcome`, columnas especulativas retiradas, VC01 repetida con tiempos válidos. Menores aplicados en `27d5fd6` (correspondencia de motivos, constante compartida). Nota aceptada: un rechazo definitivo que llegara después de la recuperación no se registra (sin QR emitido, sin dinero en riesgo) |
+
+Hallazgos pendientes: 0.

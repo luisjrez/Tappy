@@ -1,5 +1,5 @@
 ticket = "B16"
-revision = "ad31e26"
+revision = "27d5fd6"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B16-uncertain-creation.md#b16-vc01--antesdespués-y-recuperación-real"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -54,4 +54,5 @@ tests = [
     "tests/sales/test_uncertain_creation.py::test_recovery_runs_are_idempotent",
     "tests/sales/test_uncertain_creation.py::test_a_late_qr_for_a_recovered_attempt_is_kept_as_evidence",
     "tests/sales/test_uncertain_creation.py::test_creation_timeout_must_outlast_every_provider_timeout_phase",
+    "tests/sales/test_uncertain_creation.py::test_every_uncertain_reason_has_a_job_reason",
 ]
