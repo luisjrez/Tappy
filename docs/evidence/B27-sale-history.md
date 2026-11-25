@@ -13,7 +13,7 @@ Ticket: [#35](https://github.com/luisjrez/Tappy/issues/35) · Historia: [H6 #6](
 - **Base y revisiones:**
   - Base: rama B26 `0490ed2` ([PR #82](https://github.com/luisjrez/Tappy/pull/82)), stack #68.
   - Candidato: `675e62f`.
-  - Correcciones de la review: `27d4eb2`, revisión final. La VC01 se repitió sobre ella.
+  - Correcciones de la review: `27d4eb2`, revisión final del código. La VC01 se repitió sobre ella. `9678241` solo renombra un test (nit de la ronda 2), sin cambio de comportamiento.
 - **Entorno:** macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -40,7 +40,7 @@ Todos los tests están en `tests/sales/test_sale_history.py`.
 | UC | AC | TC | Test real | Resultado |
 | --- | --- | --- | --- | --- |
 | B27-UC01 | B27-AC01 | B27-TC01 | `test_consecutive_pages_are_stable_without_repeats_or_gaps` (5 ventas, empate de `created_at` en el límite de página, páginas 2/2/1, sin repeticiones ni huecos, la página 2 no cambia al insertar una venta nueva); `test_rows_carry_the_sale_summary_without_attempt_duplication` | PASS |
-| B27-UC02 | B27-AC02 | B27-TC02 | `test_invalid_history_requests_are_rejected` (estado inválido, límites 0 y 51, parámetro desconocido, cursor manipulado, fecha sin zona, rango invertido, `merchant_id` mal formado); `test_a_page_holds_at_most_fifty_sales`; `test_history_never_exposes_another_merchant` (filtro ajeno `404`, cursor de administrador reutilizado por un operador, administrador ve todo, sin sesión `401`); `test_history_filters_by_creation_time_and_merchant` | PASS |
+| B27-UC02 | B27-AC02 | B27-TC02 | `test_invalid_history_requests_are_rejected` (estado inválido, límites 0 y 51, parámetro desconocido, cursor manipulado, fecha sin zona, rango invertido, `merchant_id` mal formado); `test_fifty_is_the_largest_accepted_limit`; `test_history_never_exposes_another_merchant` (filtro ajeno `404`, cursor de administrador reutilizado por un operador, administrador ve todo, sin sesión `401`); `test_history_filters_by_creation_time_and_merchant` | PASS |
 | B27-UC03 | B27-AC03 | B27-TC03 | `test_status_filters_keep_pending_apart_from_confirmed_one_row_per_sale` (venta con dos intentos + pendiente adicional + confirmada; páginas de 1 con `open`; `paid` aparte; `attempt_count` 1/1/2) | PASS |
 | Arrastre B10 | — | B10-TC03 | `test_history_keeps_confirmed_sales_after_the_receiver_is_disabled` (receptor deshabilitado: el historial muestra la venta pagada con su instantánea y una venta nueva da `409`) | PASS |
 
@@ -295,6 +295,7 @@ AC PASS / AC aplicables = 3/3 = **100%**. El arrastre de B10 también pasa.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `675e62f` | APPROVE | REQUEST_CHANGES | Ver detalle debajo de la tabla |
+| 2 | `27d4eb2` + `d3d9f95` | APPROVE | APPROVE | Máximo de 50 corregido y probado; evidencia fiel. Nit aplicado en `9678241`: el test del límite se llama `test_fifty_is_the_largest_accepted_limit` |
 
 Detalle de la ronda 1, aplicado en `27d4eb2` con Red/Green:
 
@@ -309,4 +310,4 @@ Registrados sin cambio:
 - la regla de `covered` y de lo confirmado está tanto en SQL (historial) como en Python (detalle), para evitar N+1;
 - falta un índice para paginar con volumen.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.

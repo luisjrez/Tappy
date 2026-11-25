@@ -1,5 +1,5 @@
 ticket = "B27"
-revision = "27d4eb2"
+revision = "9678241"
 
 [vc01]
 status = "PASS"
@@ -8,7 +8,7 @@ evidence = "docs/evidence/B27-sale-history.md#b27-vc01--resultado-inicial-del-hi
 
 [review]
 standards = "APPROVED"
-spec = "PENDING"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -34,7 +34,7 @@ id = "B27-TC02"
 mode = "automated"
 tests = [
     "tests/sales/test_sale_history.py::test_invalid_history_requests_are_rejected",
-    "tests/sales/test_sale_history.py::test_a_page_holds_at_most_fifty_sales",
+    "tests/sales/test_sale_history.py::test_fifty_is_the_largest_accepted_limit",
     "tests/sales/test_sale_history.py::test_history_never_exposes_another_merchant",
     "tests/sales/test_sale_history.py::test_history_filters_by_creation_time_and_merchant",
     "tests/sales/test_sale_history.py::test_history_keeps_confirmed_sales_after_the_receiver_is_disabled",
