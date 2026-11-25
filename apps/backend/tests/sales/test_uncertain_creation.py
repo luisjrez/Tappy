@@ -15,6 +15,7 @@ from tappy.sales.attempts import AttemptRequest, recover_interrupted, reserve_at
 from tappy.sales.models import AttemptMethod, JobReason
 from tests.sales.support import (
     AMOUNT,
+    AMPLE_QUOTA,
     IDEMPOTENCY_HEADER,
     OPERATOR_A,
     actor_of,
@@ -158,7 +159,11 @@ def interrupted_attempt(client: TestClient, database_url: str) -> str:
     try:
         with database.transaction() as session:
             request = AttemptRequest(
-                actor_of(client, operator_a), uuid.UUID(sale_id), AttemptMethod.QR, "k" * 16
+                actor_of(client, operator_a),
+                uuid.UUID(sale_id),
+                AttemptMethod.QR,
+                "k" * 16,
+                AMPLE_QUOTA,
             )
             reserved = reserve_attempt(session, request, SimulatedQrProvider(), RESERVED_AT)
     finally:

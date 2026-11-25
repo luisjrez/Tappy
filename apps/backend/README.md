@@ -122,6 +122,21 @@ A sale is the commercial obligation to receive a fixed amount. Creating one does
 - A new attempt on the same sale is a retry: it keeps the sale, amount and reference and links the previous attempt (`previous_attempt_id`; each attempt can be retried once). It is refused with `409` while an attempt is active or uncertain (`creating`, `pending`, `reconciling`) and while the latest attempt is `expired` but not yet verified. Expiring an attempt enqueues a verification job; when `run-jobs` (or `reconcile`) finds no payment for the expired QR, the attempt gets `verified_at` and a retry is allowed; a payment found instead confirms the sale. `failed` attempts can be retried at once. `late_payment_possible` is `true` on a retry whose previous attempt issued a QR, because that QR may still receive a late payment.
 - Amount, currency, concept, merchant, reference and receiver snapshot cannot change after creation: there is no update route and the database rejects such updates.
 
+### Quotas and request limits
+
+Quotas are counted in Postgres (`operation_quotas`), so they hold across processes, restarts and concurrent requests: a reservation is an atomic upsert in the same transaction as the work it allows, and a creation that rolls back gives its slot back. Windows are fixed (`TAPPY_QUOTA_WINDOW_SECONDS`, default 60) and a merchant's or identity's previous windows are purged when it reserves again.
+
+| Setting | Default | Counts | Scope |
+| --- | --- | --- | --- |
+| `TAPPY_SALE_CREATION_QUOTA` | 10 | New sales (`POST /sales`) | Merchant |
+| `TAPPY_ATTEMPT_CREATION_QUOTA` | 10 | New attempts (`POST /sales/{id}/attempts`), the only route that calls the provider to create a QR | Merchant |
+| `TAPPY_SALE_READ_QUOTA` | 120 | `GET /sales`, `GET /sales/{id}`, `GET /sales/{id}/receipt` | Authenticated identity |
+
+- Over the quota the API answers `429` with a `Retry-After` header and `{"detail", "retry_after_seconds"}`: the seconds, rounded up, until the current window ends. Nothing is created and the provider is not called.
+- Only new work spends quota: a repeated `Idempotency-Key` returns the stored result for free, and a request refused earlier (validation, blocked receiver, active attempt) spends nothing. Unauthenticated requests are refused with `401` before any quota is counted.
+- Reading a sale only uses Tappy's own state: no read calls the provider, however often a pending attempt is polled. The provider is queried only by `reconcile` and `run-jobs`.
+- API request bodies are limited to `TAPPY_API_MAX_BODY_BYTES` (default 16384) and answer `413` above it, whether the size is declared or streamed. Webhooks keep their own limit. Pages of `GET /sales` stay limited to 50 rows.
+
 ## Provider webhooks
 
 `POST /webhooks/pey` receives pey events signed with [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md). It answers `204` only after the event is stored in Postgres; verification and storage happen before any effect on sales (applying events is a later step).

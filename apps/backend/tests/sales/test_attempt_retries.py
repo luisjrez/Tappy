@@ -20,6 +20,7 @@ from tests.payments.pey_support import CREATED, FakePey
 from tests.payments.webhook_support import settings_for
 from tests.sales.support import (
     AMOUNT,
+    AMPLE_QUOTA,
     IDEMPOTENCY_HEADER,
     OPERATOR_A,
     actor_of,
@@ -264,6 +265,7 @@ def test_concurrent_retries_leave_a_single_new_attempt(
                 uuid.UUID(sale["id"]),
                 AttemptMethod.QR,
                 str(uuid.uuid4()),
+                AMPLE_QUOTA,
             )
             held = reserve_attempt(racing, request, fake.provider(), clock.now())
             with ThreadPoolExecutor(max_workers=1) as pool:

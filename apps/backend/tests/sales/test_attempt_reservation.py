@@ -15,6 +15,7 @@ from tappy.sales.models import AttemptMethod
 from tests.sales.support import (
     ADMIN,
     AMOUNT,
+    AMPLE_QUOTA,
     BLOCKED_DISABLED,
     IDEMPOTENCY_HEADER,
     OPERATOR_A,
@@ -250,6 +251,7 @@ def test_concurrent_reservations_leave_a_single_active_attempt(
                 uuid.UUID(sale_id),
                 AttemptMethod.QR,
                 str(uuid.uuid4()),
+                AMPLE_QUOTA,
             )
             held = reserve_attempt(racing, request, SimulatedQrProvider(), RESERVED_AT)
             with ThreadPoolExecutor(max_workers=1) as pool:
@@ -295,7 +297,7 @@ def test_reservation_interrupted_before_commit_leaves_no_trace(
     try:
         with database.session_factory() as interrupted, interrupted.begin():
             request = AttemptRequest(
-                actor_of(client, operator_a), uuid.UUID(sale_id), AttemptMethod.QR, key
+                actor_of(client, operator_a), uuid.UUID(sale_id), AttemptMethod.QR, key, AMPLE_QUOTA
             )
             reserve_attempt(interrupted, request, SimulatedQrProvider(), RESERVED_AT)
             interrupted.rollback()

@@ -1,6 +1,7 @@
 import base64
 import binascii
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -51,9 +52,18 @@ class Settings(BaseSettings):
     pey_webhook_secret: SecretStr | None = None
     webhook_tolerance_seconds: int = Field(default=300, ge=1, le=3600)
     webhook_max_body_bytes: int = Field(default=256 * 1024, ge=1024, le=1024 * 1024)
+    api_max_body_bytes: int = Field(default=16 * 1024, ge=1024, le=1024 * 1024)
+    quota_window_seconds: int = Field(default=60, ge=1, le=24 * 3600)
+    sale_creation_quota: int = Field(default=10, ge=1)
+    attempt_creation_quota: int = Field(default=10, ge=1)
+    sale_read_quota: int = Field(default=120, ge=1)
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
+
+    @property
+    def quota_window(self) -> timedelta:
+        return timedelta(seconds=self.quota_window_seconds)
 
     @property
     def zone(self) -> ZoneInfo:

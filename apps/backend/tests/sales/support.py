@@ -1,6 +1,6 @@
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from httpx2 import Response
@@ -11,6 +11,7 @@ from tappy.main import create_app
 from tappy.payments.provider import QrProvider
 from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
+from tappy.platform.quotas import QuotaPolicy
 from tests.support import create_identity, scalar
 
 ADMIN = "admin@tappy.example"
@@ -33,6 +34,7 @@ DEFAULT_MAXIMUM = 100_000_000
 AMOUNT = 30000
 CONFIGURED_MAXIMUM = 50000
 IDEMPOTENCY_HEADER = "Idempotency-Key"
+AMPLE_QUOTA = QuotaPolicy(1000, timedelta(minutes=1))
 
 
 def start_client(

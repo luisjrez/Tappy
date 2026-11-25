@@ -2,6 +2,7 @@ from tappy.identity.models import AccessSession, Identity
 from tappy.merchants.models import Membership, Merchant, ReceivingAccount
 from tappy.payments.events import WebhookEvent, WebhookEventConflict
 from tappy.platform.persistence import Base
+from tappy.platform.quotas import OperationQuota
 from tappy.sales.idempotency import IdempotencyRequest
 from tappy.sales.models import (
     ExceptionNote,
@@ -19,6 +20,7 @@ __all__ = [
     "Identity",
     "Membership",
     "Merchant",
+    "OperationQuota",
     "PaymentAttempt",
     "PaymentException",
     "ReceivingAccount",

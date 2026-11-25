@@ -12,6 +12,7 @@ from tappy.sales.service import SaleRequest, create_sale
 from tests.sales.support import (
     ADMIN,
     AMOUNT,
+    AMPLE_QUOTA,
     BLOCKED_MISSING,
     DEFAULT_MAXIMUM,
     IDEMPOTENCY_HEADER,
@@ -190,7 +191,7 @@ def race(
     database = Database.from_settings(build_settings(database_url=database_url))
     try:
         with database.session_factory() as racing, racing.begin():
-            request = SaleRequest(summary, uuid.UUID(merchant_a), AMOUNT, None, KEY)
+            request = SaleRequest(summary, uuid.UUID(merchant_a), AMOUNT, None, KEY, AMPLE_QUOTA)
             held = create_sale(racing, request, DEFAULT_MAXIMUM, RACED_AT)
             with ThreadPoolExecutor(max_workers=1) as pool:
                 attempt = pool.submit(

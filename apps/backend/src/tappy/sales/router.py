@@ -1,6 +1,6 @@
 import uuid
 from http import HTTPStatus
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 
@@ -14,6 +14,8 @@ from tappy.platform.dependencies import (
     SessionDependency,
     SettingsDependency,
 )
+from tappy.platform.quota_responses import QuotaExceededResponse
+from tappy.platform.quotas import QuotaOperation, QuotaPolicy, identity_scope, reserve_quota
 from tappy.sales.attempts import AttemptOutcome, AttemptRequest, request_attempt
 from tappy.sales.errors import (
     ActiveAttemptError,
@@ -39,6 +41,32 @@ from tappy.sales.schemas import (
 from tappy.sales.service import SaleRequest, create_sale, read_receipt, read_sale
 
 router = APIRouter(prefix="/sales", tags=["sales"])
+QUOTA_EXCEEDED: dict[int | str, dict[str, Any]] = {
+    HTTPStatus.TOO_MANY_REQUESTS: {
+        "model": QuotaExceededResponse,
+        "description": "Quota exceeded; retry after the seconds in Retry-After",
+    }
+}
+
+
+def sale_read_quota(
+    actor: CurrentIdentity,
+    database: DatabaseDependency,
+    clock: ClockDependency,
+    settings: SettingsDependency,
+) -> None:
+    policy = QuotaPolicy(settings.sale_read_quota, settings.quota_window)
+    with database.transaction() as db:
+        reserve_quota(
+            db,
+            QuotaOperation.SALE_READ,
+            identity_scope(uuid.UUID(actor.reference)),
+            policy,
+            clock.now(),
+        )
+
+
+SaleReadQuota = Depends(sale_read_quota)
 OUTCOME_STATUS = {
     AttemptOutcome.CREATED: HTTPStatus.CREATED,
     AttemptOutcome.REPLAYED: HTTPStatus.OK,
@@ -50,9 +78,15 @@ def sale_request(
     payload: SaleCreateRequest,
     idempotency_key: Annotated[str, Header(pattern=KEY_PATTERN)],
     actor: CurrentOperator,
+    settings: SettingsDependency,
 ) -> SaleRequest:
     return SaleRequest(
-        actor, payload.merchant_id, payload.amount_cents, payload.concept, idempotency_key
+        actor,
+        payload.merchant_id,
+        payload.amount_cents,
+        payload.concept,
+        idempotency_key,
+        QuotaPolicy(settings.sale_creation_quota, settings.quota_window),
     )
 
 
@@ -60,6 +94,7 @@ def sale_request(
     "",
     status_code=HTTPStatus.CREATED,
     responses={
+        **QUOTA_EXCEEDED,
         HTTPStatus.NOT_FOUND: {"description": "Merchant not found or not accessible"},
         HTTPStatus.OK: {
             "model": SaleResponse,
@@ -92,7 +127,9 @@ def create(
 
 @router.get(
     "",
+    dependencies=[SaleReadQuota],
     responses={
+        **QUOTA_EXCEEDED,
         HTTPStatus.NOT_FOUND: {"description": "Merchant not found or not accessible"},
         HTTPStatus.UNPROCESSABLE_CONTENT: {"description": "Invalid filter, limit or cursor"},
     },
@@ -108,7 +145,11 @@ def read_history(
         raise HTTPException(HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(error)) from None
 
 
-@router.get("/{sale_id}", responses={HTTPStatus.NOT_FOUND: {"description": "Sale not found"}})
+@router.get(
+    "/{sale_id}",
+    dependencies=[SaleReadQuota],
+    responses={**QUOTA_EXCEEDED, HTTPStatus.NOT_FOUND: {"description": "Sale not found"}},
+)
 def read_one(
     sale_id: uuid.UUID, actor: CurrentIdentity, db: SessionDependency, clock: ClockDependency
 ) -> SaleResponse:
@@ -120,7 +161,11 @@ def read_one(
 
 @router.get(
     "/{sale_id}/receipt",
-    responses={HTTPStatus.NOT_FOUND: {"description": "Sale not found or no confirmed reception"}},
+    dependencies=[SaleReadQuota],
+    responses={
+        **QUOTA_EXCEEDED,
+        HTTPStatus.NOT_FOUND: {"description": "Sale not found or no confirmed reception"},
+    },
 )
 def read_receipt_data(
     sale_id: uuid.UUID, actor: CurrentIdentity, db: SessionDependency
@@ -136,14 +181,17 @@ def attempt_request(
     payload: AttemptCreateRequest,
     idempotency_key: Annotated[str, Header(pattern=KEY_PATTERN)],
     actor: CurrentOperator,
+    settings: SettingsDependency,
 ) -> AttemptRequest:
-    return AttemptRequest(actor, sale_id, payload.method, idempotency_key)
+    quota = QuotaPolicy(settings.attempt_creation_quota, settings.quota_window)
+    return AttemptRequest(actor, sale_id, payload.method, idempotency_key, quota)
 
 
 @router.post(
     "/{sale_id}/attempts",
     status_code=HTTPStatus.CREATED,
     responses={
+        **QUOTA_EXCEEDED,
         HTTPStatus.OK: {
             "model": AttemptResponse,
             "description": "Repeated request: the attempt reserved with this key",

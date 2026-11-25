@@ -15,9 +15,21 @@ from tappy.platform import health
 from tappy.platform.clock import Clock, SystemClock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
+from tappy.platform.quota_responses import quota_exceeded_response
+from tappy.platform.quotas import QuotaExceededError
 from tappy.platform.validation import validation_error_response
 from tappy.sales import exceptions_router, reports_router
 from tappy.sales import router as sales_router
+
+API_ROUTERS = (
+    health.router,
+    identity_router.router,
+    operators_router.router,
+    merchants_router.router,
+    sales_router.router,
+    reports_router.router,
+    exceptions_router.router,
+)
 
 
 def create_app(
@@ -38,13 +50,9 @@ def create_app(
     app.state.clock = clock or SystemClock()
     app.state.qr_provider = qr_provider or provider_from(settings)
     app.add_exception_handler(RequestValidationError, validation_error_response)
-    app.include_router(health.router)
-    app.include_router(identity_router.router)
-    app.include_router(operators_router.router)
-    app.include_router(merchants_router.router)
-    app.include_router(sales_router.router)
-    app.include_router(reports_router.router)
-    app.include_router(exceptions_router.router)
+    app.add_exception_handler(QuotaExceededError, quota_exceeded_response)
+    for router in API_ROUTERS:
+        app.include_router(router, max_body_size=settings.api_max_body_bytes)
     app.include_router(webhooks_router.router)
     mount_admin(app, settings, database, app.state.clock)
     return app

@@ -23,6 +23,7 @@ from tappy.payments.provider import (
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
 from tappy.platform.persistence import is_unique_violation
+from tappy.platform.quotas import QuotaOperation, QuotaPolicy, merchant_scope, reserve_quota
 from tappy.sales.errors import (
     ActiveAttemptError,
     ReceiverChangedError,
@@ -62,6 +63,7 @@ class AttemptRequest:
     sale_id: uuid.UUID
     method: AttemptMethod
     idempotency_key: str
+    quota: QuotaPolicy
 
 
 class AttemptOutcome(StrEnum):
@@ -146,6 +148,9 @@ def reserve_attempt(
     receiver = held_issuing_receiver(db, held.merchant_id)
     ensure_same_receiver(held, receiver)
     previous = attempt_to_retry(db, held.id)
+    reserve_quota(
+        db, QuotaOperation.ATTEMPT_CREATION, merchant_scope(held.merchant_id), request.quota, now
+    )
     attempt = PaymentAttempt(
         id=attempt_id,
         sale_id=held.id,

@@ -14,6 +14,7 @@ from tappy.merchants.models import Merchant
 from tappy.merchants.receivers import held_issuing_receiver, masked_account
 from tappy.merchants.service import accessible_merchant, scoped_ids
 from tappy.platform.persistence import is_unique_violation
+from tappy.platform.quotas import QuotaOperation, QuotaPolicy, merchant_scope, reserve_quota
 from tappy.sales.errors import InvalidConceptError, NoReceptionError, SaleNotFoundError
 from tappy.sales.expiration import expire_due_attempts
 from tappy.sales.idempotency import (
@@ -47,6 +48,7 @@ class SaleRequest:
     amount_cents: int
     concept: str | None
     idempotency_key: str
+    quota: QuotaPolicy
 
 
 class NextAction(StrEnum):
@@ -309,6 +311,7 @@ def create_sale(db: Session, request: SaleRequest, maximum: int, now: datetime) 
     if replayed_id is not None:
         return SaleCreation(describe_sale(db.get_one(Sale, replayed_id)), replayed=True)
     receiver = held_issuing_receiver(db, merchant.id)
+    reserve_quota(db, QuotaOperation.SALE_CREATION, merchant_scope(merchant.id), request.quota, now)
     sale = Sale(
         id=sale_id,
         merchant_id=merchant.id,
