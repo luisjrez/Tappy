@@ -1,0 +1,53 @@
+ticket = "B25"
+revision = "99e6787"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B25-sale-retry.md#b25-vc01--antesdespués-del-reintento"
+
+[review]
+standards = "APPROVED"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B25-AC01"
+use_cases = ["B25-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B25-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_attempt_retries.py::test_a_verified_expired_attempt_allows_a_linked_retry_on_the_same_sale",
+    "tests/sales/test_attempt_retries.py::test_repeating_a_retry_returns_the_same_attempt",
+    "tests/sales/test_attempt_retries.py::test_a_failed_attempt_allows_a_retry_without_a_late_payment_warning",
+    "tests/sales/test_attempt_retries.py::test_the_late_payment_warning_covers_every_earlier_qr",
+    "tests/sales/test_attempt_retries.py::test_a_late_payment_found_by_the_verification_needs_no_retry",
+]
+
+[[criteria]]
+id = "B25-AC02"
+use_cases = ["B25-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B25-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_attempt_retries.py::test_an_active_or_uncertain_attempt_blocks_a_retry",
+    "tests/sales/test_attempt_retries.py::test_an_expired_attempt_needs_verification_before_a_retry",
+    "tests/sales/test_attempt_retries.py::test_an_uncertain_verification_keeps_the_retry_blocked",
+    "tests/sales/test_attempt_retries.py::test_a_query_made_before_the_expiration_never_verifies_it",
+]
+
+[[criteria]]
+id = "B25-AC03"
+use_cases = ["B25-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B25-TC03"
+mode = "automated"
+tests = ["tests/sales/test_attempt_retries.py::test_concurrent_retries_leave_a_single_new_attempt"]
