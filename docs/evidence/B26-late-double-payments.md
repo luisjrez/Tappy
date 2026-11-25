@@ -221,6 +221,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `b3ca5c2` | REQUEST_CHANGES | APPROVE | Ver detalle debajo de la tabla |
+| 2 | `3fbced1` + `6298a6c` | APPROVE | APPROVE | Hueco corregido con `pay_attempt` y su test; sin hallazgos nuevos |
 
 Detalle de la ronda 1, todo aplicado en `3fbced1` con Red/Green:
 
@@ -237,4 +238,4 @@ Registrados sin cambio:
 - `failed → paid` queda fuera del alcance porque no es alcanzable.
 - Un sobrepago sigue siendo `amount_mismatch` sin cobertura, porque cubrir exige el importe exacto.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.

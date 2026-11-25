@@ -7,7 +7,7 @@ modality = "comparison"
 evidence = "docs/evidence/B26-late-double-payments.md#b26-vc01--antesdespués-del-pago-tardío-y-la-doble-recepción"
 
 [review]
-standards = "PENDING"
+standards = "APPROVED"
 spec = "APPROVED"
 pending_findings = 0
 
