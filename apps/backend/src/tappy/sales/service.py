@@ -167,13 +167,19 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
         failure_code=attempt.failure_code,
         created_at=attempt.created_at,
         expires_at=attempt.expires_at,
-        next_action=NEXT_ACTIONS[attempt.status],
+        next_action=next_action(attempt),
         verified_at=attempt.verified_at,
         previous_attempt_id=(
             None if attempt.previous_attempt_id is None else str(attempt.previous_attempt_id)
         ),
         late_payment_possible=late_payment_possible(attempt),
     )
+
+
+def next_action(attempt: PaymentAttempt) -> NextAction:
+    if attempt.status is AttemptStatus.EXPIRED and attempt.verified_at is not None:
+        return NextAction.NEW_ATTEMPT
+    return NEXT_ACTIONS[attempt.status]
 
 
 def late_payment_possible(attempt: PaymentAttempt) -> bool:

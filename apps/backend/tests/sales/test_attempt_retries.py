@@ -123,10 +123,12 @@ def test_a_verified_expired_attempt_allows_a_linked_retry_on_the_same_sale(
     client: TestClient, migrated_database_url: str, clock: MovableClock, fake: SequentialPey
 ) -> None:
     sale, first, operator_a = expired_and_verified(client, migrated_database_url, clock, fake)
+    verified = follow(client, operator_a, sale)["attempts"][0]
 
     retried = request_qr(client, operator_a, sale)
     read = follow(client, operator_a, sale)
 
+    assert verified["next_action"] == "new_attempt"
     assert retried.status_code == HTTPStatus.CREATED
     retry = retried.json()
     assert retry["sale_id"] == sale["id"]
