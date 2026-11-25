@@ -1,0 +1,52 @@
+ticket = "B34"
+revision = "c23d9bb"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B34-diagnostics-recovery.md#b34-vc01--respuestas-logs-y-comandos"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B34-AC01"
+use_cases = ["B34-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B34-TC01"
+mode = "automated"
+tests = [
+    "tests/test_diagnostics.py::test_an_unexpected_error_answers_a_reference_and_logs_it_without_sensitive_data",
+    "tests/test_diagnostics.py::test_configured_secrets_never_reach_a_log_line",
+    "tests/test_diagnostics.py::test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced",
+    "tests/test_diagnostics.py::test_every_error_response_carries_its_reference",
+]
+
+[[criteria]]
+id = "B34-AC02"
+use_cases = ["B34-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B34-TC02"
+mode = "automated"
+tests = [
+    "tests/test_backup_restore.py::test_a_backup_restores_into_a_new_database_with_the_sale_and_its_pending_job",
+    "tests/test_backup_restore.py::test_the_restore_refuses_to_overwrite_an_existing_database",
+]
+
+[[criteria]]
+id = "B34-AC03"
+use_cases = ["B34-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B34-TC03"
+mode = "automated"
+tests = [
+    "tests/test_backup_restore.py::test_a_runner_interrupted_after_the_restore_finishes_the_job_once_and_can_be_followed",
+]
