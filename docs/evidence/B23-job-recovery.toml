@@ -1,5 +1,5 @@
 ticket = "B23"
-revision = "3cb0970"
+revision = "c98e5b5"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B23-job-recovery.md#b23-vc01--lote-lease-y-429"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]

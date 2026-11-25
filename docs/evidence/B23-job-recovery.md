@@ -14,7 +14,7 @@ Ticket: [#31](https://github.com/luisjrez/Tappy/issues/31) · Historia: [H5 #5](
 - **Base y revisiones:**
   - Base: rama B22 `5295de9` ([PR #78](https://github.com/luisjrez/Tappy/pull/78)), stack #68.
   - Candidato: `94c3ae6`.
-  - Correcciones de la review: `3cb0970`, revisión final. La VC01 se repitió sobre ella.
+  - Correcciones de la review: `3cb0970` (ronda 1) y `c98e5b5` (nit de la ronda 2), revisión final. La VC01 se repitió sobre ella.
 - **Entorno:** macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -36,7 +36,7 @@ El downgrade se niega si hay trabajos `exhausted`.
 - `claim_jobs` toma hasta `TAPPY_JOB_BATCH_SIZE` trabajos `pending` que cumplan tres condiciones: ya vencieron, tienen el lease libre o vencido y les quedan intentos. Usa `FOR UPDATE SKIP LOCKED`.
 - Cada reclamación les asigna un `lease_owner` nuevo y `lease_until = ahora + TAPPY_JOB_LEASE_SECONDS`, y suma un intento: una caída también consume intento.
 - Con el lease vigente, nadie más los toma.
-- Terminar (`finish_job`) o reprogramar (`reschedule_job`) exige ser el dueño del lease, que se borra al cerrar un trabajo por cualquier vía. Así, un ejecutor cuyo lease venció, o cuyo trabajo cerró otro camino, no cambia nada (`lease_lost`).
+- Terminar (`finish_job`) o reprogramar (`reschedule_job`) exige ser el dueño del lease, que se borra al cerrar un trabajo por cualquier vía. Así, un ejecutor cuyo lease venció no cambia nada (`lease_lost`). Si otro camino ya cerró el trabajo como `done`, reprogramarlo da `lease_lost` y terminarlo cuenta como confirmado, sin ningún cambio en los datos.
 - Con pey, el lease debe superar la consulta más larga posible: 10 páginas × 4 fases de timeout. El validador de configuración no aplica con el simulador.
 
 ### Planificador aislado
@@ -114,11 +114,11 @@ Escenarios:
 - **A:** evento guardado sin aplicar, que representa una caída tras persistirlo; se inserta directamente en `webhook_events`.
 - **B y C:** intentos `reconciling` con un trabajo pendiente, es decir, una creación incierta preparada por SQL.
 
-En el «después», un ejecutor reclama los trabajos y cae sin terminarlos antes del lote.
+En el «después», el ejecutor 1 se simula desde el script de la VC01: llama a `claim_jobs` con `JobPolicy.from_settings` y no termina los trabajos, que es lo que deja un proceso caído.
 
 ### Antes (B22 `5295de9`)
 
-| A: evento guardado y proceso caído antes de aplicarlo | 200 | `{"status": "open", "confirmed_amount_cents": 0, "attempt": "pending", "transfers": []}` |
+- A: evento guardado y proceso caído antes de aplicarlo → 200 `{"status": "open", "confirmed_amount_cents": 0, "attempt": "pending", "transfers": []}`
 
 **Lote programado**
 
@@ -130,11 +130,11 @@ python -m tappy.sales: error: argument command: invalid choice: 'run-jobs' (choo
 (exit 2)
 ```
 
-| A después | 200 | `{"status": "open", "confirmed_amount_cents": 0, "attempt": "pending", "transfers": []}` |
+- A después → 200 `{"status": "open", "confirmed_amount_cents": 0, "attempt": "pending", "transfers": []}`
 
-| B después (429) | 200 | `{"status": "open", "confirmed_amount_cents": 0, "attempt": "reconciling", "transfers": []}` |
+- B después (429) → 200 `{"status": "open", "confirmed_amount_cents": 0, "attempt": "reconciling", "transfers": []}`
 
-| C después | 200 | `{"status": "open", "confirmed_amount_cents": 0, "attempt": "reconciling", "transfers": []}` |
+- C después → 200 `{"status": "open", "confirmed_amount_cents": 0, "attempt": "reconciling", "transfers": []}`
 
 **Trabajos abiertos**
 
@@ -156,11 +156,11 @@ run at: 2026-11-25T06:41:46.555804+00:00
 (exit 0)
 ```
 
-pey requests:
+pey requests: (ninguna)
 
-### Después (revisión final `3cb0970`)
+### Después (revisión final `c98e5b5`)
 
-| A: evento guardado y proceso caído antes de aplicarlo | 200 | `{"status": "open", "confirmed_amount_cents": 0, "attempt": "pending", "transfers": []}` |
+- A: evento guardado y proceso caído antes de aplicarlo → 200 `{"status": "open", "confirmed_amount_cents": 0, "attempt": "pending", "transfers": []}`
 
 Ejecutor 1 reclama 2 trabajos y cae sin terminarlos (lease de 5 s).
 
@@ -176,7 +176,7 @@ confirmed: 0, in review: 0, rescheduled: 0, exhausted: 0, lease lost: 0, failed:
 (exit 0)
 ```
 
-Hora del lote programado (UTC): 2026-11-25T06:51:11+00:00
+Hora del lote programado (UTC): 2026-11-25T06:57:15+00:00
 
 **Lote programado**
 
@@ -187,26 +187,26 @@ jobs of paid attempts closed: 0
 interrupted attempts moved to reconciliation: 0
 jobs claimed: 2
 confirmed: 1, in review: 0, rescheduled: 1, exhausted: 0, lease lost: 0, failed: 0
-QR payments query for attempt ed5d8440-f020-43cc-ba1d-2792529cde55 failed (rate_limited); payment stays unconfirmed
+QR payments query for attempt ce0a39b7-e8f1-4054-ba54-9ea3669e8956 failed (rate_limited); payment stays unconfirmed
 (exit 0)
 ```
 
-| A después | 200 | `{"status": "paid", "confirmed_amount_cents": 30000, "attempt": "paid", "transfers": ["TX-VC23-A"]}` |
+- A después → 200 `{"status": "paid", "confirmed_amount_cents": 30000, "attempt": "paid", "transfers": ["TX-VC23-A"]}`
 
-| B después (429) | 200 | `{"status": "open", "confirmed_amount_cents": 0, "attempt": "reconciling", "transfers": []}` |
+- B después (429) → 200 `{"status": "open", "confirmed_amount_cents": 0, "attempt": "reconciling", "transfers": []}`
 
-| C después | 200 | `{"status": "paid", "confirmed_amount_cents": 30000, "attempt": "paid", "transfers": ["TX-VC23-C"]}` |
+- C después → 200 `{"status": "paid", "confirmed_amount_cents": 30000, "attempt": "paid", "transfers": ["TX-VC23-C"]}`
 
 **Trabajos abiertos**
 
 ```
 $ python -m tappy.sales reconciliations
-attempt: ed5d8440-f020-43cc-ba1d-2792529cde55
-sale reference: VZJQKBKXVS
+attempt: ce0a39b7-e8f1-4054-ba54-9ea3669e8956
+sale reference: A39KQEZA2F
 attempt status: reconciling
 reason: timeout
 status: pending
-run at: 2026-11-25T06:56:12.389398+00:00
+run at: 2026-11-25T07:02:16.246716+00:00
 tries: 2
 leased until: not leased
 last problem: rate_limited
@@ -224,7 +224,7 @@ Validación:
 - **TC03:**
   - Vencido el lease, el lote reclama los 2 trabajos (intento 2).
   - C se confirma.
-  - B recibe `429` y se reprograma a la hora del lote + 300 s (06:51:11 → 06:56:12). El backoff del intento 2 sería de 120 s, así que gana la espera de pey.
+  - B recibe `429` y se reprograma a la hora del lote + 300 s (06:57:15 → 07:02:16). El backoff del intento 2 sería de 120 s, así que gana la espera de pey.
   - `reconciliations` muestra `tries: 2`, `last problem: rate_limited` y el trabajo sin lease.
 - **Antes:** `run-jobs` no existía (exit 2), el evento guardado y los trabajos quedaban pendientes, y el listado no mostraba intentos ni problemas.
 
@@ -241,7 +241,7 @@ Los datos se eliminaron al terminar. Estado VC01: **PASS**.
 
 ## Checks
 
-`uv run python -m quality.check` sobre `3cb0970`, con `.env` exportado: PASS en todos los pasos.
+`uv run python -m quality.check` sobre `c98e5b5`, con `.env` exportado: PASS en todos los pasos.
 
 - format, lint y types (mypy strict).
 - hygiene.
@@ -263,6 +263,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `94c3ae6` | REQUEST_CHANGES | REQUEST_CHANGES | Ver detalle debajo de la tabla |
+| 2 | `3cb0970` + `ca78ad5` | APPROVE | APPROVE | Bloqueantes resueltos. Aplicado en `c98e5b5`: comparación directa con `NOT_QUERYABLE`. Evidencia: redacción de `lease_lost`, filas de la VC01 como lista, peticiones a pey vacías explícitas y cómo se simuló el ejecutor 1. Notas sin cambio: el barrido de cierre puede esperar un lock breve de otro ejecutor |
 
 Detalle de la ronda 1, todo corregido en `3cb0970`.
 
@@ -287,4 +288,4 @@ Registradas sin cambio:
 - Supuesto de relojes sincronizados.
 - `.all()` en lugar de `.tuples()`, que SQLAlchemy 2.1 depreca.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.
