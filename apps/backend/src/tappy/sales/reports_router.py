@@ -2,14 +2,13 @@ import uuid
 from datetime import date
 from http import HTTPStatus
 from typing import Annotated
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from tappy.identity.dependencies import CurrentIdentity
 from tappy.merchants.errors import MerchantNotFoundError
 from tappy.platform.dependencies import ClockDependency, SessionDependency, SettingsDependency
-from tappy.sales.periods import BusinessDay, local_day
+from tappy.sales.periods import BusinessDay
 from tappy.sales.schemas import DailySummaryResponse
 from tappy.sales.summaries import daily_summary
 
@@ -21,8 +20,9 @@ def requested_day(
     settings: SettingsDependency,
     day: Annotated[date | None, Query(alias="date")] = None,
 ) -> BusinessDay:
-    zone = ZoneInfo(settings.timezone)
-    return BusinessDay(day or local_day(clock.now(), zone), zone)
+    if day is None:
+        return BusinessDay.today(clock.now(), settings.zone)
+    return BusinessDay(day, settings.zone)
 
 
 @router.get(

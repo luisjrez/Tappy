@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import ColumnElement, Exists, ScalarSelect, and_, func, select
+from sqlalchemy.orm import aliased
 
 from tappy.sales.models import AttemptStatus, PaymentAttempt, Sale, Transfer
 
@@ -29,5 +30,23 @@ def sale_is_covered() -> Exists:
     )
 
 
-def paid_between(start: datetime, end: datetime) -> ColumnElement[bool]:
+def covers_its_sale() -> ColumnElement[bool]:
+    earlier = aliased(Transfer)
+    attempt = aliased(PaymentAttempt)
+    first = (
+        select(earlier.id)
+        .join(attempt, attempt.id == earlier.attempt_id)
+        .where(
+            earlier.sale_id == Transfer.sale_id,
+            earlier.amount_cents == Sale.amount_cents,
+            attempt.status == AttemptStatus.PAID,
+        )
+        .order_by(earlier.received_at, earlier.id)
+        .limit(1)
+        .scalar_subquery()
+    )
+    return Transfer.id == first
+
+
+def transfer_paid_between(start: datetime, end: datetime) -> ColumnElement[bool]:
     return and_(Transfer.occurred_at >= start, Transfer.occurred_at < end)

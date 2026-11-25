@@ -95,14 +95,12 @@ def filtered_sales(db: Session, actor: IdentitySummary, query: HistoryQuery) -> 
 
 
 def sale_history(db: Session, actor: IdentitySummary, query: HistoryQuery) -> HistoryPage:
-    confirmed = received_for_sale()
-    covered = sale_is_covered()
     attempts = (
         select(func.count(PaymentAttempt.id)).where(PaymentAttempt.sale_id == Sale.id)
     ).scalar_subquery()
     rows = db.execute(
         filtered_sales(db, actor, query)
-        .add_columns(confirmed, covered, attempts)
+        .add_columns(received_for_sale(), sale_is_covered(), attempts)
         .order_by(Sale.created_at.desc(), Sale.id.desc())
         .limit(query.limit + 1)
     ).all()

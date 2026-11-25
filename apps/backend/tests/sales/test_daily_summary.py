@@ -1,7 +1,7 @@
 import json
 import uuid
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
 
+from tappy.platform.config import Settings
 from tests.payments.pey_support import CREATED, FakePey
 from tests.payments.webhook_support import Delivery, deliver, settings_for
 from tests.sales.support import (
@@ -23,7 +24,7 @@ from tests.sales.support import (
     ready_merchant,
     start_client,
 )
-from tests.support import MovableClock
+from tests.support import MovableClock, build_settings
 
 LOCAL = ZoneInfo("America/Mexico_City")
 DAY = "2026-11-25"
@@ -46,9 +47,15 @@ class SequentialPey(FakePey):
 
 
 @pytest.fixture
-def client(migrated_database_url: str) -> Iterator[TestClient]:
+def clock() -> MovableClock:
+    return MovableClock(datetime.fromtimestamp(NOON, LOCAL))
+
+
+@pytest.fixture
+def client(migrated_database_url: str, clock: MovableClock) -> Iterator[TestClient]:
     settings = settings_for(migrated_database_url)
-    with start_client(settings, migrated_database_url, SequentialPey().provider()) as started:
+    provider = SequentialPey().provider()
+    with start_client(settings, migrated_database_url, provider, clock) as started:
         yield started
 
 
@@ -81,7 +88,8 @@ def pay(
         "metadata": {"tappy_attempt_id": attempt["id"]},
     }
     body = json.dumps(event, separators=(",", ":")).encode()
-    deliver(client, body, Delivery(message_id=f"msg_{transaction_id.lower()}"))
+    signed = Delivery(f"msg_{transaction_id.lower()}", NOON)
+    deliver(client, body, signed)
 
 
 def summary(client: TestClient, merchant: str, headers: dict[str, str], **params: str) -> Response:
@@ -160,7 +168,7 @@ def test_redelivered_evidence_never_inflates_the_summary(client: TestClient, mer
         "transactionId": "TX-ONCE",
         "metadata": {"tappy_attempt_id": attempt["id"]},
     }
-    deliver(client, json.dumps(event).encode(), Delivery(message_id="msg_again"))
+    deliver(client, json.dumps(event).encode(), Delivery("msg_again", NOON))
 
     body = summary(client, merchant, bearer(client, OPERATOR_A), date=DAY).json()
 
@@ -216,3 +224,54 @@ def test_the_default_day_is_todays_local_date_on_the_server_clock(
         body = summary(client, merchant, bearer(client, OPERATOR_A)).json()
 
     assert body["date"] == DAY
+
+
+def test_a_covered_sale_counts_only_on_the_day_of_its_covering_transfer(
+    client: TestClient, merchant: str, clock: MovableClock
+) -> None:
+    _, attempt = charge(client, merchant, PRICE)
+    pay(client, attempt, PRICE, "TX-DAY-ONE", NOON)
+    clock.advance(timedelta(seconds=1))
+    pay(client, attempt, PRICE, "TX-DAY-TWO", NEXT_DAY)
+    operator_a = bearer(client, OPERATOR_A)
+
+    first = summary(client, merchant, operator_a, date=DAY).json()
+    second = summary(client, merchant, operator_a, date="2026-11-26").json()
+
+    assert (first["received_amount_cents"], first["covered_sale_count"]) == (PRICE, 1)
+    assert (second["received_amount_cents"], second["covered_sale_count"]) == (PRICE, 0)
+    assert second["review_sale_count"] == 1
+
+
+def test_own_incidents_opened_that_day_are_visible_even_without_a_transfer(
+    client: TestClient, merchant: str
+) -> None:
+    _, attempt = charge(client, merchant, PRICE)
+    foreign_account = {
+        "type": "codi.qr.payment_received",
+        "amount": PRICE / 100,
+        "bankAccountId": "01HZZFOREIGNACCOUNT00000",
+        "codiQrId": attempt["provider_request_id"],
+        "datePaid": NOON,
+        "transactionId": "TX-FOREIGN",
+        "metadata": {"tappy_attempt_id": attempt["id"]},
+    }
+    body = json.dumps(foreign_account).encode()
+    deliver(client, body, Delivery("msg_foreign", NOON))
+    operator_a = bearer(client, OPERATOR_A)
+
+    today = summary(client, merchant, operator_a, date=DAY).json()
+    tomorrow = summary(client, merchant, operator_a, date="2026-11-26").json()
+
+    assert (today["received_amount_cents"], today["open_exception_count"]) == (0, 1)
+    assert tomorrow["open_exception_count"] == 0
+
+
+def test_the_business_timezone_must_be_a_known_iana_zone() -> None:
+    base = build_settings().model_dump()
+
+    with pytest.raises(ValueError, match="IANA time zone"):
+        Settings.model_validate({**base, "timezone": "Mars/Olympus_Mons"})
+
+    accepted = Settings.model_validate({**base, "timezone": "America/Tijuana"})
+    assert accepted.zone == ZoneInfo("America/Tijuana")

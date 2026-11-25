@@ -55,6 +55,10 @@ class Settings(BaseSettings):
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
 
+    @property
+    def zone(self) -> ZoneInfo:
+        return ZoneInfo(self.timezone)
+
     @field_validator("timezone")
     @classmethod
     def known_timezone(cls, name: str) -> str:
