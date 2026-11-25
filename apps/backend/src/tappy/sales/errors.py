@@ -42,3 +42,8 @@ class AttemptNotFoundError(SaleError):
 class UnverifiedAttemptError(SaleError):
     def __init__(self) -> None:
         super().__init__("The previous attempt expired; verify it before creating another")
+
+
+class NoReceptionError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("The sale has no confirmed reception")

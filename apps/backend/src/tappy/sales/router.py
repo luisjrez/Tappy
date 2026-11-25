@@ -19,6 +19,7 @@ from tappy.sales.errors import (
     ActiveAttemptError,
     InvalidAmountError,
     InvalidConceptError,
+    NoReceptionError,
     ReceiverChangedError,
     SaleNotFoundError,
     SaleNotOpenError,
@@ -31,10 +32,11 @@ from tappy.sales.schemas import (
     AttemptResponse,
     HistoryParams,
     HistoryResponse,
+    ReceiptResponse,
     SaleCreateRequest,
     SaleResponse,
 )
-from tappy.sales.service import SaleRequest, create_sale, read_sale
+from tappy.sales.service import SaleRequest, create_sale, read_receipt, read_sale
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 OUTCOME_STATUS = {
@@ -121,6 +123,19 @@ def read_one(
     try:
         return SaleResponse.model_validate(read_sale(db, actor, sale_id, clock.now()))
     except SaleNotFoundError as error:
+        raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
+
+
+@router.get(
+    "/{sale_id}/receipt",
+    responses={HTTPStatus.NOT_FOUND: {"description": "Sale not found or no confirmed reception"}},
+)
+def read_receipt_data(
+    sale_id: uuid.UUID, actor: CurrentIdentity, db: SessionDependency
+) -> ReceiptResponse:
+    try:
+        return ReceiptResponse.model_validate(read_receipt(db, actor, sale_id))
+    except (SaleNotFoundError, NoReceptionError) as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
 
 

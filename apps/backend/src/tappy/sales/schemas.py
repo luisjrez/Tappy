@@ -129,3 +129,21 @@ class HistoryResponse(BaseModel):
 
     items: list[SaleRowResponse]
     next_cursor: str | None
+
+
+class ReceiptResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    sale_id: str
+    sale_reference: str
+    merchant_name: str
+    beneficiary_name: str
+    masked_account: str
+    amount_cents: int
+    currency: str
+    concept: str | None
+    provider_transaction_id: str
+    paid_at: datetime
+    received_at: datetime
+    simulated: bool
+    under_review: bool
