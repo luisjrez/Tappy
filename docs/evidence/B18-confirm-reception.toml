@@ -1,0 +1,52 @@
+ticket = "B18"
+revision = "4d1224b"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B18-confirm-reception.md#b18-vc01--antesdespués-de-la-recepción"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B18-AC01"
+use_cases = ["B18-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B18-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_reception.py::test_exact_evidence_confirms_the_transfer_and_the_sale",
+    "tests/sales/test_reception.py::test_the_operations_command_applies_stored_events",
+    "tests/sales/test_reception.py::test_epoch_seconds_are_read_as_utc",
+    "tests/sales/test_reception.py::test_transfers_cannot_be_changed_once_recorded",
+]
+
+[[criteria]]
+id = "B18-AC02"
+use_cases = ["B18-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B18-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_reception.py::test_insufficient_evidence_never_marks_the_sale_received",
+    "tests/sales/test_reception.py::test_an_invalid_signature_leaves_the_pending_attempt_untouched",
+]
+
+[[criteria]]
+id = "B18-AC03"
+use_cases = ["B18-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B18-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_reception.py::test_a_failure_inside_the_application_leaves_no_partial_state_and_reprocessing_completes",
+]
