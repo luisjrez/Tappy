@@ -133,7 +133,7 @@ Quotas are counted in Postgres (`operation_quotas`), so they hold across process
 | `TAPPY_SALE_READ_QUOTA` | 120 | `GET /sales`, `GET /sales/{id}`, `GET /sales/{id}/receipt` | Authenticated identity |
 
 - Over the quota the API answers `429` with a `Retry-After` header and `{"detail", "retry_after_seconds"}`: the seconds, rounded up, until the current window ends. Nothing is created and the provider is not called.
-- Only new work spends quota: repeating an accepted sale or QR request (same `Idempotency-Key`) returns the stored result for free and never gets `429`, and a refused request (validation, blocked receiver, active attempt) rolls its reservation back. A request whose original answer was `429` stored nothing, so repeating it is new work. Unauthenticated requests are refused with `401` before any quota is counted.
+- Only new work spends quota: repeating an accepted sale or QR request (same `Idempotency-Key`) returns the stored result for free and never gets `429`, and a refused request (validation, blocked receiver, active attempt) rolls its reservation back. A request whose original answer was `429` stored nothing, so repeating it is new work. Unauthenticated requests are refused with `401` before any quota is counted. Reads count whenever they are authenticated, also when they answer `404`.
 - Reading a sale only uses Tappy's own state: no read calls the provider, however often a pending attempt is polled. The provider is queried only by `reconcile` and `run-jobs`.
 - API request bodies are limited to `TAPPY_API_MAX_BODY_BYTES` (default 16384) and answer `413` above it, whether the size is declared or streamed. Webhooks keep their own limit. Pages of `GET /sales` stay limited to 50 rows.
 
