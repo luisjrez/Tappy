@@ -1,0 +1,49 @@
+ticket = "B28"
+revision = "368696a"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B28-verified-receipt.md#b28-vc01--resultado-inicial-del-comprobante"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B28-AC01"
+use_cases = ["B28-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B28-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_receipts.py::test_a_validated_own_transfer_produces_its_receipt",
+    "tests/sales/test_receipts.py::test_a_double_reception_receipt_shows_the_covering_transfer_under_review",
+    "tests/sales/test_receipts.py::test_history_detail_and_receipt_agree_on_coverage",
+]
+
+[[criteria]]
+id = "B28-AC02"
+use_cases = ["B28-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B28-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_receipts.py::test_a_sale_without_a_confirmed_reception_has_no_receipt",
+    "tests/sales/test_receipts.py::test_receipts_are_never_shown_for_another_merchant",
+]
+
+[[criteria]]
+id = "B28-AC03"
+use_cases = ["B28-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B28-TC03"
+mode = "automated"
+tests = ["tests/sales/test_receipts.py::test_the_receipt_keeps_useful_evidence_but_no_payer_data_or_secrets"]
