@@ -95,12 +95,18 @@ def assert_quota_exceeded(response: Response, wait: int = WAIT_SECONDS) -> None:
     }
 
 
-def request_qr(client: TestClient, headers: dict[str, str], sale_id: str) -> Response:
+def request_qr_with_key(
+    client: TestClient, headers: dict[str, str], sale_id: str, key: str
+) -> Response:
     return client.post(
         f"/sales/{sale_id}/attempts",
         json={"method": "qr"},
-        headers={**headers, IDEMPOTENCY_HEADER: str(uuid.uuid4())},
+        headers={**headers, IDEMPOTENCY_HEADER: key},
     )
+
+
+def request_qr(client: TestClient, headers: dict[str, str], sale_id: str) -> Response:
+    return request_qr_with_key(client, headers, sale_id, str(uuid.uuid4()))
 
 
 def test_sales_within_the_quota_are_created_and_the_excess_gets_429_with_wait_guidance(
@@ -193,16 +199,6 @@ def test_qr_requests_over_the_quota_get_429_without_calling_the_provider(
             {"sale": sales[-1]},
         )
         == 0
-    )
-
-
-def request_qr_with_key(
-    client: TestClient, headers: dict[str, str], sale_id: str, key: str
-) -> Response:
-    return client.post(
-        f"/sales/{sale_id}/attempts",
-        json={"method": "qr"},
-        headers={**headers, IDEMPOTENCY_HEADER: key},
     )
 
 
