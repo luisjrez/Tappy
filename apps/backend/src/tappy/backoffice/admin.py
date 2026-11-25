@@ -9,6 +9,7 @@ from starlette_admin.base import BaseAdmin
 from tappy.backoffice.auth import AdminAuthProvider
 from tappy.backoffice.merchants import MerchantsView
 from tappy.backoffice.operators import OperatorsView
+from tappy.backoffice.sales import SalesView
 from tappy.identity.sessions import SessionPolicy
 from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
@@ -42,4 +43,5 @@ def mount_admin(app: FastAPI, settings: Settings, database: Database, clock: Clo
     )
     admin.add_view(OperatorsView(database, clock, ADMIN_BASE_URL))
     admin.add_view(MerchantsView(database, clock, ADMIN_BASE_URL))
+    admin.add_view(SalesView(database, clock, ADMIN_BASE_URL))
     admin.mount_to(app)

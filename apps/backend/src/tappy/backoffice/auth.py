@@ -88,6 +88,7 @@ class AdminAuthProvider(AuthProvider):
         except InvalidRefreshTokenError:
             return None
         store_tokens(request, resumed.tokens)
+        request.state.admin_identity = resumed.identity
         return AdminUser(username=resumed.identity.email)
 
     async def logout(self, request: Request) -> Response | None:

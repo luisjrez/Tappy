@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% block header %}
+    <h2 class="page-title">Sales</h2>
+{% endblock %}
+{% block content %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table card-table">
+                <thead>
+                <tr><th>Reference</th><th>Created</th><th>Amount (MXN)</th><th>Received (MXN)</th><th>Status</th><th>Covered</th><th>Attempts</th></tr>
+                </thead>
+                <tbody>
+                {% for sale in sales %}
+                    <tr data-sale="{{ sale.id }}">
+                        <td><a href="{{ sales_url }}/{{ sale.id }}">{{ sale.reference }}</a></td>
+                        <td>{{ sale.created_at.isoformat() }}</td>
+                        <td>{{ pesos(sale.amount_cents) }}</td>
+                        <td>{{ pesos(sale.confirmed_amount_cents) }}</td>
+                        <td>{{ sale.status }}</td>
+                        <td>{{ "yes" if sale.covered else "no" }}</td>
+                        <td>{{ sale.attempt_count }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="7">No sales match these filters.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if next_url %}
+            <div class="card-footer"><a class="btn btn-outline-primary" href="{{ next_url }}">Next page</a></div>
+        {% endif %}
+    </div>
+{% endblock %}

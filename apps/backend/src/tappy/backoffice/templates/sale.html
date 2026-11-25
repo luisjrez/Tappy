@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% block header %}
+    <h2 class="page-title">Sale {{ sale.reference }}</h2>
+{% endblock %}
+{% block content %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-3">Status</dt><dd class="col-9">{{ sale.status }}</dd>
+                <dt class="col-3">Amount (MXN)</dt><dd class="col-9">{{ pesos(sale.amount_cents) }}</dd>
+                <dt class="col-3">Received (MXN)</dt><dd class="col-9">{{ pesos(sale.confirmed_amount_cents) }}</dd>
+                <dt class="col-3">Covered</dt><dd class="col-9">{{ "yes" if sale.covered else "no" }}</dd>
+                <dt class="col-3">Receiver</dt><dd class="col-9">{{ sale.beneficiary_name }} · {{ sale.masked_account }}</dd>
+                <dt class="col-3">Concept</dt><dd class="col-9">{{ sale.concept or "—" }}</dd>
+                <dt class="col-3">Created</dt><dd class="col-9">{{ sale.created_at.isoformat() }}</dd>
+            </dl>
+        </div>
+    </div>
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Attempts</h3></div>
+        <div class="table-responsive">
+            <table class="table card-table">
+                <thead><tr><th>Created</th><th>Method</th><th>Status</th><th>Provider QR</th><th>Expires</th><th>Previous attempt</th></tr></thead>
+                <tbody>
+                {% for attempt in sale.attempts %}
+                    <tr>
+                        <td>{{ attempt.created_at.isoformat() }}</td>
+                        <td>{{ attempt.method }}</td>
+                        <td>{{ attempt.status }}{% if attempt.simulated %} (simulated){% endif %}</td>
+                        <td>{{ attempt.provider_request_id or "—" }}</td>
+                        <td>{{ attempt.expires_at.isoformat() if attempt.expires_at else "—" }}</td>
+                        <td>{{ attempt.previous_attempt_id or "—" }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No attempts.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">Transfers</h3></div>
+        <div class="table-responsive">
+            <table class="table card-table">
+                <thead><tr><th>Transaction</th><th>Amount (MXN)</th><th>Paid</th><th>Received</th><th>Account</th></tr></thead>
+                <tbody>
+                {% for transfer in sale.transfers %}
+                    <tr>
+                        <td>{{ transfer.provider_transaction_id }}</td>
+                        <td>{{ pesos(transfer.amount_cents) }}</td>
+                        <td>{{ transfer.occurred_at.isoformat() if transfer.occurred_at else "not given (dated by reception)" }}</td>
+                        <td>{{ transfer.received_at.isoformat() }}</td>
+                        <td>{{ transfer.masked_account }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">No transfers recorded.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3 class="card-title">Exceptions</h3></div>
+        <div class="table-responsive">
+            <table class="table card-table">
+                <thead><tr><th>Reason</th><th>Expected (MXN)</th><th>Received (MXN)</th><th>Opened</th><th>Resolved</th></tr></thead>
+                <tbody>
+                {% for exception in sale.exceptions %}
+                    <tr>
+                        <td>{{ exception.reason }}</td>
+                        <td>{{ pesos(exception.expected_amount_cents) if exception.expected_amount_cents is not none else "—" }}</td>
+                        <td>{{ pesos(exception.received_amount_cents) if exception.received_amount_cents is not none else "—" }}</td>
+                        <td>{{ exception.created_at.isoformat() }}</td>
+                        <td>{{ exception.resolved_at.isoformat() if exception.resolved_at else "open" }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">No exceptions.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <a class="btn btn-outline-secondary mt-3" href="{{ sales_url }}">Back to sales</a>
+{% endblock %}
