@@ -1,7 +1,7 @@
 import logging
 import uuid
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import StrEnum
 
 from sqlalchemy import select, update
@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 class ReconciliationResult(StrEnum):
     CONFIRMED = "confirmed"
+    VERIFIED = "verified"
     REVIEW = "review"
     NO_EVIDENCE = "no_evidence"
     UNCERTAIN = "uncertain"
@@ -108,6 +109,21 @@ def close_paid_jobs(db: Session, *criteria: ColumnElement[bool]) -> int:
     return len(closed)
 
 
+def mark_verified(db: Session, attempt_id: uuid.UUID, now: datetime) -> bool:
+    attempt = db.scalars(
+        select(PaymentAttempt)
+        .where(PaymentAttempt.id == attempt_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one()
+    if attempt.status is not AttemptStatus.EXPIRED:
+        return False
+    attempt.verified_at = now
+    attempt.updated_at = now
+    db.flush()
+    return True
+
+
 def report_for(
     db: Session,
     attempt_id: uuid.UUID,
@@ -171,4 +187,9 @@ def reconcile_attempt(
             for payment in payments
         ]
         close_paid_jobs(db, ReconciliationJob.attempt_id == attempt_id)
-        return report_for(db, attempt_id, outcomes)
+        report = report_for(db, attempt_id, outcomes)
+        if report.result is ReconciliationResult.NO_EVIDENCE and mark_verified(
+            db, attempt_id, clock.now()
+        ):
+            return report_for(db, attempt_id, outcomes, ReconciliationResult.VERIFIED)
+        return report

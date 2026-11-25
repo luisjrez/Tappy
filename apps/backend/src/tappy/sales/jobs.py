@@ -30,6 +30,7 @@ LEASE_EXPIRED = "lease_expired"
 
 class JobOutcome(StrEnum):
     CONFIRMED = "confirmed"
+    VERIFIED = "verified"
     IN_REVIEW = "in_review"
     RESCHEDULED = "rescheduled"
     EXHAUSTED = "exhausted"
@@ -39,6 +40,7 @@ class JobOutcome(StrEnum):
 
 FINISHED = {
     ReconciliationResult.CONFIRMED: JobOutcome.CONFIRMED,
+    ReconciliationResult.VERIFIED: JobOutcome.VERIFIED,
     ReconciliationResult.REVIEW: JobOutcome.IN_REVIEW,
 }
 
@@ -82,6 +84,7 @@ class JobRunSummary:
     recovered: int
     claimed: int = 0
     confirmed: int = 0
+    verified: int = 0
     in_review: int = 0
     rescheduled: int = 0
     exhausted: int = 0
@@ -214,6 +217,7 @@ class JobRunner:
             recovered=recovered,
             claimed=len(claimed),
             confirmed=outcomes.count(JobOutcome.CONFIRMED),
+            verified=outcomes.count(JobOutcome.VERIFIED),
             in_review=outcomes.count(JobOutcome.IN_REVIEW),
             rescheduled=outcomes.count(JobOutcome.RESCHEDULED),
             exhausted=outcomes.count(JobOutcome.EXHAUSTED) + abandoned,

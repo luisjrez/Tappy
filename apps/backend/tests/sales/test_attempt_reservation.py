@@ -82,6 +82,9 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
         "created_at": attempt["created_at"],
         "expires_at": None,
         "next_action": "wait_for_qr",
+        "verified_at": None,
+        "previous_attempt_id": None,
+        "late_payment_possible": False,
     }
     assert sale["status"] == "open"
     assert sale["attempts"] == [attempt]
@@ -126,7 +129,11 @@ def test_finished_attempts_allow_a_new_reservation(
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
     reserve(client, operator_a, sale_id)
-    execute(migrated_database_url, "UPDATE payment_attempts SET status = :s", {"s": status})
+    execute(
+        migrated_database_url,
+        "UPDATE payment_attempts SET status = :s, verified_at = now()",
+        {"s": status},
+    )
 
     retried = reserve(client, operator_a, sale_id)
 

@@ -37,6 +37,7 @@ EXCEPTION_CONSTRAINT = "uq_payment_exceptions_evidence_reason"
 WAITING_REFERENCE_INDEX = "ix_payment_exceptions_waiting_reference"
 DUE_JOBS_INDEX = "ix_reconciliation_jobs_due"
 DUE_EXPIRATION_INDEX = "ix_payment_attempts_due_expiration"
+PREVIOUS_ATTEMPT_CONSTRAINT = "uq_payment_attempts_previous_attempt"
 JOB_PROBLEM_MAX_LENGTH = 32
 
 
@@ -71,6 +72,7 @@ class JobReason(StrEnum):
     INVALID_RESPONSE = "invalid_response"
     DUPLICATE_PROVIDER_ID = "duplicate_provider_id"
     INTERRUPTED_CREATION = "interrupted_creation"
+    EXPIRED = "expired"
 
 
 class JobStatus(StrEnum):
@@ -136,6 +138,7 @@ class PaymentAttempt(Base):
             ),
         ),
         UniqueConstraint("provider", "provider_request_id", name=PROVIDER_REQUEST_CONSTRAINT),
+        UniqueConstraint("previous_attempt_id", name=PREVIOUS_ATTEMPT_CONSTRAINT),
         Index(
             DUE_EXPIRATION_INDEX,
             "expires_at",
@@ -155,6 +158,11 @@ class PaymentAttempt(Base):
     qr_payload: Mapped[str | None] = mapped_column(Text)
     failure_code: Mapped[str | None] = mapped_column(String(FAILURE_CODE_MAX_LENGTH))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    previous_attempt_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("payment_attempts.id"))
+    previous_attempt: Mapped[PaymentAttempt | None] = relationship(
+        remote_side=lambda: [PaymentAttempt.id]
+    )
     sale: Mapped[Sale] = relationship(back_populates="attempts")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

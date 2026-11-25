@@ -41,6 +41,9 @@ class AttemptResponse(BaseModel):
     created_at: datetime
     expires_at: datetime | None
     next_action: NextAction
+    verified_at: datetime | None
+    previous_attempt_id: str | None
+    late_payment_possible: bool
 
 
 class TransferResponse(BaseModel):

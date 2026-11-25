@@ -80,6 +80,9 @@ class AttemptView:
     created_at: datetime
     expires_at: datetime | None
     next_action: NextAction
+    verified_at: datetime | None
+    previous_attempt_id: str | None
+    late_payment_possible: bool
 
 
 @dataclass(frozen=True)
@@ -165,7 +168,17 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
         created_at=attempt.created_at,
         expires_at=attempt.expires_at,
         next_action=NEXT_ACTIONS[attempt.status],
+        verified_at=attempt.verified_at,
+        previous_attempt_id=(
+            None if attempt.previous_attempt_id is None else str(attempt.previous_attempt_id)
+        ),
+        late_payment_possible=late_payment_possible(attempt),
     )
+
+
+def late_payment_possible(attempt: PaymentAttempt) -> bool:
+    previous = attempt.previous_attempt
+    return previous is not None and previous.provider_request_id is not None
 
 
 def describe_sale(sale: Sale) -> SaleView:

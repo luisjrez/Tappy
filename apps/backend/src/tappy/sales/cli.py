@@ -109,6 +109,9 @@ def conflicts(database: Database, _settings: Settings, _options: argparse.Namesp
 
 RESULT_TEXT = {
     ReconciliationResult.CONFIRMED: "payment confirmed",
+    ReconciliationResult.VERIFIED: (
+        "no payment found after the expiration; a new attempt may be created"
+    ),
     ReconciliationResult.REVIEW: "payment evidence needs review",
     ReconciliationResult.NO_EVIDENCE: "no payment evidence found; the payment stays unconfirmed",
     ReconciliationResult.UNCERTAIN: (
@@ -158,7 +161,8 @@ def run_jobs(database: Database, settings: Settings, _options: argparse.Namespac
             f"pending attempts expired: {summary.expired}",
             f"interrupted attempts moved to reconciliation: {summary.recovered}",
             f"jobs claimed: {summary.claimed}",
-            f"confirmed: {summary.confirmed}, in review: {summary.in_review}, "
+            f"confirmed: {summary.confirmed}, verified unpaid: {summary.verified}, "
+            f"in review: {summary.in_review}, "
             f"rescheduled: {summary.rescheduled}, exhausted: {summary.exhausted}, "
             f"lease lost: {summary.lease_lost}, failed: {summary.failed}",
         ]

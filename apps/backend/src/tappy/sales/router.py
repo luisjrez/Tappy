@@ -22,6 +22,7 @@ from tappy.sales.errors import (
     ReceiverChangedError,
     SaleNotFoundError,
     SaleNotOpenError,
+    UnverifiedAttemptError,
 )
 from tappy.sales.idempotency import KEY_PATTERN, IdempotencyConflictError
 from tappy.sales.schemas import (
@@ -113,7 +114,10 @@ def attempt_request(
         },
         HTTPStatus.NOT_FOUND: {"description": "Sale not found"},
         HTTPStatus.CONFLICT: {
-            "description": "Active attempt, sale not open, charges blocked or key reused"
+            "description": (
+                "Active attempt, unverified expired attempt, sale not open, charges blocked "
+                "or key reused"
+            )
         },
         HTTPStatus.BAD_GATEWAY: {"description": "QR provider rejected the request; attempt failed"},
         HTTPStatus.ACCEPTED: {
@@ -140,6 +144,7 @@ def reserve(
         ) from None
     except (
         ActiveAttemptError,
+        UnverifiedAttemptError,
         SaleNotOpenError,
         ReceiverChangedError,
         IssuanceBlockedError,

@@ -37,3 +37,8 @@ class ReceiverChangedError(SaleError):
 class AttemptNotFoundError(SaleError):
     def __init__(self) -> None:
         super().__init__("Attempt not found")
+
+
+class UnverifiedAttemptError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("The previous attempt expired; verify it before creating another")

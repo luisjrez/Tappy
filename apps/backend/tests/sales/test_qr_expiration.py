@@ -172,11 +172,12 @@ def test_the_batch_expires_pending_attempts_by_the_server_clock(
     try:
         early = JobRunner(database, FakePey().provider(), "test", policy, clock).run()
         clock.advance(WINDOW)
-        due = JobRunner(database, FakePey().provider(), "test", policy, clock).run()
+        verifying = FakePey(pages=[(200, {"items": [], "nextToken": None})]).provider()
+        due = JobRunner(database, verifying, "test", policy, clock).run()
     finally:
         database.dispose()
 
-    assert (early.expired, due.expired) == (0, 1)
+    assert (early.expired, due.expired, due.verified) == (0, 1, 1)
     assert scalar(migrated_database_url, "SELECT status FROM payment_attempts") == "expired"
 
 

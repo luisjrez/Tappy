@@ -23,7 +23,12 @@ from tappy.payments.provider import (
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
 from tappy.platform.persistence import is_unique_violation
-from tappy.sales.errors import ActiveAttemptError, ReceiverChangedError, SaleNotOpenError
+from tappy.sales.errors import (
+    ActiveAttemptError,
+    ReceiverChangedError,
+    SaleNotOpenError,
+    UnverifiedAttemptError,
+)
 from tappy.sales.evidence import hold_reference
 from tappy.sales.idempotency import (
     IdempotencyClaim,
@@ -98,7 +103,7 @@ def held_open_sale(db: Session, sale_id: uuid.UUID) -> Sale:
     return sale
 
 
-def ensure_no_active_attempt(db: Session, sale_id: uuid.UUID) -> None:
+def retried_attempt(db: Session, sale_id: uuid.UUID) -> PaymentAttempt | None:
     active = db.scalar(
         select(PaymentAttempt.id).where(
             PaymentAttempt.sale_id == sale_id,
@@ -107,6 +112,15 @@ def ensure_no_active_attempt(db: Session, sale_id: uuid.UUID) -> None:
     )
     if active is not None:
         raise ActiveAttemptError
+    latest = db.scalar(
+        select(PaymentAttempt)
+        .where(PaymentAttempt.sale_id == sale_id)
+        .order_by(PaymentAttempt.created_at.desc(), PaymentAttempt.id.desc())
+        .limit(1)
+    )
+    if latest is not None and latest.status is AttemptStatus.EXPIRED and latest.verified_at is None:
+        raise UnverifiedAttemptError
+    return latest
 
 
 def ensure_same_receiver(sale: Sale, receiver: ReceivingAccount) -> None:
@@ -130,7 +144,7 @@ def reserve_attempt(
     held = held_open_sale(db, sale.id)
     receiver = held_issuing_receiver(db, held.merchant_id)
     ensure_same_receiver(held, receiver)
-    ensure_no_active_attempt(db, held.id)
+    previous = retried_attempt(db, held.id)
     attempt = PaymentAttempt(
         id=attempt_id,
         sale_id=held.id,
@@ -140,6 +154,7 @@ def reserve_attempt(
         provider=provider.name,
         simulated=provider.simulated,
         receiver_account=held.receiver_account,
+        previous_attempt_id=None if previous is None else previous.id,
         created_at=now,
         updated_at=now,
     )

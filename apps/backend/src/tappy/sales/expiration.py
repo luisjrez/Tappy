@@ -2,9 +2,17 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from tappy.sales.models import AttemptStatus, PaymentAttempt
+from tappy.sales.models import (
+    JOB_CONSTRAINT,
+    AttemptStatus,
+    JobReason,
+    JobStatus,
+    PaymentAttempt,
+    ReconciliationJob,
+)
 from tappy.sales.transitions import move
 
 
@@ -22,5 +30,21 @@ def expire_due_attempts(db: Session, now: datetime, sale_id: uuid.UUID | None = 
     for attempt in due:
         if move(attempt, AttemptStatus.EXPIRED, now):
             expired += 1
+            verify_later(db, attempt, now)
     db.flush()
     return expired
+
+
+def verify_later(db: Session, attempt: PaymentAttempt, now: datetime) -> None:
+    db.execute(
+        insert(ReconciliationJob)
+        .values(
+            id=uuid.uuid4(),
+            attempt_id=attempt.id,
+            reason=JobReason.EXPIRED,
+            status=JobStatus.PENDING,
+            run_at=now,
+            created_at=now,
+        )
+        .on_conflict_do_nothing(constraint=JOB_CONSTRAINT)
+    )
