@@ -1,5 +1,5 @@
 ticket = "B19"
-revision = "085acb6"
+revision = "8ff2289"
 
 [vc01]
 status = "PASS"
@@ -23,6 +23,8 @@ tests = [
     "tests/sales/test_deduplication.py::test_redelivering_the_same_event_keeps_one_transfer",
     "tests/sales/test_deduplication.py::test_another_event_for_the_same_transfer_is_recognised_as_duplicate",
     "tests/sales/test_deduplication.py::test_reprocessing_never_adds_a_second_effect",
+    "tests/sales/test_deduplication.py::test_same_transaction_with_other_amount_is_not_hidden_as_duplicate",
+    "tests/sales/test_deduplication.py::test_redelivering_an_event_still_waiting_applies_it",
 ]
 
 [[criteria]]
@@ -37,6 +39,9 @@ tests = [
     "tests/sales/test_deduplication.py::test_same_event_id_with_other_content_is_flagged_and_the_original_kept",
     "tests/sales/test_deduplication.py::test_repeated_conflicting_variants_are_kept_once",
     "tests/sales/test_deduplication.py::test_event_ids_are_unique_per_provider_and_environment",
+    "tests/sales/test_deduplication.py::test_transfer_ids_are_unique_per_provider_and_environment",
+    "tests/sales/test_deduplication.py::test_a_conflict_on_an_event_not_yet_applied_keeps_applying_the_original",
+    "tests/sales/test_deduplication.py::test_environment_names_are_short_lowercase_identifiers",
 ]
 
 [[criteria]]
