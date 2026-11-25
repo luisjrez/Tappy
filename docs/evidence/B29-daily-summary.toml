@@ -1,0 +1,56 @@
+ticket = "B29"
+revision = "606b410"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B29-daily-summary.md#b29-vc01--resultado-inicial-del-resumen-diario"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B29-AC01"
+use_cases = ["B29-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B29-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_daily_summary.py::test_received_money_counts_transfers_and_covered_sales_but_not_pending",
+    "tests/sales/test_daily_summary.py::test_redelivered_evidence_never_inflates_the_summary",
+    "tests/sales/test_daily_summary.py::test_the_day_follows_the_business_timezone_not_utc",
+    "tests/sales/test_daily_summary.py::test_the_default_day_is_todays_local_date_on_the_server_clock",
+    "tests/sales/test_daily_summary.py::test_the_business_timezone_must_be_a_known_iana_zone",
+]
+
+[[criteria]]
+id = "B29-AC02"
+use_cases = ["B29-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B29-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_daily_summary.py::test_a_day_without_confirmed_transfers_reports_nothing",
+    "tests/sales/test_daily_summary.py::test_invalid_days_are_rejected",
+    "tests/sales/test_daily_summary.py::test_summaries_are_limited_to_accessible_merchants",
+]
+
+[[criteria]]
+id = "B29-AC03"
+use_cases = ["B29-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B29-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_daily_summary.py::test_a_second_distinct_transfer_counts_money_but_not_another_sale",
+    "tests/sales/test_daily_summary.py::test_a_covered_sale_counts_only_on_the_day_of_its_covering_transfer",
+    "tests/sales/test_daily_summary.py::test_own_incidents_opened_that_day_are_visible_even_without_a_transfer",
+]
