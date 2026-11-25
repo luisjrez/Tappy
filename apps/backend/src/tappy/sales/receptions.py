@@ -1,6 +1,7 @@
 import logging
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,7 +11,8 @@ from tappy.payments.events import EventStatus, ReceivedEvent, WebhookEvent, stor
 from tappy.payments.pey_events import evidence_from_pey
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
-from tappy.sales.evidence import EvidenceOutcome, apply_evidence
+from tappy.sales.evidence import EvidenceOutcome, apply_evidence, evidenced_attempt
+from tappy.sales.models import ExceptionReason, PaymentAttempt, PaymentException
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,30 @@ def process_event(database: Database, event_id: uuid.UUID, clock: Clock) -> Even
         )
         event.status = EVENT_STATUS_FOR[outcome]
         return event.status
+
+
+def apply_waiting_events(db: Session, attempt: PaymentAttempt, now: datetime) -> None:
+    if attempt.provider_request_id is None:
+        return
+    waiting = db.execute(
+        select(PaymentException, WebhookEvent)
+        .join(WebhookEvent, WebhookEvent.id == PaymentException.webhook_event_id)
+        .where(
+            PaymentException.reason == ExceptionReason.UNASSOCIATED,
+            PaymentException.resolved_at.is_(None),
+            PaymentException.provider_request_id == attempt.provider_request_id,
+            WebhookEvent.provider == attempt.provider,
+        )
+        .order_by(WebhookEvent.received_at, WebhookEvent.id)
+        .with_for_update()
+    ).all()
+    for exception, event in waiting:
+        evidence = evidence_from_pey(event.payload, event.environment)
+        if evidence is None or evidenced_attempt(db, evidence) is None:
+            continue
+        exception.sale_id = attempt.sale_id
+        exception.resolved_at = now
+        event.status = EVENT_STATUS_FOR[apply_evidence(db, evidence, event.id, now)]
 
 
 def stored_event_id(database: Database, event: ReceivedEvent) -> uuid.UUID:

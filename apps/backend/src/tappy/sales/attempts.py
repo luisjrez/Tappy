@@ -13,6 +13,7 @@ from tappy.merchants.models import ReceivingAccount
 from tappy.merchants.receivers import held_issuing_receiver
 from tappy.payments.provider import (
     IssuedQr,
+    ProviderName,
     ProviderRejectedError,
     ProviderUnavailableError,
     QrOrder,
@@ -23,6 +24,7 @@ from tappy.platform.clock import Clock
 from tappy.platform.database import Database
 from tappy.platform.persistence import is_unique_violation
 from tappy.sales.errors import ActiveAttemptError, ReceiverChangedError, SaleNotOpenError
+from tappy.sales.evidence import hold_reference
 from tappy.sales.idempotency import (
     IdempotencyClaim,
     IdempotentOperation,
@@ -41,7 +43,9 @@ from tappy.sales.models import (
     Sale,
     SaleStatus,
 )
+from tappy.sales.receptions import apply_waiting_events
 from tappy.sales.service import AttemptView, accessible_sale, describe_attempt, held_sale
+from tappy.sales.transitions import move
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +155,10 @@ def pending_qr_order(db: Session, attempt_id: uuid.UUID) -> QrOrder | None:
     )
 
 
+def attempt_provider(db: Session, attempt_id: uuid.UUID) -> ProviderName:
+    return db.scalars(select(PaymentAttempt.provider).where(PaymentAttempt.id == attempt_id)).one()
+
+
 def held_attempt(db: Session, attempt_id: uuid.UUID) -> PaymentAttempt:
     return db.scalars(
         select(PaymentAttempt)
@@ -162,22 +170,24 @@ def held_attempt(db: Session, attempt_id: uuid.UUID) -> PaymentAttempt:
 
 def record_rejected_qr(db: Session, attempt_id: uuid.UUID, code: str, now: datetime) -> None:
     attempt = held_attempt(db, attempt_id)
-    if attempt.status is AttemptStatus.CREATING:
-        attempt.status = AttemptStatus.FAILED
+    if move(attempt, AttemptStatus.FAILED, now):
         attempt.failure_code = code
-        attempt.updated_at = now
         db.flush()
 
 
-def attach_issued_qr(
-    db: Session, attempt: PaymentAttempt, issued: IssuedQr, status: AttemptStatus, now: datetime
-) -> None:
+def attach_issued_qr(db: Session, attempt: PaymentAttempt, issued: IssuedQr, now: datetime) -> None:
     try:
         with db.begin_nested():
             attempt.provider_request_id = issued.provider_request_id
             attempt.qr_payload = issued.payload
-            attempt.status = status
             attempt.updated_at = now
+            if not move(attempt, AttemptStatus.PENDING, now):
+                logger.warning(
+                    "QR %s arrived after attempt %s was moved to %s; kept as evidence",
+                    issued.provider_request_id,
+                    attempt.id,
+                    attempt.status,
+                )
     except IntegrityError as error:
         if is_unique_violation(error, PROVIDER_REQUEST_CONSTRAINT):
             logger.warning(
@@ -192,24 +202,24 @@ def attach_issued_qr(
 def record_issued_qr(
     db: Session, attempt_id: uuid.UUID, issued: IssuedQr, now: datetime
 ) -> AttemptView:
+    hold_reference(db, attempt_provider(db, attempt_id), issued.provider_request_id)
     attempt = held_attempt(db, attempt_id)
-    if attempt.status is AttemptStatus.CREATING:
-        attach_issued_qr(db, attempt, issued, AttemptStatus.PENDING, now)
-    elif attempt.status is AttemptStatus.RECONCILING and attempt.provider_request_id is None:
-        logger.warning(
-            "QR %s arrived after attempt %s was moved to reconciliation; kept as evidence",
-            issued.provider_request_id,
-            attempt.id,
-        )
-        attach_issued_qr(db, attempt, issued, AttemptStatus.RECONCILING, now)
+    if attempt.qr_payload is not None or attempt.provider_request_id not in (
+        None,
+        issued.provider_request_id,
+    ):
+        return describe_attempt(attempt)
+    attach_issued_qr(db, attempt, issued, now)
+    apply_waiting_events(db, attempt, now)
+    db.flush()
     return describe_attempt(attempt)
 
 
 def keep_for_reconciliation(
     db: Session, attempt: PaymentAttempt, reason: JobReason, now: datetime
 ) -> None:
-    attempt.status = AttemptStatus.RECONCILING
-    attempt.updated_at = now
+    if not move(attempt, AttemptStatus.RECONCILING, now):
+        return
     db.add(
         ReconciliationJob(
             attempt_id=attempt.id,
@@ -226,8 +236,7 @@ def record_uncertain_qr(
     db: Session, attempt_id: uuid.UUID, reason: UncertainReason, now: datetime
 ) -> AttemptView:
     attempt = held_attempt(db, attempt_id)
-    if attempt.status is AttemptStatus.CREATING:
-        keep_for_reconciliation(db, attempt, JobReason(reason.value), now)
+    keep_for_reconciliation(db, attempt, JobReason(reason.value), now)
     return describe_attempt(attempt)
 
 

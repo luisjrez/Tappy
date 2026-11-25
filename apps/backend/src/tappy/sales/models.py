@@ -34,6 +34,7 @@ JOB_CONSTRAINT = "uq_reconciliation_jobs_attempt_reason"
 JOB_REASON_MAX_LENGTH = 32
 TRANSFER_CONSTRAINT = "uq_transactions_provider_transaction"
 EXCEPTION_CONSTRAINT = "uq_payment_exceptions_evidence_reason"
+WAITING_REFERENCE_INDEX = "ix_payment_exceptions_waiting_reference"
 
 
 class SaleStatus(StrEnum):
@@ -200,6 +201,13 @@ class PaymentException(Base):
             name=EXCEPTION_CONSTRAINT,
             postgresql_nulls_not_distinct=True,
         ),
+        Index(
+            WAITING_REFERENCE_INDEX,
+            "provider_request_id",
+            postgresql_where=text(
+                f"resolved_at IS NULL AND reason = '{ExceptionReason.UNASSOCIATED}'"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -212,6 +220,7 @@ class PaymentException(Base):
     provider_transaction_id: Mapped[str | None] = mapped_column(
         String(PROVIDER_REQUEST_ID_MAX_LENGTH)
     )
+    provider_request_id: Mapped[str | None] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
     expected_amount_cents: Mapped[int | None] = mapped_column(Integer)
     received_amount_cents: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

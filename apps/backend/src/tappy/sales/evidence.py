@@ -3,12 +3,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import ColumnElement
 
-from tappy.payments.provider import PaymentEvidence
+from tappy.payments.provider import PaymentEvidence, ProviderName
 from tappy.platform.persistence import is_unique_violation
 from tappy.sales.models import (
     CURRENCY,
@@ -23,6 +24,7 @@ from tappy.sales.models import (
     Transfer,
 )
 from tappy.sales.service import held_sale
+from tappy.sales.transitions import PAYABLE_ATTEMPT_STATUSES, move
 
 
 class EvidenceOutcome(StrEnum):
@@ -30,14 +32,6 @@ class EvidenceOutcome(StrEnum):
     DUPLICATE = "duplicate"
     REVIEW = "review"
     UNMATCHED = "unmatched"
-
-
-PAYABLE_ATTEMPT_STATUSES = (
-    AttemptStatus.CREATING,
-    AttemptStatus.PENDING,
-    AttemptStatus.RECONCILING,
-    AttemptStatus.EXPIRED,
-)
 
 
 @dataclass(frozen=True)
@@ -62,19 +56,46 @@ class Application:
     now: datetime
 
 
-def evidenced_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt | None:
-    if evidence.provider_request_id is None:
-        return None
-    attempt = db.scalar(
+def hold_reference(db: Session, provider: ProviderName, provider_request_id: str) -> None:
+    key = func.hashtextextended(f"{provider}:{provider_request_id}", 0)
+    db.execute(select(func.pg_advisory_xact_lock(key)))
+
+
+def locked_attempt(db: Session, *criteria: ColumnElement[bool]) -> PaymentAttempt | None:
+    return db.scalar(
         select(PaymentAttempt)
-        .where(
-            PaymentAttempt.provider == evidence.provider,
-            PaymentAttempt.provider_request_id == evidence.provider_request_id,
-        )
+        .where(*criteria)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    if attempt is None or evidence.attempt_id not in (None, attempt.id):
+
+
+def awaiting_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt | None:
+    if evidence.attempt_id is None:
+        return None
+    attempt = locked_attempt(
+        db,
+        PaymentAttempt.id == evidence.attempt_id,
+        PaymentAttempt.provider == evidence.provider,
+    )
+    if attempt is None or attempt.provider_request_id not in (None, evidence.provider_request_id):
+        return None
+    attempt.provider_request_id = evidence.provider_request_id
+    return attempt
+
+
+def evidenced_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt | None:
+    if evidence.provider_request_id is None:
+        return None
+    hold_reference(db, evidence.provider, evidence.provider_request_id)
+    attempt = locked_attempt(
+        db,
+        PaymentAttempt.provider == evidence.provider,
+        PaymentAttempt.provider_request_id == evidence.provider_request_id,
+    )
+    if attempt is None:
+        return awaiting_attempt(db, evidence)
+    if evidence.attempt_id not in (None, attempt.id):
         return None
     return attempt
 
@@ -106,6 +127,7 @@ def open_exception(db: Session, application: Application, incident: Incident) ->
         "transfer_id": incident.transfer_id,
         "webhook_event_id": application.event_id,
         "provider_transaction_id": application.evidence.provider_transaction_id,
+        "provider_request_id": application.evidence.provider_request_id,
         "reason": incident.reason,
         "expected_amount_cents": incident.expected_amount_cents,
         "received_amount_cents": application.evidence.amount_cents,
@@ -187,8 +209,7 @@ def recorded_by_this_event(db: Session, existing: Transfer, event_id: uuid.UUID 
 
 
 def cover_sale(attempt: PaymentAttempt, sale: Sale, now: datetime) -> EvidenceOutcome:
-    attempt.status = AttemptStatus.PAID
-    attempt.updated_at = now
+    move(attempt, AttemptStatus.PAID, now)
     sale.status = SaleStatus.PAID
     return EvidenceOutcome.APPLIED
 
