@@ -98,6 +98,7 @@ def test_a_validated_own_transfer_produces_its_receipt(
         "concept": "Comida",
         "provider_transaction_id": "01M3QR8H0RH0XBCKYYD242YXNV",
         "paid_at": detail["transfers"][0]["occurred_at"],
+        "dated_by": "bank",
         "received_at": detail["transfers"][0]["received_at"],
         "simulated": False,
         "under_review": False,
@@ -194,3 +195,23 @@ def test_history_detail_and_receipt_agree_on_coverage(
 
     assert short == (False, False, HTTPStatus.NOT_FOUND)
     assert exact == (True, True, HTTPStatus.OK)
+
+
+def test_a_receipt_without_a_bank_time_says_it_is_dated_by_reception(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, attempt, operator_a = pending_sale(client, migrated_database_url)
+    event = {
+        "type": "codi.qr.payment_received",
+        "amount": AMOUNT / 100,
+        "bankAccountId": RECEIVER_A["provider_account_id"],
+        "codiQrId": attempt["provider_request_id"],
+        "transactionId": "TX-RECEPTION-DATED",
+        "metadata": {"tappy_attempt_id": attempt["id"]},
+    }
+    deliver(client, json.dumps(event).encode(), Delivery(message_id="msg_reception_dated"))
+
+    body = receipt(client, operator_a, sale["id"]).json()
+
+    assert (body["paid_at"], body["dated_by"]) == (None, "reception")
+    assert body["received_at"] is not None

@@ -10,7 +10,8 @@ from tappy.sales.models import (
     ExceptionReason,
     SaleStatus,
 )
-from tappy.sales.service import NextAction
+from tappy.sales.periods import PeriodKind
+from tappy.sales.service import DateBasis, NextAction
 
 
 class SaleCreateRequest(BaseModel):
@@ -53,7 +54,8 @@ class TransferResponse(BaseModel):
 
     provider_transaction_id: str
     amount_cents: int
-    occurred_at: datetime
+    occurred_at: datetime | None
+    dated_by: DateBasis
     received_at: datetime
     beneficiary_name: str
     masked_account: str
@@ -143,7 +145,8 @@ class ReceiptResponse(BaseModel):
     currency: str
     concept: str | None
     provider_transaction_id: str
-    paid_at: datetime
+    paid_at: datetime | None
+    dated_by: DateBasis
     received_at: datetime
     simulated: bool
     under_review: bool
@@ -161,3 +164,37 @@ class DailySummaryResponse(BaseModel):
     covered_sale_count: int
     review_sale_count: int
     open_exception_count: int
+
+
+class PeriodParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    period: PeriodKind
+    day: date | None = Field(default=None, alias="date")
+
+
+class DayTotalsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date
+    received_amount_cents: int
+    transfer_count: int
+    covered_sale_count: int
+
+
+class PeriodSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    merchant_id: str
+    period: PeriodKind
+    start: date
+    end: date
+    timezone: str
+    received_amount_cents: int
+    currency: str
+    transfer_count: int
+    covered_sale_count: int
+    review_sale_count: int
+    open_exception_count: int
+    reception_dated_transfer_count: int
+    days: list[DayTotalsResponse]

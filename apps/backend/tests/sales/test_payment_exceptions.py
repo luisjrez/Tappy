@@ -180,7 +180,9 @@ def test_a_transfer_id_already_used_with_other_data_opens_an_incident(
     assert event_status(migrated_database_url, "msg_e2") == "review"
 
 
-@pytest.mark.parametrize("changes", [{"transactionId": None}, {"datePaid": None}, {"amount": None}])
+@pytest.mark.parametrize(
+    "changes", [{"transactionId": None}, {"datePaid": "yesterday"}, {"amount": None}]
+)
 def test_incomplete_evidence_for_the_attempt_goes_to_review(
     client: TestClient, migrated_database_url: str, changes: dict[str, object]
 ) -> None:

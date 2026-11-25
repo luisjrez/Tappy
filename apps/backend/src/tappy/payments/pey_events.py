@@ -37,6 +37,10 @@ def paid_at(value: object) -> datetime | None:
         return None
 
 
+def invalid_bank_time(value: object) -> bool:
+    return value is not None and paid_at(value) is None
+
+
 def attempt_reference(metadata: object) -> uuid.UUID | None:
     if not isinstance(metadata, dict):
         return None
@@ -62,4 +66,5 @@ def evidence_from_pey(body: bytes, environment: str) -> PaymentEvidence | None:
         amount_cents=cents(event.get("amount")),
         receiver_account=text(event.get("bankAccountId")),
         occurred_at=paid_at(event.get("datePaid")),
+        bank_time_invalid=invalid_bank_time(event.get("datePaid")),
     )

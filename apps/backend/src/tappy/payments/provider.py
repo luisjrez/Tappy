@@ -71,6 +71,7 @@ class QrPayment:
     transaction_id: str
     amount_cents: int | None
     occurred_at: datetime | None
+    bank_time_invalid: bool = False
 
 
 class QrProvider(Protocol):
@@ -95,3 +96,4 @@ class PaymentEvidence:
     amount_cents: int | None
     receiver_account: str | None
     occurred_at: datetime | None
+    bank_time_invalid: bool = False

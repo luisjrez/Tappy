@@ -39,7 +39,9 @@ def covers_its_sale() -> ColumnElement[bool]:
         select(earlier.id)
         .join(attempt, attempt.id == earlier.attempt_id)
         .where(earlier.sale_id == Transfer.sale_id, covering(earlier, attempt))
-        .order_by(earlier.occurred_at, earlier.received_at, earlier.id)
+        .order_by(
+            func.coalesce(earlier.occurred_at, earlier.received_at), earlier.received_at, earlier.id
+        )
         .limit(1)
         .scalar_subquery()
     )
@@ -47,4 +49,8 @@ def covers_its_sale() -> ColumnElement[bool]:
 
 
 def transfer_paid_between(start: datetime, end: datetime) -> ColumnElement[bool]:
-    return and_(Transfer.occurred_at >= start, Transfer.occurred_at < end)
+    return and_(transfer_date() >= start, transfer_date() < end)
+
+
+def transfer_date() -> ColumnElement[datetime]:
+    return func.coalesce(Transfer.occurred_at, Transfer.received_at)

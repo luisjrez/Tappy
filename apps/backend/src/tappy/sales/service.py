@@ -89,11 +89,17 @@ class AttemptView:
     late_payment_possible: bool
 
 
+class DateBasis(StrEnum):
+    BANK = "bank"
+    RECEPTION = "reception"
+
+
 @dataclass(frozen=True)
 class TransferView:
     provider_transaction_id: str
     amount_cents: int
-    occurred_at: datetime
+    occurred_at: datetime | None
+    dated_by: DateBasis
     received_at: datetime
     beneficiary_name: str
     masked_account: str
@@ -138,7 +144,8 @@ class ReceiptView:
     currency: str
     concept: str | None
     provider_transaction_id: str
-    paid_at: datetime
+    paid_at: datetime | None
+    dated_by: DateBasis
     received_at: datetime
     simulated: bool
     under_review: bool
@@ -218,6 +225,14 @@ def late_payment_possible(attempt: PaymentAttempt) -> bool:
     return False
 
 
+def dated_at(transfer: Transfer) -> datetime:
+    return transfer.occurred_at or transfer.received_at
+
+
+def dated_by(transfer: Transfer) -> DateBasis:
+    return DateBasis.RECEPTION if transfer.occurred_at is None else DateBasis.BANK
+
+
 def covering_reception(sale: Sale) -> tuple[Transfer, PaymentAttempt] | None:
     paid = {
         attempt.id: attempt for attempt in sale.attempts if attempt.status is AttemptStatus.PAID
@@ -229,7 +244,7 @@ def covering_reception(sale: Sale) -> tuple[Transfer, PaymentAttempt] | None:
     ]
     first = min(
         exact,
-        key=lambda transfer: (transfer.occurred_at, transfer.received_at, str(transfer.id)),
+        key=lambda transfer: (dated_at(transfer), transfer.received_at, str(transfer.id)),
         default=None,
     )
     return None if first is None else (first, paid[first.attempt_id])
@@ -255,6 +270,7 @@ def describe_sale(sale: Sale) -> SaleView:
                 transfer.provider_transaction_id,
                 transfer.amount_cents,
                 transfer.occurred_at,
+                dated_by(transfer),
                 transfer.received_at,
                 sale.beneficiary_name,
                 masked_account(sale.account_last4),
@@ -353,6 +369,7 @@ def read_receipt(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> Rec
         concept=sale.concept,
         provider_transaction_id=transfer.provider_transaction_id,
         paid_at=transfer.occurred_at,
+        dated_by=dated_by(transfer),
         received_at=transfer.received_at,
         simulated=attempt.simulated,
         under_review=sale.status is SaleStatus.REVIEW,

@@ -10,7 +10,7 @@ from urllib.parse import quote
 import httpx2
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
-from tappy.payments.pey_events import cents, paid_at
+from tappy.payments.pey_events import cents, invalid_bank_time, paid_at
 from tappy.payments.provider import (
     IssuedQr,
     PaymentsQueryError,
@@ -131,7 +131,12 @@ def query_page(response: httpx2.Response) -> QueryPage:
 
 def paid_payments(page: QueryPage) -> list[QrPayment]:
     return [
-        QrPayment(item.id, cents(item.amount), paid_at(item.date_paid))
+        QrPayment(
+            item.id,
+            cents(item.amount),
+            paid_at(item.date_paid),
+            invalid_bank_time(item.date_paid),
+        )
         for item in page.items
         if item.status == PAID
     ]

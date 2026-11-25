@@ -47,7 +47,7 @@ class Incident:
 class VerifiedReception:
     transaction_id: str
     amount_cents: int
-    occurred_at: datetime
+    occurred_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -150,7 +150,7 @@ def verified_reception(evidence: PaymentEvidence) -> VerifiedReception | None:
     if (
         evidence.provider_transaction_id is None
         or evidence.amount_cents is None
-        or evidence.occurred_at is None
+        or evidence.bank_time_invalid
     ):
         return None
     return VerifiedReception(

@@ -94,6 +94,7 @@ def test_exact_evidence_confirms_the_transfer_and_the_sale(
             "provider_transaction_id": TRANSACTION,
             "amount_cents": AMOUNT,
             "occurred_at": datetime.fromtimestamp(PAID_AT, UTC).isoformat().replace("+00:00", "Z"),
+            "dated_by": "bank",
             "received_at": read["transfers"][0]["received_at"],
             "beneficiary_name": RECEIVER_A["beneficiary_name"],
             "masked_account": "**************6782",
@@ -116,7 +117,7 @@ def test_exact_evidence_confirms_the_transfer_and_the_sale(
         ({"transactionId": None}, ("review", "open", 0)),
         ({"metadata": {"tappy_attempt_id": str(uuid.uuid4())}}, ("review", "open", 0)),
         ({"type": "codi.pn.payment_received"}, ("unmatched", "open", 0)),
-        ({"datePaid": None}, ("review", "open", 0)),
+        ({"datePaid": "yesterday"}, ("review", "open", 0)),
     ],
 )
 def test_insufficient_evidence_never_marks_the_sale_received(

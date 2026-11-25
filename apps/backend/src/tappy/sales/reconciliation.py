@@ -89,6 +89,7 @@ def evidence_of(target: QueryTarget, payment: QrPayment, environment: str) -> Pa
         amount_cents=payment.amount_cents,
         receiver_account=target.receiver_account,
         occurred_at=payment.occurred_at,
+        bank_time_invalid=payment.bank_time_invalid,
     )
 
 
