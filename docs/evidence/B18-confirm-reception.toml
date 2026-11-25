@@ -1,5 +1,5 @@
 ticket = "B18"
-revision = "e6365fa"
+revision = "de0a0c2"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B18-confirm-reception.md#b18-vc01--antesdespués-de-la-recepción"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]

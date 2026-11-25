@@ -9,7 +9,7 @@ Ticket: [#26](https://github.com/luisjrez/Tappy/issues/26) · Historia: [H5 #5](
 - Ticket, UC/AC/TC y comprobación: B18-UC01–UC03, B18-AC01–AC03, B18-TC01–TC03, B18-VC01. Incluye el arrastre de B17 en [#26](https://github.com/luisjrez/Tappy/issues/26).
 - Modalidad: **antes/después** para el detalle de cobro (pasa de `open`/`pending` a `paid` con transferencia; `SaleResponse` gana `confirmed_amount_cents` y `transfers`) y para el estado del evento de B17 (antes quedaba `received`; ahora se aplica al guardarse: `applied` o `unmatched`); **resultado inicial** para la aplicación de evidencia y el comando `process-events`.
 - Cambios esperados en tests anteriores: el cuerpo exacto del cobro (B11) incluye `confirmed_amount_cents: 0` y `transfers: []`; el test de B14 que buscaba la palabra «received» comprueba ahora `confirmed_amount_cents == 0` y `transfers == []` (`received_at` de las transferencias contiene la palabra); el test de B17 espera `unmatched` para un evento sin intento asociado.
-- Base: rama B17 `d9f558d` (PR #73), stack #68. Revisiones: candidato `4d1224b` → correcciones de review `e6365fa` (revisión final; VC01 repetida sobre ella).
+- Base: rama B17 `d9f558d` (PR #73), stack #68. Revisiones: candidato `4d1224b` → correcciones de review `e6365fa` (VC01 repetida sobre ella) → `de0a0c2` (solo simplifica un tipo de excepción redundante).
 - Entorno: macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-24 (UTC 2026-11-25). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -124,7 +124,7 @@ Comprobaciones: estados finales de los eventos `applied`, `unmatched`, `unmatche
 
 ## Checks
 
-`uv run python -m quality.check` sobre `e6365fa` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (372 passed, Postgres real aislado), api (16 contratos sin diferencias); `evidence` B01–B17 APPROVED.
+`uv run python -m quality.check` sobre `de0a0c2` (con `.env` exportado): PASS format, lint, types (mypy strict), hygiene, migrations (upgrade/downgrade/upgrade + `alembic check`), tests (372 passed, Postgres real aislado), api (16 contratos sin diferencias); `evidence` B01–B17 APPROVED.
 
 ## Supresiones
 
@@ -136,4 +136,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `4d1224b` + `b219aba` | CHANGES_REQUESTED | CHANGES_REQUESTED | Standards (hard): los fallos registraban parámetros SQL (cuentas, importes) en el log; faltaba el diff OpenAPI. Riesgos: transferencias borrables, eventos que fallaban para siempre (importes/fechas extremos, `transactionId` repetido), error tras guardar devolvía 500. Spec: el detalle no mostraba el receptor verificado; el fallo inducido ocurría en la primera escritura (no probaba el rollback tras escrituras reales); retención del payload y control de reintento sin tratar |
+| 2 | `e6365fa` + `3506ef9` | APPROVE | APPROVE | `hide_parameters`, triggers de borrado/truncado, conversión robusta, savepoint, fecha obligatoria, receptor verificado por transferencia, fallo en la última escritura, arrastres a #27/#29/#34/#42. Menor aplicado en `de0a0c2` |
+
+Hallazgos pendientes: 0.
