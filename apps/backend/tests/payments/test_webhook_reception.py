@@ -243,3 +243,35 @@ def test_webhook_secret_setting_is_validated_like_any_configuration() -> None:
     for invalid in ("not-a-secret", "whsec_short", "whsec_" + "!" * 40):
         with pytest.raises(ValueError, match="pey_webhook_secret"):
             Settings.model_validate({**base, "pey_webhook_secret": invalid})
+
+
+@pytest.mark.parametrize("stamp", ["9" * 400, "9" * 5000, "1" + "0" * 13])
+def test_absurd_timestamps_are_rejected_as_invalid(
+    client: TestClient, migrated_database_url: str, stamp: str
+) -> None:
+    body = encoded()
+    headers = {
+        "webhook-id": "msg_absurd",
+        "webhook-timestamp": stamp,
+        "webhook-signature": signature(SECRET, "msg_absurd", stamp, body),
+    }
+
+    response = client.post("/webhooks/pey", content=body, headers=headers)
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert event_count(migrated_database_url) == 0
+
+
+def test_overlong_event_ids_are_rejected_as_invalid(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    response = deliver(client, encoded(), Delivery(message_id="m" * 256))
+
+    assert response.status_code == HTTPStatus.UNAUTHORIZED
+    assert event_count(migrated_database_url) == 0
+
+
+@pytest.mark.parametrize("secret", ["whsec_" + "A" * 25, "whsec_" + "A" * 26, "whsec_QUJD"])
+def test_secrets_that_do_not_decode_to_a_usable_key_are_refused(secret: str) -> None:
+    with pytest.raises(ValueError, match="pey_webhook_secret"):
+        Settings.model_validate({**build_settings().model_dump(), "pey_webhook_secret": secret})

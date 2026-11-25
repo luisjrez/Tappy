@@ -1,6 +1,7 @@
 import hashlib
 import uuid
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field, ValidationError
@@ -9,11 +10,10 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from tappy.payments.provider import ProviderName
-from tappy.payments.webhooks import SignedDelivery
+from tappy.payments.webhooks import EVENT_ID_MAX_LENGTH
 from tappy.platform.persistence import Base, enum_column
 
 EVENT_CONSTRAINT = "uq_webhook_events_provider_event"
-EVENT_ID_MAX_LENGTH = 255
 EVENT_TYPE_MAX_LENGTH = 64
 
 
@@ -53,20 +53,26 @@ def envelope_of(body: bytes) -> EventEnvelope:
         raise InvalidEventError from None
 
 
-def store_event(
-    db: Session, provider: ProviderName, delivery: SignedDelivery, now: datetime
-) -> None:
-    envelope = envelope_of(delivery.body)
+@dataclass(frozen=True)
+class ReceivedEvent:
+    provider: ProviderName
+    message_id: str
+    event_type: str
+    body: bytes
+    signed_at: datetime
+
+
+def store_event(db: Session, event: ReceivedEvent, now: datetime) -> None:
     db.execute(
         insert(WebhookEvent)
         .values(
             id=uuid.uuid4(),
-            provider=provider,
-            provider_event_id=delivery.message_id,
-            event_type=envelope.type,
-            payload=delivery.body,
-            payload_digest=hashlib.sha256(delivery.body).hexdigest(),
-            signed_at=datetime.fromtimestamp(int(delivery.timestamp), UTC),
+            provider=event.provider,
+            provider_event_id=event.message_id,
+            event_type=event.event_type,
+            payload=event.body,
+            payload_digest=hashlib.sha256(event.body).hexdigest(),
+            signed_at=event.signed_at,
             status=EventStatus.RECEIVED,
             received_at=now,
         )

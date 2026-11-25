@@ -2,12 +2,17 @@ import base64
 import binascii
 import hashlib
 import hmac
+import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import SecretStr
 
+from tappy.platform.config import standard_webhook_key
+
 SIGNATURE_VERSION = "v1"
+EVENT_ID_MAX_LENGTH = 255
+TIMESTAMP = re.compile(r"\d{1,12}")
 
 
 class InvalidSignatureError(Exception):
@@ -23,13 +28,10 @@ class SignedDelivery:
     body: bytes
 
 
-def signing_key(secret: SecretStr) -> bytes:
-    return base64.b64decode(secret.get_secret_value().removeprefix("whsec_"))
-
-
 def expected_signature(secret: SecretStr, delivery: SignedDelivery) -> bytes:
     signed = f"{delivery.message_id}.{delivery.timestamp}.".encode() + delivery.body
-    return hmac.new(signing_key(secret), signed, hashlib.sha256).digest()
+    key = standard_webhook_key(secret.get_secret_value())
+    return hmac.new(key, signed, hashlib.sha256).digest()
 
 
 def presented_signatures(header: str) -> list[bytes]:
@@ -45,13 +47,16 @@ def presented_signatures(header: str) -> list[bytes]:
     return decoded
 
 
-def verify(secret: SecretStr, delivery: SignedDelivery, now: datetime, tolerance: int) -> None:
-    if not delivery.message_id or not delivery.timestamp.isdigit():
+def verify(secret: SecretStr, delivery: SignedDelivery, now: datetime, tolerance: int) -> datetime:
+    if not 0 < len(delivery.message_id) <= EVENT_ID_MAX_LENGTH:
         raise InvalidSignatureError
-    if abs(now.timestamp() - int(delivery.timestamp)) > tolerance:
+    if not TIMESTAMP.fullmatch(delivery.timestamp):
+        raise InvalidSignatureError
+    signed_at = int(delivery.timestamp)
+    if abs(now.timestamp() - signed_at) > tolerance:
         raise InvalidSignatureError
     expected = expected_signature(secret, delivery)
-    if not any(
-        hmac.compare_digest(expected, given) for given in presented_signatures(delivery.signatures)
-    ):
+    presented = presented_signatures(delivery.signatures)
+    if not any(hmac.compare_digest(expected, given) for given in presented):
         raise InvalidSignatureError
+    return datetime.fromtimestamp(signed_at, UTC)
