@@ -1,0 +1,56 @@
+ticket = "B17"
+revision = "b553a22"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B17-webhook-reception.md#b17-vc01--resultado-inicial-del-webhook"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B17-AC01"
+use_cases = ["B17-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B17-TC01"
+mode = "automated"
+tests = [
+    "tests/payments/test_webhook_reception.py::test_valid_event_is_stored_durably_before_success",
+    "tests/payments/test_webhook_reception.py::test_repeated_delivery_is_acknowledged_without_a_second_record",
+    "tests/payments/test_webhook_reception.py::test_signatures_from_a_rotated_header_list_are_accepted",
+    "tests/payments/test_webhook_reception.py::test_webhook_secret_setting_is_validated_like_any_configuration",
+]
+
+[[criteria]]
+id = "B17-AC02"
+use_cases = ["B17-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B17-TC02"
+mode = "automated"
+tests = [
+    "tests/payments/test_webhook_reception.py::test_untrusted_deliveries_are_rejected_without_effects",
+    "tests/payments/test_webhook_reception.py::test_missing_or_malformed_headers_are_rejected",
+    "tests/payments/test_webhook_reception.py::test_signed_events_with_an_invalid_schema_are_rejected",
+    "tests/payments/test_webhook_reception.py::test_oversized_bodies_are_rejected_before_verification",
+    "tests/payments/test_webhook_reception.py::test_secret_is_never_echoed",
+]
+
+[[criteria]]
+id = "B17-AC03"
+use_cases = ["B17-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B17-TC03"
+mode = "automated"
+tests = [
+    "tests/payments/test_webhook_reception.py::test_unavailable_storage_answers_a_temporary_error_and_a_retry_keeps_the_event",
+    "tests/payments/test_webhook_reception.py::test_reception_without_a_configured_secret_is_unavailable",
+]
