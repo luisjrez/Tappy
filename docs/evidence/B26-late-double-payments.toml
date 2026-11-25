@@ -1,0 +1,53 @@
+ticket = "B26"
+revision = "3fbced1"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B26-late-double-payments.md#b26-vc01--antesdespués-del-pago-tardío-y-la-doble-recepción"
+
+[review]
+standards = "PENDING"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B26-AC01"
+use_cases = ["B26-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B26-TC01"
+mode = "automated"
+tests = ["tests/sales/test_late_payments.py::test_an_authentic_payment_to_the_old_expired_attempt_covers_the_sale"]
+
+[[criteria]]
+id = "B26-AC02"
+use_cases = ["B26-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B26-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_late_payments.py::test_a_second_distinct_transfer_is_kept_and_opens_a_double_reception",
+    "tests/sales/test_late_payments.py::test_the_same_qr_paid_twice_keeps_both_transfers",
+    "tests/sales/test_late_payments.py::test_an_exact_payment_after_a_short_one_is_kept_and_covers_the_sale_in_review",
+    "tests/sales/test_late_payments.py::test_a_second_reception_found_by_reconciliation_is_kept_once",
+    "tests/sales/test_late_payments.py::test_a_foreign_account_payment_for_a_paid_sale_is_never_recorded",
+]
+
+[[criteria]]
+id = "B26-AC03"
+use_cases = ["B26-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B26-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_late_payments.py::test_the_newer_presentation_is_withdrawn_without_promising_cancellation",
+    "tests/sales/test_late_payments.py::test_repeating_the_old_payment_never_duplicates_the_money",
+    "tests/sales/test_late_payments.py::test_covering_through_a_second_reception_also_withdraws_newer_presentations",
+    "tests/sales/test_late_payments.py::test_an_older_verified_attempt_suggests_nothing_once_the_sale_is_covered",
+]
