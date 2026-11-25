@@ -1,3 +1,4 @@
+import calendar
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from enum import StrEnum
@@ -11,8 +12,7 @@ class PeriodKind(StrEnum):
 
 
 def last_day_of_month(day: date) -> date:
-    next_month = (day.replace(day=1) + timedelta(days=32)).replace(day=1)
-    return next_month - timedelta(days=1)
+    return day.replace(day=calendar.monthrange(day.year, day.month)[1])
 
 
 @dataclass(frozen=True)
@@ -34,8 +34,10 @@ class BusinessPeriod:
                 return cls(kind, day.replace(day=1), last_day_of_month(day), zone)
 
     @classmethod
-    def today(cls, kind: PeriodKind, now: datetime, zone: ZoneInfo) -> BusinessPeriod:
-        return cls.containing(kind, now.astimezone(zone).date(), zone)
+    def at(
+        cls, kind: PeriodKind, day: date | None, now: datetime, zone: ZoneInfo
+    ) -> BusinessPeriod:
+        return cls.containing(kind, day or now.astimezone(zone).date(), zone)
 
     @property
     def bounds(self) -> tuple[datetime, datetime]:

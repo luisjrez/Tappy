@@ -24,7 +24,7 @@ from tests.sales.support import (
     ready_merchant,
     start_client,
 )
-from tests.support import MovableClock, build_settings
+from tests.support import MovableClock, build_settings, execute
 
 LOCAL = ZoneInfo("America/Mexico_City")
 PRICE = 10000
@@ -95,6 +95,23 @@ def pay(
     deliver(client, json.dumps(event, separators=(",", ":")).encode(), signed)
 
 
+def reconcile_with_bank_time(
+    database_url: str, attempt: dict[str, Any], clock: MovableClock, paid: datetime
+) -> None:
+    item = {
+        "id": "TX-JANUARY",
+        "status": "PAID",
+        "amount": PRICE / 100,
+        "datePaid": int(paid.timestamp()),
+    }
+    database = Database.from_settings(build_settings(database_url=database_url))
+    try:
+        provider = FakePey(pages=[(200, {"items": [item], "nextToken": None})]).provider()
+        reconcile_attempt(database, uuid.UUID(attempt["id"]), provider, "test", clock)
+    finally:
+        database.dispose()
+
+
 def period(
     client: TestClient, merchant: str, headers: dict[str, str], kind: str, day: str
 ) -> Response:
@@ -162,18 +179,7 @@ def test_a_month_end_payment_notified_next_month_counts_once_in_its_bank_month(
     attempt = charge(client, merchant)
     clock.current = local(2027, 2, 1, 0, 20)
     pay(client, clock, attempt, "TX-JANUARY", local(2027, 1, 31, 23, 50))
-    item = {
-        "id": "TX-JANUARY",
-        "status": "PAID",
-        "amount": PRICE / 100,
-        "datePaid": int(local(2027, 1, 31, 23, 50).timestamp()),
-    }
-    database = Database.from_settings(build_settings(database_url=migrated_database_url))
-    try:
-        provider = FakePey(pages=[(200, {"items": [item], "nextToken": None})]).provider()
-        reconcile_attempt(database, uuid.UUID(attempt["id"]), provider, "test", clock)
-    finally:
-        database.dispose()
+    reconcile_with_bank_time(migrated_database_url, attempt, clock, local(2027, 1, 31, 23, 50))
     operator_a = bearer(client, OPERATOR_A)
 
     january = period(client, merchant, operator_a, "month", "2027-01-10").json()
@@ -181,7 +187,47 @@ def test_a_month_end_payment_notified_next_month_counts_once_in_its_bank_month(
 
     assert (january["received_amount_cents"], january["covered_sale_count"]) == (PRICE, 1)
     assert (february["received_amount_cents"], february["transfer_count"]) == (0, 0)
-    assert january["reception_dated_transfer_count"] == 0
+
+
+def test_a_late_bank_time_moves_a_reception_dated_transfer_to_its_bank_period_once(
+    client: TestClient, migrated_database_url: str, merchant: str, clock: MovableClock
+) -> None:
+    attempt = charge(client, merchant)
+    clock.current = local(2027, 2, 1, 0, 20)
+    pay(client, clock, attempt, "TX-JANUARY", None)
+    operator_a = bearer(client, OPERATOR_A)
+    before = period(client, merchant, operator_a, "month", "2027-02-10").json()
+
+    reconcile_with_bank_time(migrated_database_url, attempt, clock, local(2027, 1, 31, 23, 50))
+    reconcile_with_bank_time(migrated_database_url, attempt, clock, local(2027, 1, 15, 9, 0))
+    january = period(client, merchant, operator_a, "month", "2027-01-10").json()
+    february = period(client, merchant, operator_a, "month", "2027-02-10").json()
+    transfer = client.get(f"/sales/{attempt['sale_id']}", headers=operator_a).json()["transfers"]
+
+    assert (before["received_amount_cents"], before["reception_dated_transfer_count"]) == (PRICE, 1)
+    assert (january["received_amount_cents"], january["reception_dated_transfer_count"]) == (
+        PRICE,
+        0,
+    )
+    assert [day["date"] for day in january["days"] if day["transfer_count"]] == ["2027-01-31"]
+    assert (february["received_amount_cents"], february["transfer_count"]) == (0, 0)
+    assert len(transfer) == 1
+    assert transfer[0]["dated_by"] == "bank"
+
+
+def test_the_database_only_lets_a_missing_bank_time_be_filled_once(
+    client: TestClient, migrated_database_url: str, merchant: str, clock: MovableClock
+) -> None:
+    pay(client, clock, charge(client, merchant), "TX-DATED", None)
+
+    execute(migrated_database_url, "UPDATE transactions SET occurred_at = now()")
+    for statement in (
+        "UPDATE transactions SET occurred_at = now() - interval '1 day'",
+        "UPDATE transactions SET amount_cents = 1",
+        "DELETE FROM transactions",
+    ):
+        with pytest.raises(Exception, match="recorded transfers are immutable"):
+            execute(migrated_database_url, statement)
 
 
 def test_the_daily_endpoint_matches_the_day_period(

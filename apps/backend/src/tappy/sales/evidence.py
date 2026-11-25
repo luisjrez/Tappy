@@ -197,6 +197,11 @@ def record_reception(
     return transfer
 
 
+def date_by_bank(existing: Transfer, evidence: PaymentEvidence) -> None:
+    if existing.occurred_at is None and evidence.occurred_at is not None:
+        existing.occurred_at = evidence.occurred_at
+
+
 def recorded_by_this_event(db: Session, existing: Transfer, event_id: uuid.UUID | None) -> bool:
     if event_id is None or existing.webhook_event_id != event_id:
         return False
@@ -260,6 +265,7 @@ def apply_evidence(
                 transfer_id=existing.id,
             )
             return open_exception(db, application, incident)
+        date_by_bank(existing, evidence)
         if recorded_by_this_event(db, existing, event_id):
             return EvidenceOutcome.REVIEW
         return EvidenceOutcome.DUPLICATE

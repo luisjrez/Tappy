@@ -23,9 +23,7 @@ def requested_day(
     settings: SettingsDependency,
     day: Annotated[date | None, Query(alias="date")] = None,
 ) -> BusinessPeriod:
-    if day is None:
-        return BusinessPeriod.today(PeriodKind.DAY, clock.now(), settings.zone)
-    return BusinessPeriod.containing(PeriodKind.DAY, day, settings.zone)
+    return BusinessPeriod.at(PeriodKind.DAY, day, clock.now(), settings.zone)
 
 
 def requested_period(
@@ -33,9 +31,7 @@ def requested_period(
     clock: ClockDependency,
     settings: SettingsDependency,
 ) -> BusinessPeriod:
-    if params.day is None:
-        return BusinessPeriod.today(params.period, clock.now(), settings.zone)
-    return BusinessPeriod.containing(params.period, params.day, settings.zone)
+    return BusinessPeriod.at(params.period, params.day, clock.now(), settings.zone)
 
 
 @router.get("/{merchant_id}/summary/daily", responses=NOT_FOUND)

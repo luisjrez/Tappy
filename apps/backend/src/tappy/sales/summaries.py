@@ -1,5 +1,6 @@
 import uuid
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -10,7 +11,7 @@ from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.service import accessible_merchant
 from tappy.sales.models import CURRENCY, PaymentException, Sale, SaleStatus, Transfer
 from tappy.sales.periods import BusinessPeriod, PeriodKind
-from tappy.sales.received import covers_its_sale, transfer_date, transfer_paid_between
+from tappy.sales.received import covers_its_sale, dated_at, transfer_paid_between
 
 type TransferRow = Row[uuid.UUID, int, SaleStatus, bool, bool, datetime]
 
@@ -53,12 +54,28 @@ class DailySummaryView:
     open_exception_count: int
 
 
-def day_totals(day: date, rows: list[TransferRow]) -> DayTotalsView:
-    return DayTotalsView(
-        date=day,
+@dataclass(frozen=True)
+class Totals:
+    received_amount_cents: int
+    transfer_count: int
+    covered_sale_count: int
+
+
+def totals(rows: Sequence[TransferRow]) -> Totals:
+    return Totals(
         received_amount_cents=sum(row.amount_cents for row in rows),
         transfer_count=len(rows),
         covered_sale_count=len({row.sale_id for row in rows if row.covers}),
+    )
+
+
+def day_totals(day: date, rows: Sequence[TransferRow]) -> DayTotalsView:
+    day_sum = totals(rows)
+    return DayTotalsView(
+        date=day,
+        received_amount_cents=day_sum.received_amount_cents,
+        transfer_count=day_sum.transfer_count,
+        covered_sale_count=day_sum.covered_sale_count,
     )
 
 
@@ -74,7 +91,7 @@ def period_summary(
             Sale.status.label("sale_status"),
             covers_its_sale().label("covers"),
             Transfer.occurred_at.is_(None).label("reception_dated"),
-            transfer_date().label("dated_at"),
+            dated_at().label("dated_at"),
         )
         .join(Sale, Sale.id == Transfer.sale_id)
         .where(Sale.merchant_id == merchant.id, transfer_paid_between(start, end))
@@ -92,7 +109,7 @@ def period_summary(
     by_day: dict[date, list[TransferRow]] = defaultdict(list)
     for row in transfers:
         by_day[period.local_date(row.dated_at)].append(row)
-    whole = day_totals(period.first, list(transfers))
+    whole = totals(transfers)
     return PeriodSummaryView(
         merchant_id=str(merchant.id),
         period=period.kind,
