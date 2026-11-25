@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from tappy.payments.provider import PaymentEvidence, ProviderName
 
@@ -23,7 +23,7 @@ def cents(value: object) -> int | None:
         scaled = Decimal(value) * CENTS_PER_PESO
         if not scaled.is_finite() or scaled != scaled.to_integral_value() or scaled <= 0:
             return None
-    except InvalidOperation, ArithmeticError:
+    except ArithmeticError:
         return None
     return int(scaled)
 
