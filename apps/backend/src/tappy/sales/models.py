@@ -61,25 +61,6 @@ class AttemptStatus(StrEnum):
     FAILED = "failed"
 
 
-class NextAction(StrEnum):
-    WAIT_FOR_QR = "wait_for_qr"
-    SHOW_QR = "show_qr"
-    WAIT_FOR_VERIFICATION = "wait_for_verification"
-    VERIFY_BEFORE_RETRY = "verify_before_retry"
-    NEW_ATTEMPT = "new_attempt"
-    NONE = "none"
-
-
-NEXT_ACTIONS = {
-    AttemptStatus.CREATING: NextAction.WAIT_FOR_QR,
-    AttemptStatus.PENDING: NextAction.SHOW_QR,
-    AttemptStatus.RECONCILING: NextAction.WAIT_FOR_VERIFICATION,
-    AttemptStatus.EXPIRED: NextAction.VERIFY_BEFORE_RETRY,
-    AttemptStatus.FAILED: NextAction.NEW_ATTEMPT,
-    AttemptStatus.PAID: NextAction.NONE,
-}
-
-
 ACTIVE_ATTEMPT_STATUSES = (AttemptStatus.CREATING, AttemptStatus.PENDING, AttemptStatus.RECONCILING)
 
 

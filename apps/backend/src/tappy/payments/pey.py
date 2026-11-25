@@ -45,7 +45,7 @@ class PeySettings:
     base_url: str
     api_key: SecretStr
     timeout_seconds: float
-    expiration_seconds: int
+    qr_window: timedelta
 
 
 class CreatedQr(BaseModel):
@@ -83,11 +83,11 @@ def pesos(amount_cents: int) -> float:
     return sent
 
 
-def qr_request(order: QrOrder, expiration_seconds: int) -> dict[str, object]:
+def qr_request(order: QrOrder, qr_window: timedelta) -> dict[str, object]:
     body: dict[str, object] = {
         "amount": pesos(order.amount_cents),
         "bankAccountId": order.receiver_account,
-        "expiration": expiration_seconds,
+        "expiration": int(qr_window.total_seconds()),
         "metadata": {"tappy_attempt_id": str(order.attempt_id), "tappy_reference": order.reference},
     }
     if order.concept is not None:
@@ -162,7 +162,7 @@ class PeyQrProvider:
 
     def post(self, order: QrOrder) -> httpx2.Response:
         with self.client() as client:
-            return client.post("/codi/qr", json=qr_request(order, self.settings.expiration_seconds))
+            return client.post("/codi/qr", json=qr_request(order, self.settings.qr_window))
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
         path = f"/transaction/codi/qr/{quote(provider_request_id, safe='')}"
@@ -186,7 +186,7 @@ class PeyQrProvider:
             "pey QR creation for attempt %s answered %s", order.attempt_id, response.status_code
         )
         if response.status_code == httpx2.codes.CREATED:
-            return issued_qr(response, timedelta(seconds=self.settings.expiration_seconds))
+            return issued_qr(response, self.settings.qr_window)
         if response.status_code in REJECTED_STATUSES:
             raise ProviderRejectedError(rejection_code(response))
         raise ProviderUnavailableError(UncertainReason.SERVER_ERROR)

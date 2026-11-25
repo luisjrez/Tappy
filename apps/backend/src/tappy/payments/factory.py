@@ -21,5 +21,5 @@ def pey_settings(settings: Settings) -> PeySettings:
         settings.pey_base_url,
         settings.pey_api_key,
         settings.pey_timeout_seconds,
-        settings.qr_expiration_seconds,
+        timedelta(seconds=settings.qr_expiration_seconds),
     )

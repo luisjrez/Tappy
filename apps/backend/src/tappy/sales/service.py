@@ -3,6 +3,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -22,13 +23,11 @@ from tappy.sales.idempotency import (
 )
 from tappy.sales.models import (
     CONCEPT_MAX_LENGTH,
-    NEXT_ACTIONS,
     REFERENCE_CONSTRAINT,
     REFERENCE_LENGTH,
     AttemptMethod,
     AttemptStatus,
     ExceptionReason,
-    NextAction,
     PaymentAttempt,
     Sale,
     SaleStatus,
@@ -46,6 +45,25 @@ class SaleRequest:
     amount_cents: int
     concept: str | None
     idempotency_key: str
+
+
+class NextAction(StrEnum):
+    WAIT_FOR_QR = "wait_for_qr"
+    SHOW_QR = "show_qr"
+    WAIT_FOR_VERIFICATION = "wait_for_verification"
+    VERIFY_BEFORE_RETRY = "verify_before_retry"
+    NEW_ATTEMPT = "new_attempt"
+    NONE = "none"
+
+
+NEXT_ACTIONS = {
+    AttemptStatus.CREATING: NextAction.WAIT_FOR_QR,
+    AttemptStatus.PENDING: NextAction.SHOW_QR,
+    AttemptStatus.RECONCILING: NextAction.WAIT_FOR_VERIFICATION,
+    AttemptStatus.EXPIRED: NextAction.VERIFY_BEFORE_RETRY,
+    AttemptStatus.FAILED: NextAction.NEW_ATTEMPT,
+    AttemptStatus.PAID: NextAction.NONE,
+}
 
 
 @dataclass(frozen=True)

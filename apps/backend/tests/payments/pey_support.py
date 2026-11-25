@@ -1,5 +1,6 @@
 import json
 from collections.abc import Sequence
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,6 @@ class FakePey:
             base_url=BASE_URL,
             api_key=SecretStr(API_KEY),
             timeout_seconds=5,
-            expiration_seconds=self.expiration_seconds,
+            qr_window=timedelta(seconds=self.expiration_seconds),
         )
         return PeyQrProvider(settings, transport=httpx2.MockTransport(self.handle))

@@ -7,9 +7,9 @@ from tappy.sales.models import (
     AttemptMethod,
     AttemptStatus,
     ExceptionReason,
-    NextAction,
     SaleStatus,
 )
+from tappy.sales.service import NextAction
 
 
 class SaleCreateRequest(BaseModel):
