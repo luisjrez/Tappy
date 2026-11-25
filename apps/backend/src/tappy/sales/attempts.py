@@ -175,6 +175,15 @@ def record_rejected_qr(db: Session, attempt_id: uuid.UUID, code: str, now: datet
         db.flush()
 
 
+def conflicting_qr(issued: IssuedQr, attempt: PaymentAttempt) -> ProviderUnavailableError:
+    logger.warning(
+        "QR %s conflicts with the QR of attempt %s or of another attempt; attempt kept",
+        issued.provider_request_id,
+        attempt.id,
+    )
+    return ProviderUnavailableError(UncertainReason.DUPLICATE_PROVIDER_ID)
+
+
 def attach_issued_qr(db: Session, attempt: PaymentAttempt, issued: IssuedQr, now: datetime) -> None:
     try:
         with db.begin_nested():
@@ -192,12 +201,7 @@ def attach_issued_qr(db: Session, attempt: PaymentAttempt, issued: IssuedQr, now
                 )
     except IntegrityError as error:
         if is_unique_violation(error, PROVIDER_REQUEST_CONSTRAINT):
-            logger.warning(
-                "QR provider id %s is already linked to another attempt; attempt %s kept",
-                issued.provider_request_id,
-                attempt.id,
-            )
-            raise ProviderUnavailableError(UncertainReason.DUPLICATE_PROVIDER_ID) from None
+            raise conflicting_qr(issued, attempt) from None
         raise
 
 
@@ -207,13 +211,7 @@ def record_issued_qr(
     hold_reference(db, attempt_provider(db, attempt_id), issued.provider_request_id)
     attempt = held_attempt(db, attempt_id)
     if attempt.provider_request_id not in (None, issued.provider_request_id):
-        logger.warning(
-            "QR %s differs from QR %s already linked to attempt %s; attempt kept",
-            issued.provider_request_id,
-            attempt.provider_request_id,
-            attempt.id,
-        )
-        raise ProviderUnavailableError(UncertainReason.DUPLICATE_PROVIDER_ID)
+        raise conflicting_qr(issued, attempt)
     if attempt.qr_payload is not None:
         return describe_attempt(attempt)
     attach_issued_qr(db, attempt, issued, now)

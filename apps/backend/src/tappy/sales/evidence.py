@@ -78,9 +78,11 @@ def adopting_attempt(db: Session, evidence: PaymentEvidence) -> PaymentAttempt |
         PaymentAttempt.id == evidence.attempt_id,
         PaymentAttempt.provider == evidence.provider,
     )
-    if attempt is None or attempt.provider_request_id == evidence.provider_request_id:
-        return attempt
-    if attempt.provider_request_id is not None or attempt.status not in AWAITING_QR_STATUSES:
+    if (
+        attempt is None
+        or attempt.provider_request_id is not None
+        or attempt.status not in AWAITING_QR_STATUSES
+    ):
         return None
     attempt.provider_request_id = evidence.provider_request_id
     return attempt
