@@ -2,14 +2,16 @@ import argparse
 import sys
 import uuid
 from collections.abc import Callable, Sequence
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from tappy.payments.events import WebhookEvent, WebhookEventConflict, event_conflicts
 from tappy.payments.factory import provider_from
 from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, Settings, load_settings
 from tappy.platform.database import Database
+from tappy.platform.diagnostics import configure_logging
 from tappy.sales.attempts import OpenReconciliation, open_reconciliations, recover_interrupted
+from tappy.sales.backlog import Lag, backlog
 from tappy.sales.errors import AttemptNotFoundError
 from tappy.sales.jobs import JobPolicy, JobRunner
 from tappy.sales.payment_exceptions import OpenException, open_exceptions
@@ -169,7 +171,38 @@ def run_jobs(database: Database, settings: Settings, _options: argparse.Namespac
     )
 
 
+def waiting(label: str, found: Lag, since: str, now: datetime) -> str:
+    if found.oldest is None:
+        return f"{label}: {found.count}"
+    seconds = int((now - found.oldest).total_seconds())
+    return f"{label}: {found.count} (oldest {since} {seconds} s ago)"
+
+
+def show_backlog(database: Database, settings: Settings, _options: argparse.Namespace) -> str:
+    now = SystemClock().now()
+    timeout = settings.attempt_creation_timeout_seconds
+    with database.transaction() as session:
+        found = backlog(session, now, now - timedelta(seconds=timeout))
+    return "\n".join(
+        [
+            waiting("received webhook events", found.received_events, "received", now),
+            waiting("due reconciliation jobs", found.due_jobs, "due", now),
+            f"leased reconciliation jobs: {found.leased_jobs} "
+            f"({found.expired_leases} with an expired lease)",
+            f"exhausted reconciliation jobs: {found.exhausted_jobs}",
+            waiting(
+                f"attempts creating longer than {timeout} s",
+                found.stalled_creations,
+                "updated",
+                now,
+            ),
+            f"open payment exceptions: {found.open_exceptions}",
+        ]
+    )
+
+
 COMMANDS: dict[str, Handler] = {
+    "backlog": show_backlog,
     "reconciliations": reconciliations,
     "recover-interrupted": recover,
     "process-events": process_events,
@@ -197,6 +230,7 @@ def main(arguments: Sequence[str]) -> int:
     except ConfigurationError as error:
         print(error, file=sys.stderr)
         return 1
+    configure_logging(settings)
     database = Database.from_settings(settings)
     try:
         command: Handler = options.handler
