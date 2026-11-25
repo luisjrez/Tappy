@@ -9,6 +9,7 @@ from tappy.identity.models import IdentityStatus, Role
 from tappy.identity.provisioning import IdentitySummary
 from tappy.main import create_app
 from tappy.payments.provider import QrProvider
+from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
 from tests.support import create_identity, scalar
 
@@ -35,16 +36,21 @@ IDEMPOTENCY_HEADER = "Idempotency-Key"
 
 
 def start_client(
-    settings: Settings, database_url: str, qr_provider: QrProvider | None = None
+    settings: Settings,
+    database_url: str,
+    qr_provider: QrProvider | None = None,
+    clock: Clock | None = None,
 ) -> TestClient:
     create_identity(database_url, ADMIN, PASSWORD, role=Role.ADMIN)
     create_identity(database_url, OPERATOR_A, PASSWORD)
     create_identity(database_url, OPERATOR_B, PASSWORD)
-    return app_client(settings, qr_provider)
+    return app_client(settings, qr_provider, clock)
 
 
-def app_client(settings: Settings, qr_provider: QrProvider | None = None) -> TestClient:
-    return TestClient(create_app(settings, qr_provider=qr_provider))
+def app_client(
+    settings: Settings, qr_provider: QrProvider | None = None, clock: Clock | None = None
+) -> TestClient:
+    return TestClient(create_app(settings, clock=clock, qr_provider=qr_provider))
 
 
 def actor_of(client: TestClient, headers: dict[str, str]) -> IdentitySummary:

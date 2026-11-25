@@ -29,11 +29,13 @@ class FakePey:
         body: object = None,
         error: Exception | None = None,
         pages: Sequence[tuple[int, object] | httpx2.Response] = (),
+        expiration_seconds: int = 360,
     ):
         self.status = status
         self.body = CREATED if body is None else body
         self.error = error
         self.pages = list(pages)
+        self.expiration_seconds = expiration_seconds
         self.requests: list[httpx2.Request] = []
 
     def handle(self, request: httpx2.Request) -> httpx2.Response:
@@ -49,5 +51,10 @@ class FakePey:
         return [request for request in self.requests if request.method == "GET"]
 
     def provider(self) -> PeyQrProvider:
-        settings = PeySettings(base_url=BASE_URL, api_key=SecretStr(API_KEY), timeout_seconds=5)
+        settings = PeySettings(
+            base_url=BASE_URL,
+            api_key=SecretStr(API_KEY),
+            timeout_seconds=5,
+            expiration_seconds=self.expiration_seconds,
+        )
         return PeyQrProvider(settings, transport=httpx2.MockTransport(self.handle))

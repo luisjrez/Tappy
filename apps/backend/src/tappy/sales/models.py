@@ -36,6 +36,7 @@ TRANSFER_CONSTRAINT = "uq_transactions_provider_transaction"
 EXCEPTION_CONSTRAINT = "uq_payment_exceptions_evidence_reason"
 WAITING_REFERENCE_INDEX = "ix_payment_exceptions_waiting_reference"
 DUE_JOBS_INDEX = "ix_reconciliation_jobs_due"
+DUE_EXPIRATION_INDEX = "ix_payment_attempts_due_expiration"
 JOB_PROBLEM_MAX_LENGTH = 32
 
 
@@ -58,6 +59,25 @@ class AttemptStatus(StrEnum):
     EXPIRED = "expired"
     PAID = "paid"
     FAILED = "failed"
+
+
+class NextAction(StrEnum):
+    WAIT_FOR_QR = "wait_for_qr"
+    SHOW_QR = "show_qr"
+    WAIT_FOR_VERIFICATION = "wait_for_verification"
+    VERIFY_BEFORE_RETRY = "verify_before_retry"
+    NEW_ATTEMPT = "new_attempt"
+    NONE = "none"
+
+
+NEXT_ACTIONS = {
+    AttemptStatus.CREATING: NextAction.WAIT_FOR_QR,
+    AttemptStatus.PENDING: NextAction.SHOW_QR,
+    AttemptStatus.RECONCILING: NextAction.WAIT_FOR_VERIFICATION,
+    AttemptStatus.EXPIRED: NextAction.VERIFY_BEFORE_RETRY,
+    AttemptStatus.FAILED: NextAction.NEW_ATTEMPT,
+    AttemptStatus.PAID: NextAction.NONE,
+}
 
 
 ACTIVE_ATTEMPT_STATUSES = (AttemptStatus.CREATING, AttemptStatus.PENDING, AttemptStatus.RECONCILING)
@@ -135,6 +155,11 @@ class PaymentAttempt(Base):
             ),
         ),
         UniqueConstraint("provider", "provider_request_id", name=PROVIDER_REQUEST_CONSTRAINT),
+        Index(
+            DUE_EXPIRATION_INDEX,
+            "expires_at",
+            postgresql_where=text(f"status = '{AttemptStatus.PENDING}'"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -148,6 +173,7 @@ class PaymentAttempt(Base):
     provider_request_id: Mapped[str | None] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
     qr_payload: Mapped[str | None] = mapped_column(Text)
     failure_code: Mapped[str | None] = mapped_column(String(FAILURE_CODE_MAX_LENGTH))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     sale: Mapped[Sale] = relationship(back_populates="attempts")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

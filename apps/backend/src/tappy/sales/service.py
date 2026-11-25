@@ -13,6 +13,7 @@ from tappy.merchants.receivers import held_issuing_receiver, masked_account
 from tappy.merchants.service import accessible_merchant, scoped_ids
 from tappy.platform.persistence import is_unique_violation
 from tappy.sales.errors import InvalidConceptError, SaleNotFoundError
+from tappy.sales.expiration import expire_due_attempts
 from tappy.sales.idempotency import (
     IdempotencyClaim,
     IdempotentOperation,
@@ -21,11 +22,13 @@ from tappy.sales.idempotency import (
 )
 from tappy.sales.models import (
     CONCEPT_MAX_LENGTH,
+    NEXT_ACTIONS,
     REFERENCE_CONSTRAINT,
     REFERENCE_LENGTH,
     AttemptMethod,
     AttemptStatus,
     ExceptionReason,
+    NextAction,
     PaymentAttempt,
     Sale,
     SaleStatus,
@@ -57,6 +60,8 @@ class AttemptView:
     qr_payload: str | None
     failure_code: str | None
     created_at: datetime
+    expires_at: datetime | None
+    next_action: NextAction
 
 
 @dataclass(frozen=True)
@@ -140,6 +145,8 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
         qr_payload=attempt.qr_payload,
         failure_code=attempt.failure_code,
         created_at=attempt.created_at,
+        expires_at=attempt.expires_at,
+        next_action=NEXT_ACTIONS[attempt.status],
     )
 
 
@@ -235,5 +242,7 @@ def accessible_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> 
     return sale
 
 
-def read_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> SaleView:
-    return describe_sale(accessible_sale(db, actor, sale_id))
+def read_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID, now: datetime) -> SaleView:
+    sale = accessible_sale(db, actor, sale_id)
+    expire_due_attempts(db, now, sale.id)
+    return describe_sale(sale)

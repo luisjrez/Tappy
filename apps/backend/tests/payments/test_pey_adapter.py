@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 
 import httpx2
@@ -41,7 +42,7 @@ def test_sends_exact_peso_amounts_and_keeps_the_official_id_and_payload(
     assert str(request.url) == f"{BASE_URL}/codi/qr"
     assert request.headers["authorization"] == f"Bearer {API_KEY}"
     assert sent_body(fake)["amount"] == pesos
-    assert issued == IssuedQr(CREATED["id"], CREATED["qrString"])
+    assert issued == IssuedQr(CREATED["id"], CREATED["qrString"], timedelta(seconds=360))
 
 
 def test_request_fields_are_allowed_by_the_official_request_schema() -> None:
@@ -51,7 +52,7 @@ def test_request_fields_are_allowed_by_the_official_request_schema() -> None:
 
     allowed = set(FIXTURE["request_schema"]["properties"])
     assert set(sent_body(fake)) <= allowed
-    assert {"amount", "bankAccountId", "metadata", "concept"} <= allowed
+    assert {"amount", "bankAccountId", "expiration", "metadata", "concept"} <= allowed
 
 
 def test_request_targets_the_snapshotted_receiver_and_links_the_attempt() -> None:
@@ -63,6 +64,7 @@ def test_request_targets_the_snapshotted_receiver_and_links_the_attempt() -> Non
         "amount": Decimal("300.10"),
         "concept": "Dos tacos",
         "bankAccountId": RECEIVER,
+        "expiration": 360,
         "metadata": {"tappy_attempt_id": str(ATTEMPT), "tappy_reference": "MSPE6WGBSK"},
     }
 

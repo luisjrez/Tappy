@@ -85,9 +85,11 @@ def create(
 
 
 @router.get("/{sale_id}", responses={HTTPStatus.NOT_FOUND: {"description": "Sale not found"}})
-def read_one(sale_id: uuid.UUID, actor: CurrentIdentity, db: SessionDependency) -> SaleResponse:
+def read_one(
+    sale_id: uuid.UUID, actor: CurrentIdentity, db: SessionDependency, clock: ClockDependency
+) -> SaleResponse:
     try:
-        return SaleResponse.model_validate(read_sale(db, actor, sale_id))
+        return SaleResponse.model_validate(read_sale(db, actor, sale_id, clock.now()))
     except SaleNotFoundError as error:
         raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
 

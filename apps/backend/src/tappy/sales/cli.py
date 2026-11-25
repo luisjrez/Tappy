@@ -155,6 +155,7 @@ def run_jobs(database: Database, settings: Settings, _options: argparse.Namespac
         [
             f"events: {events_line(summary.events)}",
             f"jobs of paid attempts closed: {summary.closed}",
+            f"pending attempts expired: {summary.expired}",
             f"interrupted attempts moved to reconciliation: {summary.recovered}",
             f"jobs claimed: {summary.claimed}",
             f"confirmed: {summary.confirmed}, in review: {summary.in_review}, "

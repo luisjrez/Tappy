@@ -63,6 +63,7 @@ class QrOrder:
 class IssuedQr:
     provider_request_id: str
     payload: str
+    valid_for: timedelta | None = None
 
 
 @dataclass(frozen=True)

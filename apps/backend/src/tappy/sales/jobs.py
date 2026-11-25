@@ -13,6 +13,7 @@ from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.sales.attempts import recover_interrupted
+from tappy.sales.expiration import expire_due_attempts
 from tappy.sales.models import JobStatus, ReconciliationJob
 from tappy.sales.receptions import ProcessingSummary, process_received_events
 from tappy.sales.reconciliation import (
@@ -86,6 +87,7 @@ class JobRunSummary:
     exhausted: int = 0
     lease_lost: int = 0
     closed: int = 0
+    expired: int = 0
     failed: int = 0
 
 
@@ -202,6 +204,7 @@ class JobRunner:
         now = self.clock.now()
         with self.database.transaction() as db:
             closed = close_paid_jobs(db)
+            expired = expire_due_attempts(db, now)
             recovered = recover_interrupted(db, now - self.policy.creation_timeout, now)
             abandoned = exhaust_abandoned(db, self.policy, now)
             claimed = claim_jobs(db, self.policy, now)
@@ -216,6 +219,7 @@ class JobRunner:
             exhausted=outcomes.count(JobOutcome.EXHAUSTED) + abandoned,
             lease_lost=outcomes.count(JobOutcome.LEASE_LOST),
             closed=closed,
+            expired=expired,
             failed=outcomes.count(JobOutcome.FAILED),
         )
 

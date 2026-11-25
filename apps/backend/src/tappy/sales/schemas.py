@@ -3,7 +3,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, StrictInt
 
-from tappy.sales.models import AttemptMethod, AttemptStatus, ExceptionReason, SaleStatus
+from tappy.sales.models import (
+    AttemptMethod,
+    AttemptStatus,
+    ExceptionReason,
+    NextAction,
+    SaleStatus,
+)
 
 
 class SaleCreateRequest(BaseModel):
@@ -33,6 +39,8 @@ class AttemptResponse(BaseModel):
     qr_payload: str | None
     failure_code: str | None
     created_at: datetime
+    expires_at: datetime | None
+    next_action: NextAction
 
 
 class TransferResponse(BaseModel):

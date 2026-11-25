@@ -187,11 +187,18 @@ def conflicting_qr(issued: IssuedQr, attempt: PaymentAttempt) -> ProviderUnavail
     return ProviderUnavailableError(UncertainReason.DUPLICATE_PROVIDER_ID)
 
 
-def attach_issued_qr(db: Session, attempt: PaymentAttempt, issued: IssuedQr, now: datetime) -> None:
+def attach_issued_qr(
+    db: Session,
+    attempt: PaymentAttempt,
+    issued: IssuedQr,
+    now: datetime,
+    expires_at: datetime | None,
+) -> None:
     try:
         with db.begin_nested():
             attempt.provider_request_id = issued.provider_request_id
             attempt.qr_payload = issued.payload
+            attempt.expires_at = expires_at
             attempt.updated_at = now
             if attempt.status is AttemptStatus.CREATING:
                 move(attempt, AttemptStatus.PENDING, now)
@@ -209,7 +216,11 @@ def attach_issued_qr(db: Session, attempt: PaymentAttempt, issued: IssuedQr, now
 
 
 def record_issued_qr(
-    db: Session, attempt_id: uuid.UUID, issued: IssuedQr, now: datetime
+    db: Session,
+    attempt_id: uuid.UUID,
+    issued: IssuedQr,
+    now: datetime,
+    expires_at: datetime | None = None,
 ) -> AttemptView:
     hold_reference(db, attempt_provider(db, attempt_id), issued.provider_request_id)
     attempt = held_attempt(db, attempt_id)
@@ -217,7 +228,7 @@ def record_issued_qr(
         raise conflicting_qr(issued, attempt)
     if attempt.qr_payload is not None:
         return describe_attempt(attempt)
-    attach_issued_qr(db, attempt, issued, now)
+    attach_issued_qr(db, attempt, issued, now, expires_at)
     apply_waiting_events(db, attempt, now)
     db.flush()
     return describe_attempt(attempt)
@@ -260,10 +271,12 @@ def request_attempt(
         )
     if order is None:
         return reservation
+    requested_at = clock.now()
     try:
         issued = provider.create_qr(order)
+        expires_at = None if issued.valid_for is None else requested_at + issued.valid_for
         with database.transaction() as db:
-            recorded = record_issued_qr(db, order.attempt_id, issued, clock.now())
+            recorded = record_issued_qr(db, order.attempt_id, issued, clock.now(), expires_at)
     except ProviderRejectedError as rejection:
         with database.transaction() as db:
             record_rejected_qr(db, order.attempt_id, rejection.code, clock.now())

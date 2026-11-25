@@ -108,6 +108,8 @@ def test_creating_a_qr_returns_the_simulated_payload_pending(
         "qr_payload": expected_payload(reference, attempt["id"]),
         "failure_code": None,
         "created_at": attempt["created_at"],
+        "expires_at": attempt["expires_at"],
+        "next_action": "show_qr",
     }
     assert sale["attempts"] == [attempt]
     assert len(simulator.orders) == 1

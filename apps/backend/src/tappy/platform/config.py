@@ -12,6 +12,7 @@ PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
 PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
 PROVIDER_TIMEOUT_PHASES = 4
 MAX_QUERY_PAGES = 10
+PEY_MIN_QR_EXPIRATION_SECONDS = 360
 STANDARD_WEBHOOKS_PREFIX = "whsec_"
 WEBHOOK_KEY_MIN_BYTES = 24
 PEY_BASE_URL = r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))"
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     pey_api_key: SecretStr | None = Field(default=None, min_length=16)
     pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
     attempt_creation_timeout_seconds: int = Field(default=60, ge=1)
+    qr_expiration_seconds: int = Field(default=900, ge=PEY_MIN_QR_EXPIRATION_SECONDS, le=24 * 3600)
     job_lease_seconds: int = Field(default=600, ge=1)
     job_batch_size: int = Field(default=20, ge=1, le=100)
     job_max_tries: int = Field(default=8, ge=1, le=50)

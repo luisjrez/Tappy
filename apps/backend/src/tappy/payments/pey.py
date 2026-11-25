@@ -45,6 +45,7 @@ class PeySettings:
     base_url: str
     api_key: SecretStr
     timeout_seconds: float
+    expiration_seconds: int
 
 
 class CreatedQr(BaseModel):
@@ -82,10 +83,11 @@ def pesos(amount_cents: int) -> float:
     return sent
 
 
-def qr_request(order: QrOrder) -> dict[str, object]:
+def qr_request(order: QrOrder, expiration_seconds: int) -> dict[str, object]:
     body: dict[str, object] = {
         "amount": pesos(order.amount_cents),
         "bankAccountId": order.receiver_account,
+        "expiration": expiration_seconds,
         "metadata": {"tappy_attempt_id": str(order.attempt_id), "tappy_reference": order.reference},
     }
     if order.concept is not None:
@@ -100,12 +102,12 @@ def rejection_code(response: httpx2.Response) -> str:
         raise ProviderUnavailableError(UncertainReason.INVALID_RESPONSE) from None
 
 
-def issued_qr(response: httpx2.Response) -> IssuedQr:
+def issued_qr(response: httpx2.Response, valid_for: timedelta) -> IssuedQr:
     try:
         created = CreatedQr.model_validate_json(response.content)
     except ValidationError:
         raise ProviderUnavailableError(UncertainReason.INVALID_RESPONSE) from None
-    return IssuedQr(created.id, created.qr_string)
+    return IssuedQr(created.id, created.qr_string, valid_for)
 
 
 def retry_after(response: httpx2.Response) -> timedelta | None:
@@ -160,7 +162,7 @@ class PeyQrProvider:
 
     def post(self, order: QrOrder) -> httpx2.Response:
         with self.client() as client:
-            return client.post("/codi/qr", json=qr_request(order))
+            return client.post("/codi/qr", json=qr_request(order, self.settings.expiration_seconds))
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
         path = f"/transaction/codi/qr/{quote(provider_request_id, safe='')}"
@@ -184,7 +186,7 @@ class PeyQrProvider:
             "pey QR creation for attempt %s answered %s", order.attempt_id, response.status_code
         )
         if response.status_code == httpx2.codes.CREATED:
-            return issued_qr(response)
+            return issued_qr(response, timedelta(seconds=self.settings.expiration_seconds))
         if response.status_code in REJECTED_STATUSES:
             raise ProviderRejectedError(rejection_code(response))
         raise ProviderUnavailableError(UncertainReason.SERVER_ERROR)
