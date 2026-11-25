@@ -14,7 +14,7 @@ Ticket: [#29](https://github.com/luisjrez/Tappy/issues/29) · Historia: [H5 #5](
 - **Base y revisiones:**
   - Base: rama B20 `b80cb1e` ([PR #76](https://github.com/luisjrez/Tappy/pull/76)), stack #68.
   - Candidato: `2ecd31a` + `94fd7f0`.
-  - Correcciones de la review: `bf0b852`, revisión final. La VC01 se repitió sobre ella.
+  - Correcciones de la review: `bf0b852` (ronda 1) y `2aa67c3` (notas de la ronda 2), revisión final. La VC01 se repitió sobre ella.
 - **Entorno:** macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-24 (UTC 2026-11-25). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -76,7 +76,7 @@ Todos los tests están en `tests/sales/test_out_of_order.py`.
 | B21-UC02 | B21-AC02 | B21-TC02 | `test_a_late_pending_response_never_degrades_a_paid_attempt` (el intento ya es `paid` antes de la respuesta; tras ella sigue `paid` y responde `201`); `test_a_late_response_with_another_qr_never_re_associates_a_paid_attempt`; `test_a_payment_before_a_creation_timeout_is_reported_as_created_and_paid` | PASS |
 | B21-UC03 | B21-AC03 | B21-TC03 | `test_an_unassociable_early_event_is_applied_once_the_reference_exists` (evento sin metadata: `unassociated` → al registrar el id, 1 transferencia, evento `applied`, incidencia resuelta); `test_an_event_without_metadata_racing_the_creation_response_is_applied` (carrera determinista con `wait_until_blocked_on_a_lock`); `test_an_event_naming_an_attempt_that_has_another_qr_is_never_adopted`; `test_waiting_references_are_backfilled_for_existing_exceptions` | PASS |
 
-En pey, «evento pendiente» corresponde a la respuesta de creación con el QR pendiente de pago: pey no emite webhooks de estado pendiente para QR, según `docs/research/pey-validation.md`. TC02 lo ejercita así, y también la transición prohibida `paid → pending`.
+En pey, «evento pendiente» corresponde a la respuesta de creación con el QR pendiente de pago: pey no emite webhooks de estado pendiente para QR, según `docs/research/pey-validation.md`. TC02 lo ejercita así. `paid` no tiene salidas en la tabla, y además `attach_issued_qr` solo avanza a `pending` un intento `creating`.
 
 ## TDD
 
@@ -118,7 +118,7 @@ exceptions [('unassociated', False), ('unassociated', False)]
 transfers (0, 0)
 ```
 
-**Después** (revisión final `bf0b852`):
+**Después** (revisión final `2aa67c3`; idéntico sobre `bf0b852`):
 
 | Paso | Status | Resultado |
 | --- | --- | --- |
@@ -156,14 +156,14 @@ Los datos se eliminaron al terminar. Estado VC01: **PASS**.
 
 ## Checks
 
-`uv run python -m quality.check` sobre `bf0b852`, con `.env` exportado: PASS en todos los pasos.
+`uv run python -m quality.check` sobre `2aa67c3`, con `.env` exportado: PASS en todos los pasos.
 
 - format, lint y types (mypy strict).
 - hygiene.
 - migrations: upgrade/downgrade/upgrade de `0017` + `alembic check`.
 - tests: 412 passed, Postgres real aislado.
 - api: 16 contratos sin diferencias.
-- evidence: B01–B20 APPROVED.
+- evidence: B01–B21 APPROVED.
 
 ## Supresiones
 
@@ -178,6 +178,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `2ecd31a` + `94fd7f0` | REQUEST_CHANGES | REQUEST_CHANGES | Ver detalle debajo de la tabla |
+| 2 | `bf0b852` + `e7b20cb` | APPROVE | APPROVE | Todos los hallazgos de la ronda 1 corregidos o justificados. Notas aplicadas en `2aa67c3`: helper compartido `conflicting_qr` para el warning, rama inalcanzable de `adopting_attempt` retirada, relleno de `0017` limitado a eventos `pey`, redacción de TC02 corregida |
 
 Detalle de la ronda 1, todo corregido en `bf0b852`:
 
@@ -195,4 +196,4 @@ Detalle de la ronda 1, todo corregido en `bf0b852`:
   - `attempt_provider` hace una consulta extra: evita cambiar la firma pública de `record_issued_qr`.
   - Ambos casos («sin asociación todavía» y «no coincide») mantienen el motivo `unassociated` de B20: el reintento ya los distingue, y añadir un motivo nuevo excede B21.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.

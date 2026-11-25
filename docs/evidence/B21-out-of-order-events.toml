@@ -1,5 +1,5 @@
 ticket = "B21"
-revision = "bf0b852"
+revision = "2aa67c3"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B21-out-of-order-events.md#b21-vc01--antesdespués-del-pago-anticipado"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
