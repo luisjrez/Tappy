@@ -1,0 +1,52 @@
+ticket = "B19"
+revision = "085acb6"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B19-dedupe-evidence.md#b19-vc01--antesdespués-de-duplicados-y-conflicto"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B19-AC01"
+use_cases = ["B19-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B19-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_deduplication.py::test_redelivering_the_same_event_keeps_one_transfer",
+    "tests/sales/test_deduplication.py::test_another_event_for_the_same_transfer_is_recognised_as_duplicate",
+    "tests/sales/test_deduplication.py::test_reprocessing_never_adds_a_second_effect",
+]
+
+[[criteria]]
+id = "B19-AC02"
+use_cases = ["B19-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B19-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_deduplication.py::test_same_event_id_with_other_content_is_flagged_and_the_original_kept",
+    "tests/sales/test_deduplication.py::test_repeated_conflicting_variants_are_kept_once",
+    "tests/sales/test_deduplication.py::test_event_ids_are_unique_per_provider_and_environment",
+]
+
+[[criteria]]
+id = "B19-AC03"
+use_cases = ["B19-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B19-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_deduplication.py::test_concurrent_event_and_query_evidence_for_one_transfer_count_once",
+]
