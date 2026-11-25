@@ -7,6 +7,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from tappy.platform.clock import SystemClock
+from tappy.platform.database import Database
+from tappy.sales.jobs import JobPolicy, JobRunner
 from tests.payments.pey_support import FakePey
 from tests.payments.webhook_support import Delivery, deliver, settings_for
 from tests.sales.support import (
@@ -19,7 +22,7 @@ from tests.sales.support import (
     ready_merchant,
     start_client,
 )
-from tests.support import execute, scalar
+from tests.support import build_settings, execute, scalar
 
 PRICE = 30000
 SHORT = 25000
@@ -183,4 +186,71 @@ def test_an_unassociated_incident_can_be_noted_but_not_reconciled(
     assert requested.status_code == HTTPStatus.CONFLICT
     assert requested.json() == {"detail": "The incident has no QR attempt to reconcile"}
     assert unknown.status_code == HTTPStatus.NOT_FOUND
+    assert scalar(migrated_database_url, "SELECT count(*) FROM reconciliation_jobs") == 0
+
+
+def test_the_requested_reconciliation_is_picked_up_by_the_job_runner(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    _, exception_id = short_payment(client, migrated_database_url)
+    client.post(f"/exceptions/{exception_id}/reconciliation", headers=bearer(client, ADMIN))
+    before = money(migrated_database_url)
+    page = (
+        200,
+        {
+            "items": [
+                {"id": "TX-SHORT", "status": "PAID", "amount": SHORT / 100, "datePaid": 1795000000}
+            ],
+            "nextToken": None,
+        },
+    )
+    database = Database.from_settings(build_settings(database_url=migrated_database_url))
+    try:
+        policy = JobPolicy.from_settings(settings_for(migrated_database_url))
+        summary = JobRunner(
+            database, FakePey(pages=[page]).provider(), "test", policy, SystemClock()
+        ).run()
+    finally:
+        database.dispose()
+
+    assert summary.claimed == 1
+    assert scalar(migrated_database_url, "SELECT tries FROM reconciliation_jobs") == 1
+    assert money(migrated_database_url) == before
+
+
+def test_the_reconciliation_targets_the_qr_of_the_incident_not_the_latest_attempt(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, exception_id = short_payment(client, migrated_database_url)
+    first_attempt = scalar(migrated_database_url, "SELECT id FROM payment_attempts")
+    execute(
+        migrated_database_url,
+        "INSERT INTO payment_attempts (id, sale_id, created_by, method, status, provider, "
+        "simulated, receiver_account, provider_request_id, created_at, updated_at, version) "
+        "SELECT gen_random_uuid(), sale_id, created_by, method, 'expired', provider, simulated, "
+        "receiver_account, 'QR-LATER', created_at + interval '1 hour', "
+        "updated_at + interval '1 hour', 1 FROM payment_attempts",
+    )
+    execute(migrated_database_url, "UPDATE payment_exceptions SET transfer_id = NULL")
+
+    client.post(f"/exceptions/{exception_id}/reconciliation", headers=bearer(client, ADMIN))
+
+    assert scalar(migrated_database_url, "SELECT attempt_id FROM reconciliation_jobs") == (
+        first_attempt
+    )
+    assert sale["id"]
+
+
+def test_a_paid_attempt_has_nothing_left_to_reconcile(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    _, exception_id = short_payment(client, migrated_database_url)
+    execute(migrated_database_url, "UPDATE payment_attempts SET status = 'paid'")
+
+    requested = client.post(
+        f"/exceptions/{exception_id}/reconciliation", headers=bearer(client, ADMIN)
+    )
+
+    assert requested.status_code == HTTPStatus.CONFLICT
+    assert requested.json() == {"detail": "The incident's attempt is already paid"}
     assert scalar(migrated_database_url, "SELECT count(*) FROM reconciliation_jobs") == 0

@@ -62,3 +62,8 @@ class InvalidNoteError(SaleError):
 class NothingToReconcileError(SaleError):
     def __init__(self) -> None:
         super().__init__("The incident has no QR attempt to reconcile")
+
+
+class AttemptAlreadyPaidError(SaleError):
+    def __init__(self) -> None:
+        super().__init__("The incident's attempt is already paid")

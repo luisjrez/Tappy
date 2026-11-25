@@ -145,6 +145,18 @@ def claim_jobs(db: Session, policy: JobPolicy, now: datetime) -> list[ClaimedJob
     return [ClaimedJob(job_id, attempt_id, owner, tries) for job_id, attempt_id, tries in rows]
 
 
+def rearm_job(job: ReconciliationJob, now: datetime) -> bool:
+    if job.status is JobStatus.PENDING:
+        return False
+    job.status = JobStatus.PENDING
+    job.run_at = now
+    job.tries = 0
+    job.lease_owner = None
+    job.lease_until = None
+    job.last_problem = None
+    return True
+
+
 def held_claim(db: Session, job: ClaimedJob) -> ReconciliationJob | None:
     return db.scalar(
         select(ReconciliationJob)

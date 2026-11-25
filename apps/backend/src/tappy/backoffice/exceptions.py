@@ -13,7 +13,7 @@ from tappy.backoffice.sales import pesos
 from tappy.identity.provisioning import IdentitySummary
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
-from tappy.sales.errors import SaleError
+from tappy.sales.errors import ExceptionNotFoundError, SaleError
 from tappy.sales.exception_review import (
     ExceptionDetail,
     NoteView,
@@ -93,7 +93,7 @@ class ExceptionsView(CustomView):
         exception_id: uuid.UUID = request.path_params["exception_id"]
         try:
             detail = await run_in_threadpool(self.detail_of, exception_id)
-        except SaleError as error:
+        except ExceptionNotFoundError as error:
             return self.render(request, "exception.html", {"problem": str(error)}, 404)
         return self.render(request, "exception.html", {"incident": detail})
 

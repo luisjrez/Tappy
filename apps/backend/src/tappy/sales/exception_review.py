@@ -9,10 +9,17 @@ from sqlalchemy.orm import Session
 from tappy.identity.models import Identity
 from tappy.identity.provisioning import IdentitySummary
 from tappy.payments.events import WebhookEvent
-from tappy.sales.errors import ExceptionNotFoundError, InvalidNoteError, NothingToReconcileError
+from tappy.sales.errors import (
+    AttemptAlreadyPaidError,
+    ExceptionNotFoundError,
+    InvalidNoteError,
+    NothingToReconcileError,
+)
 from tappy.sales.expiration import enqueue_job
+from tappy.sales.jobs import rearm_job
 from tappy.sales.models import (
     NOTE_MAX_LENGTH,
+    AttemptStatus,
     ExceptionNote,
     ExceptionReason,
     JobReason,
@@ -106,21 +113,35 @@ def add_note(
     return write_note(db, author, exception.id, cleaned, now)
 
 
-def attempt_to_review(db: Session, exception: PaymentException) -> uuid.UUID:
-    if exception.transfer_id is not None:
-        return db.get_one(Transfer, exception.transfer_id).attempt_id
-    attempt_id = db.scalar(
-        select(PaymentAttempt.id)
-        .where(
-            PaymentAttempt.sale_id == exception.sale_id,
-            PaymentAttempt.provider_request_id.is_not(None),
+def attempt_to_review(db: Session, exception: PaymentException) -> PaymentAttempt:
+    if exception.sale_id is None:
+        raise NothingToReconcileError
+    same_sale = PaymentAttempt.sale_id == exception.sale_id
+    if exception.provider_request_id is not None:
+        by_qr = db.scalar(
+            select(PaymentAttempt).where(
+                same_sale, PaymentAttempt.provider_request_id == exception.provider_request_id
+            )
         )
+        if by_qr is not None:
+            return by_qr
+    if exception.transfer_id is not None:
+        by_transfer = db.scalar(
+            select(PaymentAttempt)
+            .join(Transfer, Transfer.attempt_id == PaymentAttempt.id)
+            .where(Transfer.id == exception.transfer_id, same_sale)
+        )
+        if by_transfer is not None:
+            return by_transfer
+    latest = db.scalar(
+        select(PaymentAttempt)
+        .where(same_sale, PaymentAttempt.provider_request_id.is_not(None))
         .order_by(PaymentAttempt.created_at.desc(), PaymentAttempt.id.desc())
         .limit(1)
     )
-    if attempt_id is None:
+    if latest is None:
         raise NothingToReconcileError
-    return attempt_id
+    return latest
 
 
 def review_job(db: Session, attempt_id: uuid.UUID) -> ReconciliationJob | None:
@@ -135,30 +156,22 @@ def review_job(db: Session, attempt_id: uuid.UUID) -> ReconciliationJob | None:
     )
 
 
-def rearm(job: ReconciliationJob, now: datetime) -> RequestOutcome:
-    if job.status is JobStatus.PENDING:
-        return RequestOutcome.ALREADY_PENDING
-    job.status = JobStatus.PENDING
-    job.run_at = now
-    job.tries = 0
-    job.lease_owner = None
-    job.lease_until = None
-    job.last_problem = None
-    return RequestOutcome.REARMED
-
-
 def request_reconciliation(
     db: Session, author: IdentitySummary, exception_id: uuid.UUID, now: datetime
 ) -> RequestedReconciliation:
     exception = held_exception(db, exception_id)
-    attempt_id = attempt_to_review(db, exception)
-    existing = review_job(db, attempt_id)
+    attempt = attempt_to_review(db, exception)
+    if attempt.status is AttemptStatus.PAID:
+        raise AttemptAlreadyPaidError
+    existing = review_job(db, attempt.id)
     if existing is None:
-        enqueue_job(db, attempt_id, JobReason.REVIEW_REQUESTED, now)
+        enqueue_job(db, attempt.id, JobReason.REVIEW_REQUESTED, now)
         outcome = RequestOutcome.CREATED
+    elif rearm_job(existing, now):
+        outcome = RequestOutcome.REARMED
     else:
-        outcome = rearm(existing, now)
-    job = review_job(db, attempt_id)
+        outcome = RequestOutcome.ALREADY_PENDING
+    job = review_job(db, attempt.id)
     if job is None:
         raise RuntimeError("The requested reconciliation job was not stored")
     write_note(db, author, exception.id, f"Reconciliation requested ({outcome})", now)
@@ -203,12 +216,12 @@ def read_exception(db: Session, exception_id: uuid.UUID) -> ExceptionDetail:
 
 def requested_review(db: Session, exception: PaymentException) -> ReviewJobView | None:
     try:
-        attempt_id = attempt_to_review(db, exception)
+        attempt = attempt_to_review(db, exception)
     except NothingToReconcileError:
         return None
     job = db.scalar(
         select(ReconciliationJob).where(
-            ReconciliationJob.attempt_id == attempt_id,
+            ReconciliationJob.attempt_id == attempt.id,
             ReconciliationJob.reason == JobReason.REVIEW_REQUESTED,
         )
     )

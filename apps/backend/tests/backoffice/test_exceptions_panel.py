@@ -149,9 +149,20 @@ def test_operators_cannot_review_incidents_in_the_panel(
     sign_in(client, OPERATOR_A)
 
     page = client.get(f"/admin/exceptions/{exception_id}", follow_redirects=False)
+    token = csrf(client, "/admin/login")
+    posts = [
+        client.post(
+            f"/admin/exceptions/{exception_id}/{action}",
+            data={"text": NOTE, "csrftoken": token},
+            follow_redirects=False,
+        )
+        for action in ("notes", "reconciliation")
+    ]
 
     assert page.status_code == HTTPStatus.SEE_OTHER
+    assert {post.status_code for post in posts} <= {HTTPStatus.SEE_OTHER, HTTPStatus.FORBIDDEN}
     assert scalar(migrated_database_url, "SELECT count(*) FROM exception_notes") == 0
+    assert scalar(migrated_database_url, "SELECT count(*) FROM reconciliation_jobs") == 0
 
 
 def test_an_empty_note_is_refused_with_a_message(
