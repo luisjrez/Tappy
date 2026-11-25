@@ -25,7 +25,6 @@ from tappy.sales.reconciliation import (
 logger = logging.getLogger(__name__)
 
 LEASE_EXPIRED = "lease_expired"
-OPERATOR_RESULTS = (ReconciliationResult.NOT_QUERYABLE,)
 
 
 class JobOutcome(StrEnum):
@@ -183,7 +182,7 @@ def reschedule_job(
     held.last_problem = report.problem or report.result
     held.lease_owner = None
     held.lease_until = None
-    if held.tries >= policy.max_tries or report.result in OPERATOR_RESULTS:
+    if held.tries >= policy.max_tries or report.result is ReconciliationResult.NOT_QUERYABLE:
         held.status = JobStatus.EXHAUSTED
         return JobOutcome.EXHAUSTED
     held.run_at = now + policy.delay(held.tries, report.retry_after)
