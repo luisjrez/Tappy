@@ -115,6 +115,14 @@ A sale is the commercial obligation to receive a fixed amount. Creating one does
   - `pey`: calls `POST /codi/qr` of the pey CoDi API (contract `2026-10-20`) with `TAPPY_PEY_API_KEY` as a server-side bearer token, `TAPPY_PEY_BASE_URL` (default `https://api.pey.mx`; plain `http://` only for `127.0.0.1`/`localhost`) and `TAPPY_PEY_TIMEOUT_SECONDS` (default 10). Centavos are sent as exact pesos, the QR goes to the receiving account snapshotted on the sale (`bankAccountId`), and the attempt keeps pey's `id` and `qrString` exactly. A rejection (400/429) fails the attempt with pey's error type (`failure_code`, API `502`); a timeout, connection failure, server error or invalid answer keeps the attempt `creating` (API `503`) and never invents an ID. The key never appears in responses or logs. Real delivery against pey has not been exercised yet. A QR is refused with `409` when the merchant's receiving account changed after the sale was created, so the payer never sees a beneficiary different from the sale's.
 - Amount, currency, concept, merchant, reference and receiver snapshot cannot change after creation: there is no update route and the database rejects such updates.
 
+## Provider webhooks
+
+`POST /webhooks/pey` receives pey events signed with [Standard Webhooks](https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md). It answers `204` only after the event is stored in Postgres; verification and storage happen before any effect on sales (applying events is a later step).
+
+- `TAPPY_PEY_WEBHOOK_SECRET` (`whsec_…`, from the pey portal) is required; without it the endpoint answers `503`.
+- The signature is checked over the original bytes (`webhook-id`, `webhook-timestamp`, body) with HMAC-SHA256; any `v1` entry of a space-separated `webhook-signature` list may match (secret rotation). Timestamps outside `TAPPY_WEBHOOK_TOLERANCE_SECONDS` (default 300) are rejected. Invalid signatures or timestamps answer `401`, bodies over `TAPPY_WEBHOOK_MAX_BODY_BYTES` (default 262144) `413`, signed events without a `type` and `data` object `400`.
+- The raw body, its SHA-256 digest, the event id and type and the signed timestamp are stored in `webhook_events`; a repeated `webhook-id` is acknowledged without a second record. If storage is unavailable the answer is `503`, so the provider retries.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.

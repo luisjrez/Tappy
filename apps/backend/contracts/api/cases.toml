@@ -87,3 +87,10 @@ method = "POST"
 path = "/sales/00000000-0000-0000-0000-000000000000/attempts"
 database = "migrated"
 body = { method = "qr" }
+
+[[cases]]
+name = "webhook-pey-not-configured"
+method = "POST"
+path = "/webhooks/pey"
+database = "migrated"
+body = { type = "codi.qr.payment_received", data = {} }

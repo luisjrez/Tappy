@@ -8,6 +8,7 @@ from tappy.backoffice.admin import mount_admin
 from tappy.identity import operators_router
 from tappy.identity import router as identity_router
 from tappy.merchants import router as merchants_router
+from tappy.payments import router as webhooks_router
 from tappy.payments.factory import provider_from
 from tappy.payments.provider import QrProvider
 from tappy.platform import health
@@ -41,5 +42,6 @@ def create_app(
     app.include_router(operators_router.router)
     app.include_router(merchants_router.router)
     app.include_router(sales_router.router)
+    app.include_router(webhooks_router.router)
     mount_admin(app, settings, database, app.state.clock)
     return app

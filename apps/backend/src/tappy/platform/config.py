@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     pey_api_key: SecretStr | None = Field(default=None, min_length=16)
     pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
     attempt_creation_timeout_seconds: int = Field(default=60, ge=1)
+    pey_webhook_secret: SecretStr | None = Field(
+        default=None, pattern=r"^whsec_[A-Za-z0-9+/=]{24,}$"
+    )
+    webhook_tolerance_seconds: int = Field(default=300, ge=1, le=3600)
+    webhook_max_body_bytes: int = Field(default=256 * 1024, ge=1024, le=1024 * 1024)
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
