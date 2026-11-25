@@ -262,11 +262,14 @@ def request_attempt(
         raise
     except ProviderUnavailableError as uncertainty:
         with database.transaction() as db:
-            kept = record_uncertain_qr(db, order.attempt_id, uncertainty.reason, clock.now())
-        return AttemptReservation(kept, AttemptOutcome.UNCERTAIN)
-    if recorded.status is AttemptStatus.RECONCILING:
-        return AttemptReservation(recorded, AttemptOutcome.UNCERTAIN)
-    return AttemptReservation(recorded, AttemptOutcome.CREATED)
+            recorded = record_uncertain_qr(db, order.attempt_id, uncertainty.reason, clock.now())
+    return settled_reservation(recorded)
+
+
+def settled_reservation(attempt: AttemptView) -> AttemptReservation:
+    if attempt.status is AttemptStatus.RECONCILING:
+        return AttemptReservation(attempt, AttemptOutcome.UNCERTAIN)
+    return AttemptReservation(attempt, AttemptOutcome.CREATED)
 
 
 def recover_interrupted(db: Session, cutoff: datetime, now: datetime) -> int:

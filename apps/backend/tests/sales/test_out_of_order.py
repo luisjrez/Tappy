@@ -2,12 +2,20 @@ import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from http import HTTPStatus
 from typing import Any
 
 from fastapi.testclient import TestClient
+from httpx2 import Response
 
 from tappy.payments.events import ReceivedEvent, store_event
-from tappy.payments.provider import IssuedQr, ProviderName, QrOrder
+from tappy.payments.provider import (
+    IssuedQr,
+    ProviderName,
+    ProviderUnavailableError,
+    QrOrder,
+    UncertainReason,
+)
 from tappy.platform.clock import SystemClock
 from tappy.platform.database import Database
 from tappy.sales.attempts import record_issued_qr
@@ -69,12 +77,19 @@ class EarlyPaymentProvider:
     simulated = False
 
     def __init__(
-        self, database_url: str, *, with_metadata: bool, short_by: int = 0, early: bool = True
+        self,
+        database_url: str,
+        *,
+        with_metadata: bool,
+        short_by: int = 0,
+        early: bool = True,
+        then_times_out: bool = False,
     ) -> None:
         self.database_url = database_url
         self.with_metadata = with_metadata
         self.short_by = short_by
         self.early = early
+        self.then_times_out = then_times_out
         self.orders: list[QrOrder] = []
 
     def create_qr(self, order: QrOrder) -> IssuedQr:
@@ -82,6 +97,8 @@ class EarlyPaymentProvider:
         if self.early:
             event = payment_event(order, with_metadata=self.with_metadata, short_by=self.short_by)
             receive(self.database_url, event)
+        if self.then_times_out:
+            raise ProviderUnavailableError(UncertainReason.TIMEOUT)
         return IssuedQr(QR_ID, PAYLOAD)
 
 
@@ -89,16 +106,23 @@ def client_with(database_url: str, provider: EarlyPaymentProvider) -> TestClient
     return start_client(settings_for(database_url), database_url, provider)
 
 
-def create_qr(client: TestClient, database_url: str) -> tuple[dict[str, Any], dict[str, str]]:
+def request_qr(
+    client: TestClient, database_url: str
+) -> tuple[Response, dict[str, Any], dict[str, str]]:
     merchant_a = ready_merchant(client, database_url, "Tienda Demo A", OPERATOR_A)
     operator_a = bearer(client, OPERATOR_A)
     sale = create_sale(client, operator_a, merchant_a, amount_cents=AMOUNT).json()
-    client.post(
+    response = client.post(
         f"/sales/{sale['id']}/attempts",
         json={"method": "qr"},
         headers={**operator_a, IDEMPOTENCY_HEADER: str(uuid.uuid4())},
     )
-    return client.get(f"/sales/{sale['id']}", headers=operator_a).json(), operator_a
+    return response, client.get(f"/sales/{sale['id']}", headers=operator_a).json(), operator_a
+
+
+def create_qr(client: TestClient, database_url: str) -> tuple[dict[str, Any], dict[str, str]]:
+    _, sale, operator_a = request_qr(client, database_url)
+    return sale, operator_a
 
 
 def event_status(database_url: str) -> object:
@@ -243,3 +267,37 @@ def test_an_event_without_metadata_racing_the_creation_response_is_applied(
     assert read["status"] == "paid"
     assert read["attempts"][0]["status"] == "paid"
     assert scalar(migrated_database_url, "SELECT count(*) FROM payment_exceptions") == 0
+
+
+def test_an_attempt_in_reconciliation_without_a_qr_id_adopts_a_later_event(
+    migrated_database_url: str,
+) -> None:
+    provider = EarlyPaymentProvider(
+        migrated_database_url, with_metadata=True, early=False, then_times_out=True
+    )
+    with client_with(migrated_database_url, provider) as client:
+        response, sale, operator_a = request_qr(client, migrated_database_url)
+        status = receive(
+            migrated_database_url, payment_event(provider.orders[0], with_metadata=True)
+        )
+        read = client.get(f"/sales/{sale['id']}", headers=operator_a).json()
+
+    assert response.status_code == HTTPStatus.ACCEPTED
+    assert sale["attempts"][0]["status"] == "reconciling"
+    assert status == "applied"
+    assert read["status"] == "paid"
+    assert read["attempts"][0]["status"] == "paid"
+    assert read["attempts"][0]["provider_request_id"] == QR_ID
+
+
+def test_a_payment_before_a_creation_timeout_is_reported_as_created_and_paid(
+    migrated_database_url: str,
+) -> None:
+    provider = EarlyPaymentProvider(migrated_database_url, with_metadata=True, then_times_out=True)
+    with client_with(migrated_database_url, provider) as client:
+        response, sale, _ = request_qr(client, migrated_database_url)
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert response.json()["status"] == "paid"
+    assert sale["status"] == "paid"
+    assert scalar(migrated_database_url, "SELECT count(*) FROM reconciliation_jobs") == 0
