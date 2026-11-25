@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -17,6 +18,13 @@ from tappy.sales.models import (
     Transfer,
 )
 from tappy.sales.service import held_sale
+
+
+class EvidenceOutcome(StrEnum):
+    APPLIED = "applied"
+    DUPLICATE = "duplicate"
+    UNMATCHED = "unmatched"
+
 
 PAYABLE_ATTEMPT_STATUSES = (
     AttemptStatus.CREATING,
@@ -68,20 +76,38 @@ def record_transfer(db: Session, transfer: Transfer) -> bool:
     return True
 
 
+def recorded_transfer(db: Session, evidence: PaymentEvidence) -> Transfer | None:
+    if evidence.provider_transaction_id is None:
+        return None
+    return db.scalar(
+        select(Transfer).where(
+            Transfer.provider == evidence.provider,
+            Transfer.environment == evidence.environment,
+            Transfer.provider_transaction_id == evidence.provider_transaction_id,
+        )
+    )
+
+
 def apply_evidence(
     db: Session, evidence: PaymentEvidence, event_id: uuid.UUID | None, now: datetime
-) -> bool:
+) -> EvidenceOutcome:
     attempt = evidenced_attempt(db, evidence)
     if attempt is None:
-        return False
+        return EvidenceOutcome.UNMATCHED
+    existing = recorded_transfer(db, evidence)
+    if existing is not None:
+        if existing.attempt_id == attempt.id:
+            return EvidenceOutcome.DUPLICATE
+        return EvidenceOutcome.UNMATCHED
     sale = held_sale(db, attempt.sale_id)
     transaction_id = matching_transaction(evidence, attempt, sale)
     if transaction_id is None or evidence.occurred_at is None:
-        return False
+        return EvidenceOutcome.UNMATCHED
     transfer = Transfer(
         sale_id=sale.id,
         attempt_id=attempt.id,
         provider=evidence.provider,
+        environment=evidence.environment,
         provider_transaction_id=transaction_id,
         amount_cents=sale.amount_cents,
         currency=CURRENCY,
@@ -91,9 +117,9 @@ def apply_evidence(
         webhook_event_id=event_id,
     )
     if not record_transfer(db, transfer):
-        return False
+        return EvidenceOutcome.UNMATCHED
     attempt.status = AttemptStatus.PAID
     attempt.updated_at = now
     sale.status = SaleStatus.PAID
     db.flush()
-    return True
+    return EvidenceOutcome.APPLIED

@@ -4,7 +4,13 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy.exc import InterfaceError, OperationalError
 from starlette.concurrency import run_in_threadpool
 
-from tappy.payments.events import InvalidEventError, ReceivedEvent, envelope_of, store_event
+from tappy.payments.events import (
+    InvalidEventError,
+    ReceivedEvent,
+    StoreOutcome,
+    envelope_of,
+    store_event,
+)
 from tappy.payments.provider import ProviderName
 from tappy.payments.webhooks import InvalidSignatureError, SignedDelivery, verify
 from tappy.platform.clock import Clock
@@ -28,13 +34,13 @@ async def limited_body(request: Request, limit: int) -> bytes:
     return bytes(body)
 
 
-def persist(database: Database, event: ReceivedEvent, clock: Clock) -> None:
+def persist(database: Database, event: ReceivedEvent, clock: Clock) -> StoreOutcome:
     with database.transaction() as db:
-        store_event(db, event, clock.now())
+        return store_event(db, event, clock.now())
 
 
 def apply_stored(database: Database, event: ReceivedEvent, clock: Clock) -> None:
-    process_stored(database, event.provider, event.message_id, clock)
+    process_stored(database, event, clock)
 
 
 def signed_delivery(request: Request, body: bytes) -> SignedDelivery:
@@ -76,13 +82,19 @@ async def receive_pey(
     except InvalidEventError as error:
         raise HTTPException(HTTPStatus.BAD_REQUEST, detail=str(error)) from None
     event = ReceivedEvent(
-        ProviderName.PEY, delivery.message_id, envelope.type, delivery.body, signed_at
+        ProviderName.PEY,
+        settings.environment,
+        delivery.message_id,
+        envelope.type,
+        delivery.body,
+        signed_at,
     )
     try:
-        await run_in_threadpool(persist, database, event, clock)
+        stored = await run_in_threadpool(persist, database, event, clock)
     except OperationalError, InterfaceError:
         raise HTTPException(
             HTTPStatus.SERVICE_UNAVAILABLE, detail="Webhook storage is temporarily unavailable"
         ) from None
-    await run_in_threadpool(apply_stored, database, event, clock)
+    if stored is StoreOutcome.NEW:
+        await run_in_threadpool(apply_stored, database, event, clock)
     return Response(status_code=HTTPStatus.NO_CONTENT)

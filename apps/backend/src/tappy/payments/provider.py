@@ -58,6 +58,7 @@ class QrProvider(Protocol):
 @dataclass(frozen=True)
 class PaymentEvidence:
     provider: ProviderName
+    environment: str
     provider_request_id: str | None
     attempt_id: uuid.UUID | None
     provider_transaction_id: str | None

@@ -3,6 +3,7 @@ import sys
 from collections.abc import Callable, Sequence
 from datetime import timedelta
 
+from tappy.payments.events import WebhookEvent, WebhookEventConflict, event_conflicts
 from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, Settings, load_settings
 from tappy.platform.database import Database
@@ -46,14 +47,34 @@ def process_events(database: Database, _: Settings) -> str:
     summary = process_received_events(database, SystemClock())
     noun = "event" if summary.applied == 1 else "events"
     return (
-        f"{summary.applied} {noun} applied, {summary.unmatched} unmatched, {summary.failed} failed"
+        f"{summary.applied} {noun} applied, {summary.unmatched} unmatched, "
+        f"{summary.duplicates} duplicate, {summary.failed} failed"
     )
+
+
+def describe_conflict(event: WebhookEvent, conflict: WebhookEventConflict) -> str:
+    return "\n".join(
+        [
+            f"event: {event.provider_event_id} ({event.provider}, {event.environment})",
+            "problem: conflicting content for an event id already stored",
+            f"original digest: {event.payload_digest}",
+            f"variant digest: {conflict.payload_digest}",
+            f"variant received at: {conflict.received_at.isoformat()}",
+        ]
+    )
+
+
+def conflicts(database: Database, _: Settings) -> str:
+    with database.transaction() as session:
+        found = [describe_conflict(event, conflict) for event, conflict in event_conflicts(session)]
+    return "\n\n".join(found) if found else "No event conflicts"
 
 
 COMMANDS: dict[str, Handler] = {
     "reconciliations": reconciliations,
     "recover-interrupted": recover,
     "process-events": process_events,
+    "event-conflicts": conflicts,
 }
 
 

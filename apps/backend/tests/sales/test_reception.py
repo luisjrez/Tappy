@@ -194,9 +194,10 @@ def test_the_operations_command_applies_stored_events(
     body = json.dumps(payment_event(sale)).encode()
     execute(
         migrated_database_url,
-        "INSERT INTO webhook_events (id, provider, provider_event_id, event_type, payload, "
-        "payload_digest, signed_at, status, received_at) VALUES (gen_random_uuid(), 'pey', "
-        "'msg_stored', 'codi.qr.payment_received', :body, 'digest', now(), 'received', now())",
+        "INSERT INTO webhook_events (id, provider, environment, provider_event_id, event_type, "
+        "payload, payload_digest, signed_at, status, received_at) VALUES (gen_random_uuid(), "
+        "'pey', 'test', 'msg_stored', 'codi.qr.payment_received', :body, 'digest', now(), "
+        "'received', now())",
         {"body": body},
     )
 

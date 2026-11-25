@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tappy.merchants.models import BENEFICIARY_NAME_MAX_LENGTH, PROVIDER_ACCOUNT_ID_MAX_LENGTH
+from tappy.payments.events import ENVIRONMENT_MAX_LENGTH
 from tappy.payments.provider import ProviderName
 from tappy.platform.persistence import Base, enum_column
 
@@ -156,7 +157,9 @@ class ReconciliationJob(Base):
 class Transfer(Base):
     __tablename__ = "transactions"
     __table_args__ = (
-        UniqueConstraint("provider", "provider_transaction_id", name=TRANSFER_CONSTRAINT),
+        UniqueConstraint(
+            "provider", "environment", "provider_transaction_id", name=TRANSFER_CONSTRAINT
+        ),
         CheckConstraint("amount_cents > 0", name="ck_transactions_amount_cents_positive"),
         CheckConstraint(f"currency = '{CURRENCY}'", name="ck_transactions_currency_mxn"),
     )
@@ -165,6 +168,7 @@ class Transfer(Base):
     sale_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sales.id"), index=True)
     attempt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payment_attempts.id"))
     provider: Mapped[ProviderName] = mapped_column(enum_column(ProviderName, "transfer_provider"))
+    environment: Mapped[str] = mapped_column(String(ENVIRONMENT_MAX_LENGTH))
     provider_transaction_id: Mapped[str] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
     amount_cents: Mapped[int] = mapped_column(Integer)
     currency: Mapped[str] = mapped_column(String(3))

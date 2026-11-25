@@ -46,7 +46,7 @@ def attempt_reference(metadata: object) -> uuid.UUID | None:
         return None
 
 
-def evidence_from_pey(body: bytes) -> PaymentEvidence | None:
+def evidence_from_pey(body: bytes, environment: str) -> PaymentEvidence | None:
     try:
         event = json.loads(body, parse_float=Decimal)
     except ValueError:
@@ -55,6 +55,7 @@ def evidence_from_pey(body: bytes) -> PaymentEvidence | None:
         return None
     return PaymentEvidence(
         provider=ProviderName.PEY,
+        environment=environment,
         provider_request_id=text(event.get("codiQrId")),
         attempt_id=attempt_reference(event.get("metadata")),
         provider_transaction_id=text(event.get("transactionId")),

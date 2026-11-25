@@ -6,12 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from tappy.payments.events import EventStatus, WebhookEvent
+from tappy.payments.events import EventStatus, ReceivedEvent, WebhookEvent, stored_event
 from tappy.payments.pey_events import evidence_from_pey
-from tappy.payments.provider import ProviderName
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
-from tappy.sales.evidence import apply_evidence
+from tappy.sales.evidence import EvidenceOutcome, apply_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,15 @@ logger = logging.getLogger(__name__)
 class ProcessingSummary:
     applied: int
     unmatched: int
+    duplicates: int
     failed: int
+
+
+EVENT_STATUS_FOR = {
+    EvidenceOutcome.APPLIED: EventStatus.APPLIED,
+    EvidenceOutcome.DUPLICATE: EventStatus.DUPLICATE,
+    EvidenceOutcome.UNMATCHED: EventStatus.UNMATCHED,
+}
 
 
 def held_received_event(db: Session, event_id: uuid.UUID) -> WebhookEvent | None:
@@ -36,19 +43,19 @@ def process_event(database: Database, event_id: uuid.UUID, clock: Clock) -> Even
         event = held_received_event(db, event_id)
         if event is None:
             return None
-        evidence = evidence_from_pey(event.payload)
-        applied = evidence is not None and apply_evidence(db, evidence, event.id, clock.now())
-        event.status = EventStatus.APPLIED if applied else EventStatus.UNMATCHED
+        evidence = evidence_from_pey(event.payload, event.environment)
+        outcome = (
+            EvidenceOutcome.UNMATCHED
+            if evidence is None
+            else apply_evidence(db, evidence, event.id, clock.now())
+        )
+        event.status = EVENT_STATUS_FOR[outcome]
         return event.status
 
 
-def stored_event_id(database: Database, provider: ProviderName, message_id: str) -> uuid.UUID:
+def stored_event_id(database: Database, event: ReceivedEvent) -> uuid.UUID:
     with database.transaction() as db:
-        return db.scalars(
-            select(WebhookEvent.id).where(
-                WebhookEvent.provider == provider, WebhookEvent.provider_event_id == message_id
-            )
-        ).one()
+        return stored_event(db, event).id
 
 
 def process_safely(database: Database, event_id: uuid.UUID, clock: Clock) -> EventStatus | None:
@@ -63,11 +70,9 @@ def process_safely(database: Database, event_id: uuid.UUID, clock: Clock) -> Eve
         return None
 
 
-def process_stored(
-    database: Database, provider: ProviderName, message_id: str, clock: Clock
-) -> EventStatus | None:
+def process_stored(database: Database, event: ReceivedEvent, clock: Clock) -> EventStatus | None:
     try:
-        event_id = stored_event_id(database, provider, message_id)
+        event_id = stored_event_id(database, event)
     except SQLAlchemyError as error:
         logger.error("Stored webhook event could not be read (%s)", type(error).__name__)
         return None
@@ -85,5 +90,6 @@ def process_received_events(database: Database, clock: Clock) -> ProcessingSumma
     return ProcessingSummary(
         applied=outcomes.count(EventStatus.APPLIED),
         unmatched=outcomes.count(EventStatus.UNMATCHED),
+        duplicates=outcomes.count(EventStatus.DUPLICATE),
         failed=outcomes.count(None),
     )
