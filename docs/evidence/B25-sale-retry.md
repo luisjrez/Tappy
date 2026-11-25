@@ -140,7 +140,7 @@ Proceso real `python -m tappy` con `TAPPY_PAYMENT_PROVIDER=pey` y `TAPPY_QR_EXPI
 
 Ventas en la base: 2
 
-Consultas a pey:
+Consultas a pey: (ninguna)
 
 ### Después (revisión final `99e6787`)
 
@@ -171,7 +171,7 @@ Consultas a pey:
 
 Validación:
 
-- **TC01:** tras la comprobación (`verified unpaid: 1`), el reintento crea un intento nuevo en la misma venta. Importe 30000 y referencia sin cambios, QR nuevo, `previous_attempt_id` al vencido y `late_payment_possible: true`.
+- **TC01:** tras la comprobación (`verified unpaid: 1`), el reintento crea un intento nuevo en la misma venta. Su QR es `QRVC25A003` porque el script fija el id del pey falso en cada paso; el reintento rechazado con `409` (paso `A002`) no llamó a pey, como muestra el registro de consultas. Importe 30000 y referencia sin cambios, QR nuevo, `previous_attempt_id` al vencido y `late_payment_possible: true`.
 - **TC02:**
   - Sin comprobar el vencido: `409`.
   - Con un intento activo: `409`.
@@ -213,6 +213,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `78541a2` + `348ec4b` | APPROVE | REQUEST_CHANGES | Ver detalle debajo de la tabla |
+| 2 | `99e6787` + `473dc18` | APPROVE | APPROVE | Ambos hallazgos corregidos y probados. Notas de evidencia aplicadas: «ninguna» en las consultas vacías y una explicación de los ids de QR del escenario |
 
 Detalle de la ronda 1. Spec pidió dos cambios, ambos corregidos en `99e6787` con Red/Green:
 
@@ -229,4 +230,4 @@ Notas de Standards aplicadas:
 
 Riesgo registrado: el margen de los últimos segundos antes del vencimiento.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.

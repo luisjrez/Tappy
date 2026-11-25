@@ -8,7 +8,7 @@ evidence = "docs/evidence/B25-sale-retry.md#b25-vc01--antesdespués-del-reintent
 
 [review]
 standards = "APPROVED"
-spec = "PENDING"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
