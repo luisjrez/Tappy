@@ -239,6 +239,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `3fd634e` | APPROVE | REQUEST_CHANGES | Ver el detalle debajo de la tabla |
+| 2 | `34b2679` + `7ff94e5` | APPROVE | APPROVE | Corrección por fecha bancaria tardía y README verificados. Nota registrada: una hora bancaria distinta que llega después de una ya registrada se ignora sin incidencia; queda para un ticket posterior |
 
 Detalle de la ronda 1. Todo se aplicó en `34b2679`, con Red/Green donde correspondía.
 
@@ -252,4 +253,4 @@ Detalle de la ronda 1. Todo se aplicó en `34b2679`, con Red/Green donde corresp
   - el par `occurred_at` + `bank_time_invalid` (un tipo `BankTime` sería más limpio);
   - `DailySummaryView`, que conserva el contrato de B29.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.

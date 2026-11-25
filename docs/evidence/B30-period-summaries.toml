@@ -8,7 +8,7 @@ evidence = "docs/evidence/B30-period-summaries.md#b30-vc01--antesdespués-de-per
 
 [review]
 standards = "APPROVED"
-spec = "PENDING"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
