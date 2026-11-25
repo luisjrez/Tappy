@@ -111,6 +111,7 @@ def test_creating_a_qr_returns_the_simulated_payload_pending(
         "expires_at": attempt["expires_at"],
         "next_action": "show_qr",
         "verified_at": None,
+        "withdrawn_at": None,
         "previous_attempt_id": None,
         "late_payment_possible": False,
     }

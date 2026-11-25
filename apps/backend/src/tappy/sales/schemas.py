@@ -42,6 +42,7 @@ class AttemptResponse(BaseModel):
     expires_at: datetime | None
     next_action: NextAction
     verified_at: datetime | None
+    withdrawn_at: datetime | None
     previous_attempt_id: str | None
     late_payment_possible: bool
 
@@ -82,5 +83,6 @@ class SaleResponse(BaseModel):
     created_at: datetime
     attempts: list[AttemptResponse]
     confirmed_amount_cents: int
+    covered: bool
     transfers: list[TransferResponse]
     exceptions: list[ExceptionResponse]

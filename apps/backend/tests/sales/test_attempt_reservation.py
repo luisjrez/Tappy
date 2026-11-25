@@ -83,6 +83,7 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
         "expires_at": None,
         "next_action": "wait_for_qr",
         "verified_at": None,
+        "withdrawn_at": None,
         "previous_attempt_id": None,
         "late_payment_possible": False,
     }

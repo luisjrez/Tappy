@@ -61,6 +61,7 @@ def test_operator_creates_and_reads_sale_with_exact_amount(
         "created_at": body["created_at"],
         "attempts": [],
         "confirmed_amount_cents": 0,
+        "covered": False,
         "transfers": [],
         "exceptions": [],
     }

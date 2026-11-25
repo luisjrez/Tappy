@@ -12,6 +12,7 @@ from sqlalchemy.sql import ColumnElement
 from tappy.payments.provider import PaymentEvidence, ProviderName
 from tappy.platform.persistence import is_unique_violation
 from tappy.sales.models import (
+    ACTIVE_ATTEMPT_STATUSES,
     CURRENCY,
     EXCEPTION_CONSTRAINT,
     TRANSFER_CONSTRAINT,
@@ -164,7 +165,7 @@ def classify_doubt(
         return ExceptionReason.RECEIVER_MISMATCH
     if verified_reception(evidence) is None:
         return ExceptionReason.INCOMPLETE_EVIDENCE
-    if attempt.status not in PAYABLE_ATTEMPT_STATUSES or sale.status is not SaleStatus.OPEN:
+    if attempt.status not in (*PAYABLE_ATTEMPT_STATUSES, AttemptStatus.PAID):
         return ExceptionReason.SALE_NOT_OPEN
     return None
 
@@ -212,10 +213,36 @@ def recorded_by_this_event(db: Session, existing: Transfer, event_id: uuid.UUID 
     )
 
 
-def cover_sale(attempt: PaymentAttempt, sale: Sale, now: datetime) -> EvidenceOutcome:
+def withdraw_other_presentations(
+    db: Session, attempt: PaymentAttempt, sale: Sale, now: datetime
+) -> None:
+    for other in sale.attempts:
+        if other.id != attempt.id and other.status in ACTIVE_ATTEMPT_STATUSES:
+            other.withdrawn_at = now
+            other.updated_at = now
+    db.flush()
+
+
+def cover_sale(db: Session, attempt: PaymentAttempt, sale: Sale, now: datetime) -> EvidenceOutcome:
     move(attempt, AttemptStatus.PAID, now)
     sale.status = SaleStatus.PAID
+    withdraw_other_presentations(db, attempt, sale, now)
     return EvidenceOutcome.APPLIED
+
+
+def receive_again(
+    db: Session, application: Application, attempt: PaymentAttempt, sale: Sale, transfer: Transfer
+) -> EvidenceOutcome:
+    if transfer.amount_cents == sale.amount_cents:
+        move(attempt, AttemptStatus.PAID, application.now)
+    sale.status = SaleStatus.REVIEW
+    incident = Incident(
+        ExceptionReason.DOUBLE_RECEPTION,
+        sale_id=sale.id,
+        transfer_id=transfer.id,
+        expected_amount_cents=sale.amount_cents,
+    )
+    return open_exception(db, application, incident)
 
 
 def apply_evidence(
@@ -253,10 +280,13 @@ def receive_for_attempt(
             expected_amount_cents=sale.amount_cents,
         )
         return open_exception(db, application, incident)
+    received_before = bool(sale.transfers)
     transfer = record_reception(db, application, reception, attempt)
     if transfer is None:
         incident = Incident(ExceptionReason.CONFLICTING_TRANSFER, sale_id=sale.id)
         return open_exception(db, application, incident)
+    if received_before:
+        return receive_again(db, application, attempt, sale, transfer)
     if transfer.amount_cents != sale.amount_cents:
         sale.status = SaleStatus.REVIEW
         incident = Incident(
@@ -266,6 +296,6 @@ def receive_for_attempt(
             expected_amount_cents=sale.amount_cents,
         )
         return open_exception(db, application, incident)
-    outcome = cover_sale(attempt, sale, application.now)
+    outcome = cover_sale(db, attempt, sale, application.now)
     db.flush()
     return outcome

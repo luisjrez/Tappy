@@ -52,6 +52,7 @@ class NextAction(StrEnum):
     SHOW_QR = "show_qr"
     WAIT_FOR_VERIFICATION = "wait_for_verification"
     VERIFY_BEFORE_RETRY = "verify_before_retry"
+    HIDE_QR = "hide_qr"
     NEW_ATTEMPT = "new_attempt"
     NONE = "none"
 
@@ -81,6 +82,7 @@ class AttemptView:
     expires_at: datetime | None
     next_action: NextAction
     verified_at: datetime | None
+    withdrawn_at: datetime | None
     previous_attempt_id: str | None
     late_payment_possible: bool
 
@@ -118,6 +120,7 @@ class SaleView:
     created_at: datetime
     attempts: list[AttemptView]
     confirmed_amount_cents: int
+    covered: bool
     transfers: list[TransferView]
     exceptions: list[ExceptionView]
 
@@ -169,6 +172,7 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
         expires_at=attempt.expires_at,
         next_action=next_action(attempt),
         verified_at=attempt.verified_at,
+        withdrawn_at=attempt.withdrawn_at,
         previous_attempt_id=(
             None if attempt.previous_attempt_id is None else str(attempt.previous_attempt_id)
         ),
@@ -177,6 +181,8 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
 
 
 def next_action(attempt: PaymentAttempt) -> NextAction:
+    if attempt.withdrawn_at is not None and attempt.status is not AttemptStatus.PAID:
+        return NextAction.HIDE_QR
     if attempt.status is AttemptStatus.EXPIRED and attempt.verified_at is not None:
         return NextAction.NEW_ATTEMPT
     return NEXT_ACTIONS[attempt.status]
@@ -205,6 +211,7 @@ def describe_sale(sale: Sale) -> SaleView:
         created_at=sale.created_at,
         attempts=[describe_attempt(attempt) for attempt in sale.attempts],
         confirmed_amount_cents=sum(transfer.amount_cents for transfer in sale.transfers),
+        covered=any(attempt.status is AttemptStatus.PAID for attempt in sale.attempts),
         transfers=[
             TransferView(
                 transfer.provider_transaction_id,

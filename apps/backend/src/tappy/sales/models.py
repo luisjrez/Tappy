@@ -88,6 +88,7 @@ class ExceptionReason(StrEnum):
     CONFLICTING_TRANSFER = "conflicting_transfer"
     INCOMPLETE_EVIDENCE = "incomplete_evidence"
     SALE_NOT_OPEN = "sale_not_open"
+    DOUBLE_RECEPTION = "double_reception"
 
 
 class Sale(Base):
@@ -159,6 +160,7 @@ class PaymentAttempt(Base):
     failure_code: Mapped[str | None] = mapped_column(String(FAILURE_CODE_MAX_LENGTH))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     previous_attempt_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("payment_attempts.id"))
     previous_attempt: Mapped[PaymentAttempt | None] = relationship(
         remote_side=lambda: [PaymentAttempt.id]

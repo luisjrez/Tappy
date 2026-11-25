@@ -299,7 +299,10 @@ def test_transfer_ids_are_unique_per_provider_and_environment(
 
     deliver(client, payment_body(sale), Delivery(message_id="msg_e1"))
 
-    assert status_of(migrated_database_url, "msg_e1") == "applied"
+    assert status_of(migrated_database_url, "msg_e1") == "review"
+    assert scalar(migrated_database_url, "SELECT reason FROM payment_exceptions") == (
+        "double_reception"
+    )
     assert (
         scalar(
             migrated_database_url, "SELECT count(*) FROM transactions WHERE environment = 'test'"
