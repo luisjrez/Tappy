@@ -60,10 +60,20 @@ def upgrade() -> None:
     )
 
 
+SHARED_IDS = (
+    "SELECT count(*) FROM (SELECT provider, provider_event_id FROM webhook_events "
+    "GROUP BY provider, provider_event_id HAVING count(*) > 1) shared",
+    "SELECT count(*) FROM (SELECT provider, provider_transaction_id FROM transactions "
+    "GROUP BY provider, provider_transaction_id HAVING count(*) > 1) shared",
+)
+
+
 def downgrade() -> None:
     kept = op.get_bind().scalar(sa.text("SELECT count(*) FROM webhook_event_conflicts"))
     if kept:
         raise RuntimeError("Cannot downgrade while conflicting webhook variants exist")
+    if any(op.get_bind().scalar(sa.text(query)) for query in SHARED_IDS):
+        raise RuntimeError("Cannot downgrade while an id is shared by several environments")
     op.drop_table("webhook_event_conflicts")
     op.execute("UPDATE webhook_events SET status = 'unmatched' WHERE status = 'duplicate'")
     event_statuses("received", "applied", "unmatched")

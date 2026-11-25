@@ -19,8 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from tappy.merchants.models import BENEFICIARY_NAME_MAX_LENGTH, PROVIDER_ACCOUNT_ID_MAX_LENGTH
-from tappy.payments.events import ENVIRONMENT_MAX_LENGTH
-from tappy.payments.provider import ProviderName
+from tappy.payments.provider import ENVIRONMENT_MAX_LENGTH, ProviderName
 from tappy.platform.persistence import Base, enum_column
 
 CONCEPT_MAX_LENGTH = 40

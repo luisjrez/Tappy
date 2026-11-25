@@ -82,12 +82,12 @@ async def receive_pey(
     except InvalidEventError as error:
         raise HTTPException(HTTPStatus.BAD_REQUEST, detail=str(error)) from None
     event = ReceivedEvent(
-        ProviderName.PEY,
-        settings.environment,
-        delivery.message_id,
-        envelope.type,
-        delivery.body,
-        signed_at,
+        provider=ProviderName.PEY,
+        environment=settings.environment,
+        message_id=delivery.message_id,
+        event_type=envelope.type,
+        body=delivery.body,
+        signed_at=signed_at,
     )
     try:
         stored = await run_in_threadpool(persist, database, event, clock)
@@ -95,6 +95,6 @@ async def receive_pey(
         raise HTTPException(
             HTTPStatus.SERVICE_UNAVAILABLE, detail="Webhook storage is temporarily unavailable"
         ) from None
-    if stored is StoreOutcome.NEW:
+    if stored is not StoreOutcome.CONFLICT:
         await run_in_threadpool(apply_stored, database, event, clock)
     return Response(status_code=HTTPStatus.NO_CONTENT)

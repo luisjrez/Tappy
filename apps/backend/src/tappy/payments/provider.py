@@ -4,6 +4,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
+ENVIRONMENT_MAX_LENGTH = 32
+
 
 class ProviderName(StrEnum):
     SIMULATED = "simulated"

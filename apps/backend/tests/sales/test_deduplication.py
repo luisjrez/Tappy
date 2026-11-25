@@ -1,3 +1,4 @@
+import hashlib
 import json
 import uuid
 from collections.abc import Iterator
@@ -10,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tappy.payments.provider import PaymentEvidence, ProviderName
+from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.sales.evidence import EvidenceOutcome, apply_evidence
 from tests.payments.pey_support import FakePey
@@ -28,6 +30,7 @@ from tests.support import build_settings, execute, run_sales, scalar, wait_until
 
 TRANSACTION = "01M3QR8H0RH0XBCKYYD242YXNV"
 PAID_AT = 1795000000
+BOTH_ENVIRONMENTS = 2
 NOW = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 
 
@@ -217,9 +220,7 @@ def test_event_ids_are_unique_per_provider_and_environment(
 
     deliver(client, payment_body(sale), Delivery(message_id="msg_e1"))
 
-    assert scalar(migrated_database_url, "SELECT count(*) FROM webhook_events") == len(
-        ["production", "test"]
-    )
+    assert scalar(migrated_database_url, "SELECT count(*) FROM webhook_events") == BOTH_ENVIRONMENTS
     assert (
         scalar(
             migrated_database_url,
@@ -227,3 +228,87 @@ def test_event_ids_are_unique_per_provider_and_environment(
         )
         == "applied"
     )
+
+
+def test_same_transaction_with_other_amount_is_not_hidden_as_duplicate(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, operator_a = pending_qr(client, migrated_database_url)
+    deliver(client, payment_body(sale), Delivery(message_id="msg_e1"))
+
+    deliver(client, payment_body(sale, amount=310.0), Delivery(message_id="msg_e2"))
+
+    assert status_of(migrated_database_url, "msg_e2") == "unmatched"
+    assert detail(client, operator_a, sale)["confirmed_amount_cents"] == AMOUNT
+
+
+def test_redelivering_an_event_still_waiting_applies_it(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, operator_a = pending_qr(client, migrated_database_url)
+    body = payment_body(sale)
+    execute(
+        migrated_database_url,
+        "INSERT INTO webhook_events (id, provider, environment, provider_event_id, event_type, "
+        "payload, payload_digest, signed_at, status, received_at) VALUES (gen_random_uuid(), "
+        "'pey', 'test', 'msg_e1', 'codi.qr.payment_received', :body, :digest, now(), "
+        "'received', now())",
+        {"body": body, "digest": hashlib.sha256(body).hexdigest()},
+    )
+
+    deliver(client, body, Delivery(message_id="msg_e1"))
+
+    assert status_of(migrated_database_url, "msg_e1") == "applied"
+    assert detail(client, operator_a, sale)["status"] == "paid"
+
+
+def test_a_conflict_on_an_event_not_yet_applied_keeps_applying_the_original(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, operator_a = pending_qr(client, migrated_database_url)
+    original = payment_body(sale)
+    execute(
+        migrated_database_url,
+        "INSERT INTO webhook_events (id, provider, environment, provider_event_id, event_type, "
+        "payload, payload_digest, signed_at, status, received_at) VALUES (gen_random_uuid(), "
+        "'pey', 'test', 'msg_e1', 'codi.qr.payment_received', :body, :digest, now(), "
+        "'received', now())",
+        {"body": original, "digest": hashlib.sha256(original).hexdigest()},
+    )
+
+    deliver(client, payment_body(sale, amount=999.0), Delivery(message_id="msg_e1"))
+    run_sales(migrated_database_url, "process-events")
+
+    read = detail(client, operator_a, sale)
+    assert read["confirmed_amount_cents"] == AMOUNT
+    assert scalar(migrated_database_url, "SELECT count(*) FROM webhook_event_conflicts") == 1
+
+
+def test_transfer_ids_are_unique_per_provider_and_environment(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, _ = pending_qr(client, migrated_database_url)
+    execute(
+        migrated_database_url,
+        "INSERT INTO transactions (id, sale_id, attempt_id, provider, environment, "
+        "provider_transaction_id, amount_cents, currency, receiver_account, occurred_at, "
+        "received_at) SELECT gen_random_uuid(), sale_id, id, 'pey', 'production', :tx, 1, "
+        "'MXN', receiver_account, now(), now() FROM payment_attempts",
+        {"tx": TRANSACTION},
+    )
+
+    deliver(client, payment_body(sale), Delivery(message_id="msg_e1"))
+
+    assert status_of(migrated_database_url, "msg_e1") == "applied"
+    assert (
+        scalar(
+            migrated_database_url, "SELECT count(*) FROM transactions WHERE environment = 'test'"
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize("environment", ["Production", "x" * 33, "prod env"])
+def test_environment_names_are_short_lowercase_identifiers(environment: str) -> None:
+    with pytest.raises(ValueError, match="environment"):
+        Settings.model_validate({**build_settings().model_dump(), "environment": environment})

@@ -25,7 +25,7 @@ def standard_webhook_key(secret: str) -> bytes:
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, frozen=True)
 
-    environment: str = Field(min_length=1)
+    environment: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")
     secret_key: SecretStr = Field(min_length=32)
     database_url: SecretStr = Field(min_length=1)
     host: str = "127.0.0.1"

@@ -46,9 +46,10 @@ def recover(database: Database, settings: Settings) -> str:
 def process_events(database: Database, _: Settings) -> str:
     summary = process_received_events(database, SystemClock())
     noun = "event" if summary.applied == 1 else "events"
+    duplicates = "duplicate" if summary.duplicates == 1 else "duplicates"
     return (
         f"{summary.applied} {noun} applied, {summary.unmatched} unmatched, "
-        f"{summary.duplicates} duplicate, {summary.failed} failed"
+        f"{summary.duplicates} {duplicates}, {summary.failed} failed"
     )
 
 

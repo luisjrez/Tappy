@@ -88,6 +88,14 @@ def recorded_transfer(db: Session, evidence: PaymentEvidence) -> Transfer | None
     )
 
 
+def same_transfer(existing: Transfer, attempt: PaymentAttempt, evidence: PaymentEvidence) -> bool:
+    return (
+        existing.attempt_id == attempt.id
+        and existing.amount_cents == evidence.amount_cents
+        and existing.receiver_account == evidence.receiver_account
+    )
+
+
 def apply_evidence(
     db: Session, evidence: PaymentEvidence, event_id: uuid.UUID | None, now: datetime
 ) -> EvidenceOutcome:
@@ -96,7 +104,7 @@ def apply_evidence(
         return EvidenceOutcome.UNMATCHED
     existing = recorded_transfer(db, evidence)
     if existing is not None:
-        if existing.attempt_id == attempt.id:
+        if same_transfer(existing, attempt, evidence):
             return EvidenceOutcome.DUPLICATE
         return EvidenceOutcome.UNMATCHED
     sale = held_sale(db, attempt.sale_id)

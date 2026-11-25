@@ -9,13 +9,12 @@ from sqlalchemy import DateTime, ForeignKey, LargeBinary, String, UniqueConstrai
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
-from tappy.payments.provider import ProviderName
+from tappy.payments.provider import ENVIRONMENT_MAX_LENGTH, ProviderName
 from tappy.payments.webhooks import EVENT_ID_MAX_LENGTH
 from tappy.platform.persistence import Base, enum_column
 
 EVENT_CONSTRAINT = "uq_webhook_events_provider_event"
 CONFLICT_CONSTRAINT = "uq_webhook_event_conflicts_variant"
-ENVIRONMENT_MAX_LENGTH = 32
 EVENT_TYPE_MAX_LENGTH = 64
 
 
