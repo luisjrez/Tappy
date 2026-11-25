@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import DateTime, LargeBinary, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Mapped, Session, mapped_column
@@ -42,8 +42,9 @@ class InvalidEventError(Exception):
 
 
 class EventEnvelope(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     type: str = Field(min_length=1, max_length=EVENT_TYPE_MAX_LENGTH)
-    data: dict[str, object]
 
 
 def envelope_of(body: bytes) -> EventEnvelope:

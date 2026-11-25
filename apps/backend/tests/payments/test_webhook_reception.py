@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 from http import HTTPStatus
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,13 +22,13 @@ SECRET = "whsec_" + base64.b64encode(SECRET_BYTES).decode()
 OTHER_SECRET = "whsec_" + base64.b64encode(b"another-synthetic-secret-0123456").decode()
 EVENT = {
     "type": "codi.qr.payment_received",
-    "timestamp": "2026-11-24T12:00:00Z",
-    "data": {
-        "codiQrId": "AB12CD34EF",
-        "transactionId": "TX-SYNTHETIC-0001",
-        "amount": 300.1,
-        "metadata": {"tappy_attempt_id": str(uuid.uuid4()), "tappy_reference": "MSPE6WGBSK"},
-    },
+    "amount": 300.1,
+    "apiKeyId": "01HZZSYNTHETICAPIKEY0000",
+    "bankAccountId": "01HZY3K8Q4N6V7W8X9Y0Z1A2B3",
+    "codiQrId": "AB12CD34EF",
+    "datePaid": 1795000000,
+    "transactionId": "TX-SYNTHETIC-0001",
+    "metadata": {"tappy_attempt_id": str(uuid.uuid4()), "tappy_reference": "MSPE6WGBSK"},
 }
 MAX_BODY = 256 * 1024
 
@@ -179,7 +180,7 @@ def test_missing_or_malformed_headers_are_rejected(
 
 @pytest.mark.parametrize(
     "body",
-    [b"not json", b"[]", encoded({"data": {}}), encoded({"type": "", "data": {}})],
+    [b"not json", b"[]", encoded({"amount": 1}), encoded({"type": ""}), encoded({"type": 7})],
 )
 def test_signed_events_with_an_invalid_schema_are_rejected(
     client: TestClient, migrated_database_url: str, body: bytes
@@ -275,3 +276,19 @@ def test_overlong_event_ids_are_rejected_as_invalid(
 def test_secrets_that_do_not_decode_to_a_usable_key_are_refused(secret: str) -> None:
     with pytest.raises(ValueError, match="pey_webhook_secret"):
         Settings.model_validate({**build_settings().model_dump(), "pey_webhook_secret": secret})
+
+
+def test_the_official_pey_event_shape_is_accepted(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    official = json.loads(
+        (Path(__file__).parents[1] / "fixtures" / "pey" / "webhook-codi-qr.json").read_text()
+    )["example"]
+
+    response = deliver(client, encoded(official), Delivery(message_id="msg_official"))
+
+    assert response.status_code == HTTPStatus.NO_CONTENT
+    assert (
+        scalar(migrated_database_url, "SELECT event_type FROM webhook_events")
+        == "codi.qr.payment_received"
+    )

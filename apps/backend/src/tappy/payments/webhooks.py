@@ -12,7 +12,7 @@ from tappy.platform.config import standard_webhook_key
 
 SIGNATURE_VERSION = "v1"
 EVENT_ID_MAX_LENGTH = 255
-TIMESTAMP = re.compile(r"\d{1,12}")
+TIMESTAMP = re.compile(r"[0-9]{1,12}")
 
 
 class InvalidSignatureError(Exception):
