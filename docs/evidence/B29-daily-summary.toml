@@ -1,5 +1,5 @@
 ticket = "B29"
-revision = "606b410"
+revision = "0b9902d"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B29-daily-summary.md#b29-vc01--resultado-inicial-del-resumen-diario"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]

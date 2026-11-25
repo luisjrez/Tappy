@@ -13,7 +13,7 @@ Ticket: [#37](https://github.com/luisjrez/Tappy/issues/37) · Historia: [H6 #6](
 - **Base y revisiones:**
   - Base: rama B28 `0f6c1ae` ([PR #84](https://github.com/luisjrez/Tappy/pull/84)), stack #68.
   - Candidato: `cfa7729`.
-  - Correcciones de la review: `606b410`, revisión final. La VC01 se repitió sobre ella.
+  - Correcciones de la review: `606b410` (ronda 1) y `0b9902d` (notas de la ronda 2), revisión final. La VC01 se repitió sobre ella con las mismas cifras.
 - **Entorno:** macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -32,7 +32,7 @@ Vive en `tappy.sales.received` y lo comparten el historial y el resumen:
 
 - **Dinero recibido:** suma de las transferencias registradas. Todas son recepciones propias verificadas.
 - **Asignación al día:** por la hora de pago de pey (`datePaid` → `occurred_at`), no por la de recepción. Así lo indica PRODUCT_BASE: la fecha bancaria validada determina el periodo.
-- **Cobertura:** la primera transferencia exacta de un intento `paid`. Es la misma regla que `covering_reception` aplica en Python al detalle y al comprobante.
+- **Cobertura:** la primera transferencia exacta de un intento `paid`, ordenada por hora de pago, después por recepción y después por id. Es una sola regla SQL (`covering`, reutilizada por `covers_its_sale` y `sale_is_covered`), y `covering_reception` la aplica con el mismo orden en Python al detalle y al comprobante.
 
 ### Qué cuenta el resumen
 
@@ -40,6 +40,8 @@ Vive en `tappy.sales.received` y lo comparten el historial y el resumen:
 - `covered_sale_count`: ventas cuya transferencia de cobertura se pagó ese día. Una segunda transferencia suma dinero, pero nunca otra venta cubierta, ni ese día ni otro.
 - `review_sale_count`: ventas en `review` con transferencias ese día.
 - `open_exception_count`: incidencias propias abiertas ese día, en ventas del comercio, con o sin transferencia.
+
+Base de fechas: el dinero y la cobertura se asignan por la hora de pago de pey; las incidencias, por la hora del servidor en que se abrieron.
 
 Las ventas pendientes y las solicitudes vencidas no suman: no tienen transferencias. Una notificación repetida tampoco suma, porque el `transactionId` es único.
 
@@ -59,7 +61,7 @@ Todos los tests están en `tests/sales/test_daily_summary.py`.
 
 ## TDD
 
-**Red:** los tests se escribieron antes del código. Fallan los 9 porque la ruta no existía.
+**Red:** los tests se escribieron antes del código. Fallan los 9 porque la ruta no existía. `test_the_default_day_is_todays_local_date_on_the_server_clock` se añadió después de ese Red, junto con el primer Green, así que no tiene Red propio.
 
 ```
 FAILED tests/sales/test_daily_summary.py::test_received_money_counts_transfers_and_covered_sales_but_not_pending
@@ -92,7 +94,7 @@ FAILED tests/sales/test_daily_summary.py::test_summaries_are_limited_to_accessib
 
 ## B29-VC01 — Resultado inicial del resumen diario
 
-Proceso real `python -m tappy` con `TAPPY_PAYMENT_PROVIDER=pey` y un pey falso local. Los webhooks firmados llevan un `datePaid` fijo del 25 de noviembre, hora de Ciudad de México: un pago a las 12:00 y otro a las 23:30, que en UTC ya es el 26. Las incidencias se fechan con el reloj real del servidor, que también era el 25. Revisión `606b410`. Valores sintéticos.
+Proceso real `python -m tappy` con `TAPPY_PAYMENT_PROVIDER=pey` y un pey falso local. Los webhooks firmados llevan un `datePaid` fijo del 25 de noviembre, hora de Ciudad de México: un pago a las 12:00 y otro a las 23:30, que en UTC ya es el 26. Las incidencias se fechan con el reloj real del servidor, que también era el 25. Revisión `0b9902d`; las cifras son idénticas a las de `606b410`. Valores sintéticos.
 
 **Movimientos (pagos con fecha del 25 de noviembre, hora de Ciudad de México)**
 
@@ -135,7 +137,7 @@ Los datos se eliminaron al terminar. Estado VC01: **PASS**.
 
 ## Checks
 
-`uv run python -m quality.check` sobre `606b410`, con `.env` exportado: PASS en todos los pasos.
+`uv run python -m quality.check` sobre `606b410` y `0b9902d`, con `.env` exportado: PASS en todos los pasos.
 
 - format, lint y types (mypy strict).
 - hygiene.
@@ -144,7 +146,7 @@ Los datos se eliminaron al terminar. Estado VC01: **PASS**.
 - api: 16 contratos sin diferencias.
 - evidence: B01–B28 APPROVED.
 
-Una ejecución intermedia tuvo 1 error de infraestructura, ajeno al cambio: `test_local_data_survives_database_recreation…` falló al levantar un Compose temporal (`docker compose up … returned non-zero exit status 1`). Al repetirlo pasó 2/2, y la ejecución completa siguiente pasó entera.
+Sobre `0b9902d` el gate vuelve a pasar 523 tests; el único fallo de evidencia es la review en curso, que se registra abajo. Una ejecución intermedia tuvo 1 error de infraestructura, ajeno al cambio: `test_local_data_survives_database_recreation…` falló al levantar un Compose temporal (`docker compose up … returned non-zero exit status 1`). Al repetirlo pasó 2/2, y la ejecución completa siguiente pasó entera.
 
 ## Supresiones
 
@@ -159,6 +161,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `cfa7729` | REQUEST_CHANGES | REQUEST_CHANGES | Ver detalle debajo de la tabla |
+| 2 | `606b410` + `8f980ed` | APPROVE | APPROVE | Hallazgos resueltos. Notas aplicadas en `0b9902d`: una sola copia SQL de la regla de cobertura, la transferencia que cubre se elige por hora de pago en SQL y en Python, la base de fechas queda explícita y el Red se completa |
 
 Detalle de la ronda 1. Todo se aplicó en `606b410` con Red/Green.
 
@@ -181,4 +184,4 @@ Detalle de la ronda 1. Todo se aplicó en `606b410` con Red/Green.
 - La regla de cobertura existe en SQL (`received`) y en Python (`covering_reception`), y el test de consistencia de B28 compara historial, detalle y comprobante.
 - La ruta difiere del boceto `/v1/reports/summary`: no hay `/v1` y la zona es del negocio, no del comercio. B30 debe extender esta misma ruta.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.
