@@ -37,8 +37,7 @@ class QuotaPolicy:
     window: timedelta
 
     def window_start(self, now: datetime) -> datetime:
-        seconds = self.window.total_seconds()
-        return EPOCH + timedelta(seconds=(now - EPOCH).total_seconds() // seconds * seconds)
+        return EPOCH + (now - EPOCH) // self.window * self.window
 
     def seconds_left(self, now: datetime) -> int:
         remaining = self.window_start(now) + self.window - now

@@ -1,6 +1,6 @@
 import uuid
 from http import HTTPStatus
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 
@@ -41,10 +41,16 @@ from tappy.sales.schemas import (
 from tappy.sales.service import SaleRequest, create_sale, read_receipt, read_sale
 
 router = APIRouter(prefix="/sales", tags=["sales"])
-QUOTA_EXCEEDED: dict[int | str, dict[str, Any]] = {
+QUOTA_EXCEEDED: dict[int | str, dict[str, object]] = {
     HTTPStatus.TOO_MANY_REQUESTS: {
         "model": QuotaExceededResponse,
         "description": "Quota exceeded; retry after the seconds in Retry-After",
+        "headers": {
+            "Retry-After": {
+                "description": "Seconds until the quota window ends",
+                "schema": {"type": "integer"},
+            }
+        },
     }
 }
 

@@ -196,6 +196,59 @@ def test_qr_requests_over_the_quota_get_429_without_calling_the_provider(
     )
 
 
+def request_qr_with_key(
+    client: TestClient, headers: dict[str, str], sale_id: str, key: str
+) -> Response:
+    return client.post(
+        f"/sales/{sale_id}/attempts",
+        json={"method": "qr"},
+        headers={**headers, IDEMPOTENCY_HEADER: key},
+    )
+
+
+def test_repeated_qr_requests_replay_without_spending_the_quota_or_calling_the_provider(
+    client: TestClient, migrated_database_url: str, provider: CountingProvider
+) -> None:
+    merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+    operator_a = bearer(client, OPERATOR_A)
+    sales = [
+        post_sale(client, operator_a, merchant_a, amount_cents=AMOUNT).json()["id"]
+        for _ in range(ATTEMPT_QUOTA + 1)
+    ]
+    key = str(uuid.uuid4())
+    first = request_qr_with_key(client, operator_a, sales[0], key)
+    second = request_qr(client, operator_a, sales[1])
+
+    replays = [request_qr_with_key(client, operator_a, sales[0], key) for _ in range(2)]
+    refused = request_qr(client, operator_a, sales[2])
+
+    assert {first.status_code, second.status_code} == {HTTPStatus.CREATED}
+    assert {response.status_code for response in replays} == {HTTPStatus.OK}
+    assert {response.json()["id"] for response in replays} == {first.json()["id"]}
+    assert_quota_exceeded(refused)
+    assert len(provider.created) == ATTEMPT_QUOTA
+
+
+def test_a_refused_qr_request_spends_no_quota(
+    client: TestClient, migrated_database_url: str, provider: CountingProvider
+) -> None:
+    merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+    operator_a = bearer(client, OPERATOR_A)
+    sales = [
+        post_sale(client, operator_a, merchant_a, amount_cents=AMOUNT).json()["id"]
+        for _ in range(ATTEMPT_QUOTA)
+    ]
+    first = request_qr(client, operator_a, sales[0])
+
+    active = [request_qr(client, operator_a, sales[0]) for _ in range(ATTEMPT_QUOTA)]
+    other = request_qr(client, operator_a, sales[1])
+
+    assert first.status_code == HTTPStatus.CREATED
+    assert {response.status_code for response in active} == {HTTPStatus.CONFLICT}
+    assert other.status_code == HTTPStatus.CREATED
+    assert len(provider.created) == ATTEMPT_QUOTA
+
+
 def test_each_actor_has_a_read_quota_that_does_not_block_others(
     client: TestClient, migrated_database_url: str
 ) -> None:
@@ -272,7 +325,7 @@ def test_oversized_bodies_are_refused_before_creating_anything(
 
 
 def race_for_the_last_slot(
-    client: TestClient, database_url: str, merchant_a: str, finish: str
+    client: TestClient, database_url: str, merchant_a: str, commit: bool
 ) -> Response:
     operator_a = bearer(client, OPERATOR_A)
     for _ in range(SALE_QUOTA - 1):
@@ -291,7 +344,7 @@ def race_for_the_last_slot(
                     post_sale, client, operator_a, merchant_a, amount_cents=AMOUNT
                 )
                 wait_until_blocked_on_a_lock(database_url)
-                if finish == "commit":
+                if commit:
                     racing.commit()
                 else:
                     racing.rollback()
@@ -305,7 +358,7 @@ def test_a_creation_waiting_for_the_last_slot_is_refused_once_another_takes_it(
 ) -> None:
     merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
 
-    response = race_for_the_last_slot(client, migrated_database_url, merchant_a, "commit")
+    response = race_for_the_last_slot(client, migrated_database_url, merchant_a, commit=True)
 
     assert_quota_exceeded(response)
     assert sale_count(migrated_database_url) == SALE_QUOTA
@@ -316,7 +369,7 @@ def test_a_slot_released_by_a_rolled_back_creation_goes_to_the_waiting_one(
 ) -> None:
     merchant_a = ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
 
-    response = race_for_the_last_slot(client, migrated_database_url, merchant_a, "rollback")
+    response = race_for_the_last_slot(client, migrated_database_url, merchant_a, commit=False)
 
     assert response.status_code == HTTPStatus.CREATED
     assert sale_count(migrated_database_url) == SALE_QUOTA
