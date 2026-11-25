@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, StrictInt
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from tappy.sales.models import (
     AttemptMethod,
@@ -86,3 +87,45 @@ class SaleResponse(BaseModel):
     covered: bool
     transfers: list[TransferResponse]
     exceptions: list[ExceptionResponse]
+
+
+class HistoryParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    merchant_id: uuid.UUID | None = None
+    status: SaleStatus | None = None
+    created_from: AwareDatetime | None = None
+    created_to: AwareDatetime | None = None
+    limit: int = Field(default=20, ge=1, le=100)
+    cursor: str | None = Field(default=None, max_length=256)
+
+    @model_validator(mode="after")
+    def ordered_range(self) -> Self:
+        if self.created_from and self.created_to and self.created_from >= self.created_to:
+            raise ValueError("created_from must be before created_to")
+        return self
+
+
+class SaleRowResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    merchant_id: str
+    reference: str
+    amount_cents: int
+    currency: str
+    concept: str | None
+    status: SaleStatus
+    covered: bool
+    confirmed_amount_cents: int
+    attempt_count: int
+    beneficiary_name: str
+    masked_account: str
+    created_at: datetime
+
+
+class HistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[SaleRowResponse]
+    next_cursor: str | None

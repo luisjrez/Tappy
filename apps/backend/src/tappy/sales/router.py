@@ -2,7 +2,7 @@ import uuid
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 
 from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
@@ -24,10 +24,13 @@ from tappy.sales.errors import (
     SaleNotOpenError,
     UnverifiedAttemptError,
 )
+from tappy.sales.history import HistoryQuery, InvalidCursorError, sale_history
 from tappy.sales.idempotency import KEY_PATTERN, IdempotencyConflictError
 from tappy.sales.schemas import (
     AttemptCreateRequest,
     AttemptResponse,
+    HistoryParams,
+    HistoryResponse,
     SaleCreateRequest,
     SaleResponse,
 )
@@ -83,6 +86,32 @@ def create(
     if creation.replayed:
         response.status_code = HTTPStatus.OK
     return SaleResponse.model_validate(creation.sale)
+
+
+@router.get(
+    "",
+    responses={
+        HTTPStatus.NOT_FOUND: {"description": "Merchant not found or not accessible"},
+        HTTPStatus.UNPROCESSABLE_CONTENT: {"description": "Invalid filter, limit or cursor"},
+    },
+)
+def read_history(
+    params: Annotated[HistoryParams, Query()], actor: CurrentIdentity, db: SessionDependency
+) -> HistoryResponse:
+    query = HistoryQuery(
+        params.merchant_id,
+        params.status,
+        params.created_from,
+        params.created_to,
+        params.limit,
+        params.cursor,
+    )
+    try:
+        return HistoryResponse.model_validate(sale_history(db, actor, query))
+    except MerchantNotFoundError as error:
+        raise HTTPException(HTTPStatus.NOT_FOUND, detail=str(error)) from None
+    except InvalidCursorError as error:
+        raise HTTPException(HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(error)) from None
 
 
 @router.get("/{sale_id}", responses={HTTPStatus.NOT_FOUND: {"description": "Sale not found"}})

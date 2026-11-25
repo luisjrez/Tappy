@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -283,10 +283,12 @@ def held_sale(db: Session, sale_id: uuid.UUID) -> Sale:
     ).one()
 
 
+def scoped_sales(actor: IdentitySummary) -> Select[Sale]:
+    return select(Sale).where(Sale.merchant_id.in_(scoped_ids(actor)))
+
+
 def accessible_sale(db: Session, actor: IdentitySummary, sale_id: uuid.UUID) -> Sale:
-    sale = db.scalar(
-        select(Sale).where(Sale.id == sale_id, Sale.merchant_id.in_(scoped_ids(actor)))
-    )
+    sale = db.scalar(scoped_sales(actor).where(Sale.id == sale_id))
     if sale is None:
         raise SaleNotFoundError
     return sale
