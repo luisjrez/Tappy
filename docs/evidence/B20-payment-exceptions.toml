@@ -1,0 +1,53 @@
+ticket = "B20"
+revision = "03e4b7d"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B20-payment-exceptions.md#b20-vc01--antesdespués-de-las-incidencias"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B20-AC01"
+use_cases = ["B20-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B20-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_payment_exceptions.py::test_a_short_own_transfer_is_kept_and_opens_an_incident_without_covering_the_sale",
+    "tests/sales/test_payment_exceptions.py::test_an_over_payment_is_also_an_incident",
+    "tests/sales/test_payment_exceptions.py::test_a_sale_in_review_accepts_no_new_attempts",
+]
+
+[[criteria]]
+id = "B20-AC02"
+use_cases = ["B20-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B20-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_payment_exceptions.py::test_money_to_another_account_never_counts_for_the_merchant",
+    "tests/sales/test_payment_exceptions.py::test_a_transfer_id_already_used_with_other_data_opens_an_incident",
+    "tests/sales/test_payment_exceptions.py::test_incomplete_evidence_for_the_attempt_goes_to_review",
+]
+
+[[criteria]]
+id = "B20-AC03"
+use_cases = ["B20-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B20-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_payment_exceptions.py::test_unassociable_evidence_stays_in_review_without_approximate_association",
+    "tests/sales/test_payment_exceptions.py::test_reprocessing_an_incident_never_duplicates_it_or_the_money",
+]
