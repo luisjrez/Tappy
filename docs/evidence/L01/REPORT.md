@@ -2,6 +2,10 @@
 
 Fecha: 2026-11-25. Ticket [#93](https://github.com/luisjrez/Tappy/issues/93). Base fija de review: `96287d7`. La revisión evaluada es el commit que introduce este reporte (resolver con `git log -1 --format=%H -- docs/evidence/L01/REPORT.md`). No hay implementación web ni prueba bancaria en esta entrega.
 
+Entorno: macOS 26.6.2 (25G83), arm64; Python 3.14.8; Git 2.50.1 (Apple Git-155). Ejecutor: agente Codex en el worktree de Tappy. Inspección de Pen mediante MCP local. Comando documental ejecutado desde la raíz; salida observada: `PASS: 19 assets, 12 capturas, hashes y enlaces locales`, código 0. Verificación visual del informe: 728 px, alto 1532 px, consola sin mensajes; mostrado con html_render. No se presenta como una prueba de accesibilidad de la aplicación.
+
+Base del PR completo: `9279430`; incluye documentación de planificación aprobada previamente. Base del incremento L01: `96287d7`. El comando `git log -1 --format=%H -- docs/evidence/L01/REPORT.md` identifica el commit final del reporte, evitando atribuir las comprobaciones al candidato anterior.
+
 ## Resultado inicial documental
 
 | Trazabilidad | Pasos y esperado | Observado | Resultado |
@@ -12,7 +16,7 @@ Fecha: 2026-11-25. Ticket [#93](https://github.com/luisjrez/Tappy/issues/93). Ba
 
 Completitud documental: 3/3 AC obligatorios = 100%. No acredita aprobación humana de L01 ni desbloquea L02. Los pendientes registrados en AC03 siguen pendientes en los tickets correspondientes.
 
-## VC01
+## L01-VC01 — PASS documental; aceptación humana pendiente
 
 Resultado inicial de documento/inventario. [Referencia entregada](../../landing/IMPLEMENTATION_REFERENCE.md), [inventario](../../landing/ASSETS.json), [comparación visual navegable](review.html), [capturas Pen originales](../../design/landing/2026-11-25/README.md). El HTML es un informe para revisar decisiones, no la landing implementada. No existe un antes de código ni una UI nueva que capturar; se muestra diseño original frente a copy preparado. La aceptación humana del informe se realizará en el PR.
 
