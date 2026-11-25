@@ -71,11 +71,14 @@ class AttemptReservation:
 
 
 @dataclass(frozen=True)
-class PendingReconciliation:
+class OpenReconciliation:
     attempt: AttemptView
     reason: JobReason
     status: JobStatus
     run_at: datetime
+    tries: int
+    lease_until: datetime | None
+    last_problem: str | None
 
 
 def reservation_claim(request: AttemptRequest, sale: Sale) -> IdempotencyClaim:
@@ -291,14 +294,22 @@ def recover_interrupted(db: Session, cutoff: datetime, now: datetime) -> int:
     return len(interrupted)
 
 
-def pending_reconciliations(db: Session) -> list[PendingReconciliation]:
+def open_reconciliations(db: Session) -> list[OpenReconciliation]:
     rows = db.execute(
         select(ReconciliationJob, PaymentAttempt)
         .join(PaymentAttempt, PaymentAttempt.id == ReconciliationJob.attempt_id)
-        .where(ReconciliationJob.status == JobStatus.PENDING)
+        .where(ReconciliationJob.status.in_([JobStatus.PENDING, JobStatus.EXHAUSTED]))
         .order_by(ReconciliationJob.run_at, ReconciliationJob.id)
-    ).tuples()
+    ).all()
     return [
-        PendingReconciliation(describe_attempt(attempt), job.reason, job.status, job.run_at)
+        OpenReconciliation(
+            describe_attempt(attempt),
+            job.reason,
+            job.status,
+            job.run_at,
+            job.tries,
+            job.lease_until,
+            job.last_problem,
+        )
         for job, attempt in rows
     ]

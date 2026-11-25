@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -27,12 +28,12 @@ class FakePey:
         status: int = 201,
         body: object = None,
         error: Exception | None = None,
-        pages: list[tuple[int, object]] | None = None,
+        pages: Sequence[tuple[int, object] | httpx2.Response] = (),
     ):
         self.status = status
         self.body = CREATED if body is None else body
         self.error = error
-        self.pages = pages or []
+        self.pages = list(pages)
         self.requests: list[httpx2.Request] = []
 
     def handle(self, request: httpx2.Request) -> httpx2.Response:
@@ -40,7 +41,8 @@ class FakePey:
         if self.error is not None:
             raise self.error
         if request.method == "GET":
-            return response(*self.pages.pop(0))
+            page = self.pages.pop(0)
+            return page if isinstance(page, httpx2.Response) else response(*page)
         return response(self.status, self.body)
 
     def queries(self) -> list[httpx2.Request]:

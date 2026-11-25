@@ -35,6 +35,8 @@ JOB_REASON_MAX_LENGTH = 32
 TRANSFER_CONSTRAINT = "uq_transactions_provider_transaction"
 EXCEPTION_CONSTRAINT = "uq_payment_exceptions_evidence_reason"
 WAITING_REFERENCE_INDEX = "ix_payment_exceptions_waiting_reference"
+DUE_JOBS_INDEX = "ix_reconciliation_jobs_due"
+JOB_PROBLEM_MAX_LENGTH = 32
 
 
 class SaleStatus(StrEnum):
@@ -73,6 +75,7 @@ class JobReason(StrEnum):
 class JobStatus(StrEnum):
     PENDING = "pending"
     DONE = "done"
+    EXHAUSTED = "exhausted"
 
 
 class ExceptionReason(StrEnum):
@@ -155,7 +158,11 @@ class PaymentAttempt(Base):
 
 class ReconciliationJob(Base):
     __tablename__ = "reconciliation_jobs"
-    __table_args__ = (UniqueConstraint("attempt_id", "reason", name=JOB_CONSTRAINT),)
+    __table_args__ = (
+        UniqueConstraint("attempt_id", "reason", name=JOB_CONSTRAINT),
+        CheckConstraint("tries >= 0", name="ck_reconciliation_jobs_tries"),
+        Index(DUE_JOBS_INDEX, "run_at", postgresql_where=text(f"status = '{JobStatus.PENDING}'")),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     attempt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payment_attempts.id"))
@@ -165,6 +172,10 @@ class ReconciliationJob(Base):
     status: Mapped[JobStatus] = mapped_column(enum_column(JobStatus, "reconciliation_job_status"))
     run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    tries: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    lease_owner: Mapped[uuid.UUID | None]
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_problem: Mapped[str | None] = mapped_column(String(JOB_PROBLEM_MAX_LENGTH))
 
 
 class Transfer(Base):

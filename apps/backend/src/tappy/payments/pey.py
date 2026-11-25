@@ -3,6 +3,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
 from urllib.parse import quote
 
@@ -21,11 +22,12 @@ from tappy.payments.provider import (
     QueryProblem,
     UncertainReason,
 )
+from tappy.platform.config import MAX_QUERY_PAGES
 
 logger = logging.getLogger(__name__)
 CENTS_PER_PESO = Decimal(100)
 REJECTED_STATUSES = frozenset({400, 429})
-MAX_QUERY_PAGES = 10
+MAX_RETRY_AFTER_SECONDS = 24 * 3600
 PAID = "PAID"
 NETWORK_PROBLEMS = {
     UncertainReason.TIMEOUT: QueryProblem.TIMEOUT,
@@ -106,11 +108,19 @@ def issued_qr(response: httpx2.Response) -> IssuedQr:
     return IssuedQr(created.id, created.qr_string)
 
 
+def retry_after(response: httpx2.Response) -> timedelta | None:
+    value = response.headers.get("Retry-After", "")
+    if not value.isascii() or not value.isdigit():
+        return None
+    if len(value) > len(str(MAX_RETRY_AFTER_SECONDS)):
+        return timedelta(seconds=MAX_RETRY_AFTER_SECONDS)
+    return timedelta(seconds=min(int(value), MAX_RETRY_AFTER_SECONDS))
+
+
 def query_page(response: httpx2.Response) -> QueryPage:
     if response.status_code != httpx2.codes.OK:
-        raise PaymentsQueryError(
-            QUERY_PROBLEMS.get(response.status_code, QueryProblem.SERVER_ERROR)
-        )
+        problem = QUERY_PROBLEMS.get(response.status_code, QueryProblem.SERVER_ERROR)
+        raise PaymentsQueryError(problem, retry_after(response))
     try:
         return QueryPage.model_validate(json.loads(response.content, parse_float=Decimal))
     except ValueError:

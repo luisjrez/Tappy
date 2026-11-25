@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Protocol
 
@@ -38,9 +38,10 @@ class QueryProblem(StrEnum):
 
 
 class PaymentsQueryError(Exception):
-    def __init__(self, problem: QueryProblem) -> None:
+    def __init__(self, problem: QueryProblem, retry_after: timedelta | None = None) -> None:
         super().__init__(f"QR payments query failed: {problem}")
         self.problem = problem
+        self.retry_after = retry_after
 
 
 class ProviderRejectedError(Exception):

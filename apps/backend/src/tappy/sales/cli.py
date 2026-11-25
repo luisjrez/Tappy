@@ -9,10 +9,11 @@ from tappy.payments.factory import provider_from
 from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, Settings, load_settings
 from tappy.platform.database import Database
-from tappy.sales.attempts import PendingReconciliation, pending_reconciliations, recover_interrupted
+from tappy.sales.attempts import OpenReconciliation, open_reconciliations, recover_interrupted
 from tappy.sales.errors import AttemptNotFoundError
+from tappy.sales.jobs import JobPolicy, run_jobs
 from tappy.sales.payment_exceptions import OpenException, open_exceptions
-from tappy.sales.receptions import process_received_events
+from tappy.sales.receptions import ProcessingSummary, process_received_events
 from tappy.sales.reconciliation import (
     ReconciliationReport,
     ReconciliationResult,
@@ -22,25 +23,28 @@ from tappy.sales.reconciliation import (
 Handler = Callable[[Database, Settings, argparse.Namespace], str]
 
 
-def describe(pending: PendingReconciliation) -> str:
+def describe(job: OpenReconciliation) -> str:
     return "\n".join(
         [
-            f"attempt: {pending.attempt.id}",
-            f"sale reference: {pending.attempt.sale_reference}",
-            f"attempt status: {pending.attempt.status}",
-            f"reason: {pending.reason}",
-            f"status: {pending.status}",
-            f"run at: {pending.run_at.isoformat()}",
+            f"attempt: {job.attempt.id}",
+            f"sale reference: {job.attempt.sale_reference}",
+            f"attempt status: {job.attempt.status}",
+            f"reason: {job.reason}",
+            f"status: {job.status}",
+            f"run at: {job.run_at.isoformat()}",
+            f"tries: {job.tries}",
+            f"leased until: {job.lease_until.isoformat() if job.lease_until else 'not leased'}",
+            f"last problem: {job.last_problem or 'none'}",
         ]
     )
 
 
 def reconciliations(database: Database, _settings: Settings, _options: argparse.Namespace) -> str:
     with database.transaction() as session:
-        pending = pending_reconciliations(session)
-    if not pending:
+        listed = open_reconciliations(session)
+    if not listed:
         return "No pending reconciliations"
-    return "\n\n".join(describe(item) for item in pending)
+    return "\n\n".join(describe(item) for item in listed)
 
 
 def recover(database: Database, settings: Settings, _options: argparse.Namespace) -> str:
@@ -52,8 +56,7 @@ def recover(database: Database, settings: Settings, _options: argparse.Namespace
     return f"{moved} interrupted {noun} moved to reconciliation"
 
 
-def process_events(database: Database, _settings: Settings, _options: argparse.Namespace) -> str:
-    summary = process_received_events(database, SystemClock())
+def events_line(summary: ProcessingSummary) -> str:
     noun = "event" if summary.applied == 1 else "events"
     duplicates = "duplicate" if summary.duplicates == 1 else "duplicates"
     return (
@@ -61,6 +64,10 @@ def process_events(database: Database, _settings: Settings, _options: argparse.N
         f"{summary.in_review} in review, {summary.duplicates} {duplicates}, "
         f"{summary.failed} failed"
     )
+
+
+def process_events(database: Database, _settings: Settings, _options: argparse.Namespace) -> str:
+    return events_line(process_received_events(database, SystemClock()))
 
 
 def describe_exception(open_exception: OpenException) -> str:
@@ -136,12 +143,33 @@ def reconcile(database: Database, settings: Settings, options: argparse.Namespac
     return describe_reconciliation(report)
 
 
+def run_batch(database: Database, settings: Settings, _options: argparse.Namespace) -> str:
+    summary = run_jobs(
+        database,
+        provider_from(settings),
+        settings.environment,
+        JobPolicy.from_settings(settings),
+        SystemClock(),
+    )
+    return "\n".join(
+        [
+            f"events: {events_line(summary.events)}",
+            f"interrupted attempts moved to reconciliation: {summary.recovered}",
+            f"jobs claimed: {summary.claimed}",
+            f"confirmed: {summary.confirmed}, in review: {summary.in_review}, "
+            f"rescheduled: {summary.rescheduled}, exhausted: {summary.exhausted}, "
+            f"lease lost: {summary.lost}, failed: {summary.failed}",
+        ]
+    )
+
+
 COMMANDS: dict[str, Handler] = {
     "reconciliations": reconciliations,
     "recover-interrupted": recover,
     "process-events": process_events,
     "event-conflicts": conflicts,
     "exceptions": exceptions,
+    "run-jobs": run_batch,
 }
 
 

@@ -1,11 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx2
 import pytest
 
-from tappy.payments.pey import MAX_QUERY_PAGES
 from tappy.payments.provider import PaymentsQueryError, QrPayment, QueryProblem
+from tappy.platform.config import MAX_QUERY_PAGES
 from tests.payments.pey_support import API_KEY, QUERY_FIXTURE, FakePey
 
 QR_ID = "AB12CD34EF"
@@ -114,3 +114,25 @@ def test_the_query_is_bounded_in_pages() -> None:
 
     assert raised.value.problem is QueryProblem.TOO_MANY_PAGES
     assert len(fake.queries()) == MAX_QUERY_PAGES
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ("120", timedelta(seconds=120)),
+        ("0", timedelta(0)),
+        ("999999999999", timedelta(days=1)),
+        ("Wed, 21 Oct 2026 07:28:00 GMT", None),
+        ("-5", None),
+    ],
+)
+def test_a_rate_limit_carries_the_providers_bounded_wait(
+    header: str, expected: timedelta | None
+) -> None:
+    answer = httpx2.Response(429, json={}, headers={"Retry-After": header})
+
+    with pytest.raises(PaymentsQueryError) as raised:
+        FakePey(pages=[answer]).provider().qr_payments(QR_ID)
+
+    assert raised.value.problem is QueryProblem.RATE_LIMITED
+    assert raised.value.retry_after == expected

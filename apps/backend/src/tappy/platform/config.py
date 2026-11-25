@@ -11,6 +11,7 @@ ENV_PREFIX = "TAPPY_"
 PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
 PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
 PROVIDER_TIMEOUT_PHASES = 4
+MAX_QUERY_PAGES = 10
 STANDARD_WEBHOOKS_PREFIX = "whsec_"
 WEBHOOK_KEY_MIN_BYTES = 24
 PEY_BASE_URL = r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))"
@@ -38,6 +39,11 @@ class Settings(BaseSettings):
     pey_api_key: SecretStr | None = Field(default=None, min_length=16)
     pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
     attempt_creation_timeout_seconds: int = Field(default=60, ge=1)
+    job_lease_seconds: int = Field(default=600, ge=1)
+    job_batch_size: int = Field(default=20, ge=1, le=100)
+    job_max_tries: int = Field(default=8, ge=1, le=50)
+    job_backoff_seconds: int = Field(default=60, ge=1)
+    job_backoff_max_seconds: int = Field(default=3600, ge=1, le=24 * 3600)
     pey_webhook_secret: SecretStr | None = None
     webhook_tolerance_seconds: int = Field(default=300, ge=1, le=3600)
     webhook_max_body_bytes: int = Field(default=256 * 1024, ge=1024, le=1024 * 1024)
@@ -73,6 +79,24 @@ class Settings(BaseSettings):
             raise ValueError(
                 "TAPPY_ATTEMPT_CREATION_TIMEOUT_SECONDS must exceed "
                 f"{PROVIDER_TIMEOUT_PHASES} times TAPPY_PEY_TIMEOUT_SECONDS"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def lease_outlasts_a_query(self) -> Self:
+        query_seconds = MAX_QUERY_PAGES * PROVIDER_TIMEOUT_PHASES * self.pey_timeout_seconds
+        if self.job_lease_seconds <= query_seconds:
+            raise ValueError(
+                "TAPPY_JOB_LEASE_SECONDS must exceed "
+                f"{MAX_QUERY_PAGES * PROVIDER_TIMEOUT_PHASES} times TAPPY_PEY_TIMEOUT_SECONDS"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def backoff_is_bounded(self) -> Self:
+        if self.job_backoff_max_seconds < self.job_backoff_seconds:
+            raise ValueError(
+                "TAPPY_JOB_BACKOFF_MAX_SECONDS must be at least TAPPY_JOB_BACKOFF_SECONDS"
             )
         return self
 

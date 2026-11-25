@@ -1,6 +1,7 @@
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import timedelta
 from enum import StrEnum
 
 from sqlalchemy import select, update
@@ -57,6 +58,7 @@ class ReconciliationReport:
     duplicates: int = 0
     in_review: int = 0
     problem: QueryProblem | None = None
+    retry_after: timedelta | None = None
 
 
 def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> QueryTarget | None:
@@ -155,7 +157,8 @@ def reconcile_attempt(
             error.problem,
         )
         with database.transaction() as db:
-            return report_for(db, attempt_id, [], ReconciliationResult.UNCERTAIN, error.problem)
+            report = report_for(db, attempt_id, [], ReconciliationResult.UNCERTAIN, error.problem)
+        return replace(report, retry_after=error.retry_after)
     with database.transaction() as db:
         outcomes = [
             apply_evidence(db, evidence_of(target, payment, environment), None, clock.now())
