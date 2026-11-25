@@ -1,0 +1,58 @@
+ticket = "B23"
+revision = "c98e5b5"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B23-job-recovery.md#b23-vc01--lote-lease-y-429"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B23-AC01"
+use_cases = ["B23-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B23-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_job_runner.py::test_an_event_stored_before_a_crash_is_applied_by_the_next_batch",
+    "tests/sales/test_job_runner.py::test_a_due_job_is_reconciled_and_its_result_is_visible",
+    "tests/sales/test_job_runner.py::test_an_interrupted_creation_without_a_qr_id_goes_to_an_operator_at_once",
+    "tests/sales/test_job_runner.py::test_jobs_of_attempts_paid_by_a_webhook_are_closed_by_the_next_batch",
+]
+
+[[criteria]]
+id = "B23-AC02"
+use_cases = ["B23-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B23-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_job_runner.py::test_a_live_lease_has_a_single_claimant",
+    "tests/sales/test_job_runner.py::test_a_claimant_whose_lease_expired_cannot_finish_the_job",
+    "tests/sales/test_job_runner.py::test_a_job_closed_elsewhere_while_leased_is_never_reopened",
+]
+
+[[criteria]]
+id = "B23-AC03"
+use_cases = ["B23-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B23-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_job_runner.py::test_a_crash_and_a_rate_limit_are_retried_with_backoff_and_a_limit",
+    "tests/sales/test_job_runner.py::test_a_retry_after_longer_than_the_backoff_is_respected",
+    "tests/sales/test_job_runner.py::test_a_crash_after_every_claim_still_ends_exhausted",
+    "tests/sales/test_job_runner.py::test_no_evidence_waits_with_growing_backoff",
+    "tests/payments/test_pey_query.py::test_a_rate_limit_carries_the_providers_bounded_wait",
+    "tests/sales/test_uncertain_creation.py::test_the_job_lease_must_outlast_a_bounded_query_only_with_pey",
+]

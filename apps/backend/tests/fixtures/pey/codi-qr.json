@@ -1,0 +1,148 @@
+{
+  "source": "https://docs.pey.mx/openapi.json",
+  "openapi_version": "2026-10-20",
+  "sha256": "568e0255f334cbf8e4830324b2301e7c0d37158d90cf3a7bb8d839dd0f345c5a",
+  "operation": "POST /codi/qr",
+  "request_schema": {
+    "type": "object",
+    "required": [
+      "amount"
+    ],
+    "properties": {
+      "amount": {
+        "type": "number",
+        "minimum": 0,
+        "description": "The amount for the QR code in MXN (Mexican Peso). Must be greater than or equal to 0. Use 0 to let the payer enter the amount when scanning the QR."
+      },
+      "concept": {
+        "type": "string",
+        "description": "The concept shown to the payer. Maximum 40 characters."
+      },
+      "expiration": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Expiration time in seconds. Use 0 for no expiration. Minimum value when set is 360 (6 minutes). The QR can be paid more than once until it expires."
+      },
+      "numRef": {
+        "type": "string",
+        "pattern": "^[0-9]{1,7}$",
+        "maxLength": 7,
+        "default": "0",
+        "description": "Numeric reference for the QR code, from 1 to 7 digits. Defaults to \"0\"."
+      },
+      "generateImage": {
+        "type": "boolean",
+        "default": false,
+        "description": "When true, the response includes qrImage: the QR rendered as a base64-encoded PNG. Generating the image can make the endpoint respond more slowly; if your integration needs faster responses, we recommend building the QR client-side from qrString."
+      },
+      "bankAccountId": {
+        "type": "string",
+        "description": "Pey identifier (ULID) of the bank account that will receive the payment, registered through [Register Bank Account](/docs/api/register-bank-account/). The account must have `codiStatus: ACTIVE`. When omitted, the payment goes to the CoDi payment account linked to your API key."
+      },
+      "metadata": {
+        "type": "object",
+        "maxProperties": 50,
+        "propertyNames": {
+          "maxLength": 40
+        },
+        "additionalProperties": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "description": "Optional set of key/value pairs to attach custom data to the QR. Up to 50 pairs; keys up to 40 characters; values up to 500 characters. Values must be scalar (string, number, boolean, or null) - nested objects and arrays are not allowed. All values are stored and returned as strings (e.g. \"123\", \"false\", \"null\")."
+      }
+    }
+  },
+  "request_example": {
+    "amount": 150.0,
+    "concept": "Order #12345",
+    "expiration": 600,
+    "numRef": "1234567"
+  },
+  "responses": {
+    "201": {
+      "default": {
+        "id": "AB12CD34EF",
+        "qrString": "{\"TYP\":1,\"v\":\"01\",\"ic\":0,\"IDC\":\"AB12CD34EF\"}",
+        "qrImage": "iVBORw0KGgoAAAANSUhEUgAAAooAAAKKAQAAAACq/MUfAAAC..."
+      }
+    },
+    "400": {
+      "invalidAmount": {
+        "error": {
+          "message": "Amount must be a number greater than or equal to 0",
+          "type": "INVALID_AMOUNT",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "invalidExpiration": {
+        "error": {
+          "message": "Expiration must be 0 (no expiration) or at least 360 seconds (6 minutes)",
+          "type": "INVALID_PARAMETER",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "codiNotEnabled": {
+        "error": {
+          "message": "API key does not have CoDi enabled",
+          "type": "INVALID_STATE",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "missingBankAccount": {
+        "error": {
+          "message": "Missing bankAccountId in API key",
+          "type": "PEY_CONSISTENCY_ERROR",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "invalidRequest": {
+        "error": {
+          "message": "Invalid JSON body",
+          "type": "INVALID_REQUEST",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "429": {
+      "default": {
+        "error": {
+          "message": "API call limit reached for the current period",
+          "type": "CALL_LIMIT_REACHED",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "503": {
+      "maintenance": {
+        "error": {
+          "message": "This endpoint is under maintenance, please try again later",
+          "type": "SERVICE_UNAVAILABLE",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "500": {
+      "invokeError": {
+        "error": {
+          "message": "Error creating CoDi QR",
+          "type": "INTERNAL_SERVER_ERROR",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "requestIdError": {
+        "error": {
+          "message": "Error getting request ID",
+          "type": "INTERNAL_SERVER_ERROR",
+          "requestId": null
+        }
+      }
+    }
+  }
+}

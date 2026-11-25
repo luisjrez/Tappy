@@ -1,0 +1,65 @@
+ticket = "B11"
+revision = "f676cde"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B11-sale.md#b11-vc01--resultado-inicial-de-api"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B11-AC01"
+use_cases = ["B11-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B11-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_sales_api.py::test_operator_creates_and_reads_sale_with_exact_amount",
+    "tests/sales/test_sales_api.py::test_concept_is_optional_and_normalized",
+    "tests/sales/test_sales_api.py::test_each_sale_gets_its_own_reference",
+    "tests/sales/test_sales_api.py::test_reference_collision_is_retried_with_a_new_reference",
+    "tests/sales/test_sales_api.py::test_sale_keeps_the_receiver_it_was_created_for",
+    "tests/sales/test_sales_api.py::test_sale_is_blocked_without_an_enabled_receiver",
+    "tests/sales/test_sales_api.py::test_sale_waits_for_a_concurrent_receiver_change_and_honours_it",
+    "tests/sales/test_sales_api.py::test_sale_body_accepts_no_receiver_currency_status_or_reference",
+    "tests/sales/test_sales_api.py::test_only_operators_create_sales",
+]
+
+[[criteria]]
+id = "B11-AC02"
+use_cases = ["B11-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B11-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_sales_api.py::test_invalid_amounts_are_rejected_without_rounding",
+    "tests/sales/test_sales_api.py::test_missing_amount_is_rejected",
+    "tests/sales/test_sales_api.py::test_amount_range_messages_name_the_limits",
+    "tests/sales/test_sales_api.py::test_bounds_of_the_configured_maximum",
+    "tests/sales/test_sales_api.py::test_maximum_cannot_exceed_the_provider_limit",
+    "tests/sales/test_sales_api.py::test_long_concept_is_rejected_without_truncation",
+    "tests/sales/test_sales_api.py::test_database_rejects_non_positive_amounts",
+]
+
+[[criteria]]
+id = "B11-AC03"
+use_cases = ["B11-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B11-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_sales_api.py::test_other_operator_cannot_read_create_for_or_change_a_sale",
+    "tests/sales/test_sales_api.py::test_issued_terms_cannot_be_changed_in_the_database",
+    "tests/sales/test_sales_api.py::test_administrators_can_review_any_sale",
+    "tests/sales/test_sales_api.py::test_unknown_or_malformed_sale_ids",
+]

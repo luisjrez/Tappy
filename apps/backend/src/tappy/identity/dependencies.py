@@ -43,3 +43,12 @@ def current_admin(identity: CurrentIdentity) -> IdentitySummary:
 
 
 CurrentAdmin = Annotated[IdentitySummary, Depends(current_admin)]
+
+
+def current_operator(identity: CurrentIdentity) -> IdentitySummary:
+    if identity.role is not Role.OPERATOR:
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Operator role required")
+    return identity
+
+
+CurrentOperator = Annotated[IdentitySummary, Depends(current_operator)]

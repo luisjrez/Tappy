@@ -1,0 +1,10 @@
+{
+  "revision": "bc000f7",
+  "status": 503,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": {
+    "detail": "Webhooks are not configured"
+  }
+}

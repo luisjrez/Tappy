@@ -1,0 +1,61 @@
+ticket = "B22"
+revision = "3c72677"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B22-qr-reconciliation.md#b22-vc01--resultado-inicial-de-la-conciliación"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B22-AC01"
+use_cases = ["B22-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B22-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_qr_reconciliation.py::test_evidence_on_a_later_page_confirms_the_sale_once",
+    "tests/sales/test_qr_reconciliation.py::test_a_confirmed_reconciliation_closes_its_pending_job",
+    "tests/sales/test_qr_reconciliation.py::test_a_different_amount_found_by_query_goes_to_review",
+    "tests/sales/test_qr_reconciliation.py::test_the_command_reconciles_one_attempt",
+    "tests/payments/test_pey_query.py::test_follows_next_tokens_and_returns_only_paid_transactions",
+    "tests/payments/test_pey_query.py::test_the_official_example_page_is_understood",
+]
+
+[[criteria]]
+id = "B22-AC02"
+use_cases = ["B22-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B22-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_qr_reconciliation.py::test_no_evidence_keeps_the_payment_unconfirmed",
+    "tests/sales/test_qr_reconciliation.py::test_an_uncertain_answer_keeps_a_reconciling_attempt_waiting",
+    "tests/sales/test_qr_reconciliation.py::test_an_attempt_without_a_qr_id_cannot_be_queried",
+    "tests/payments/test_pey_query.py::test_an_empty_answer_is_no_evidence_rather_than_a_rejection",
+    "tests/payments/test_pey_query.py::test_provider_problems_leave_the_payment_uncertain",
+    "tests/payments/test_pey_query.py::test_network_failures_leave_the_payment_uncertain",
+    "tests/payments/test_pey_query.py::test_the_query_is_bounded_in_pages",
+    "tests/payments/test_pey_query.py::test_unusable_amounts_or_dates_are_kept_as_incomplete_payments",
+]
+
+[[criteria]]
+id = "B22-AC03"
+use_cases = ["B22-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B22-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_qr_reconciliation.py::test_a_webhook_then_a_query_for_the_same_transfer_count_once",
+    "tests/sales/test_qr_reconciliation.py::test_a_query_then_a_webhook_for_the_same_transfer_count_once",
+]

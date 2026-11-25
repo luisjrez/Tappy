@@ -1,0 +1,54 @@
+ticket = "B24"
+revision = "4e4573a"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B24-qr-expiration.md#b24-vc01--antesdespués-del-vencimiento"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B24-AC01"
+use_cases = ["B24-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B24-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_qr_expiration.py::test_the_qr_window_is_sent_to_pey_and_shown_by_the_server",
+    "tests/sales/test_qr_expiration.py::test_a_reached_server_expiration_shows_expired_and_a_safe_next_action",
+    "tests/sales/test_qr_expiration.py::test_the_batch_expires_pending_attempts_by_the_server_clock",
+    "tests/sales/test_qr_expiration.py::test_the_simulator_uses_the_same_server_window",
+    "tests/sales/test_qr_expiration.py::test_the_qr_window_respects_the_provider_minimum",
+]
+
+[[criteria]]
+id = "B24-AC02"
+use_cases = ["B24-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B24-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_qr_expiration.py::test_the_client_clock_never_changes_the_state",
+    "tests/sales/test_qr_expiration.py::test_an_uncertain_attempt_is_not_expired_by_its_window",
+]
+
+[[criteria]]
+id = "B24-AC03"
+use_cases = ["B24-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B24-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_qr_expiration.py::test_a_paid_attempt_stays_confirmed_after_its_expiration",
+    "tests/sales/test_qr_expiration.py::test_an_authentic_late_payment_still_confirms_an_expired_attempt",
+]

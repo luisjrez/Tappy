@@ -3,7 +3,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from psycopg.errors import UniqueViolation
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -24,6 +23,7 @@ from tappy.merchants.models import (
     ReceivingAccount,
 )
 from tappy.merchants.service import accessible_merchant, collapsed_text
+from tappy.platform.persistence import is_unique_violation
 
 CLABE = re.compile(r"\d{18}")
 CLABE_WEIGHTS = (3, 7, 1)
@@ -88,10 +88,14 @@ def issuance_block(receiver: ReceivingAccount | None) -> str | None:
     return None if receiver.enabled else DISABLED_REASON
 
 
+def masked_account(account_last4: str) -> str:
+    return "*" * MASKED_DIGITS + account_last4
+
+
 def describe_receiver(receiver: ReceivingAccount) -> ReceiverView:
     return ReceiverView(
         beneficiary_name=receiver.beneficiary_name,
-        masked_account="*" * MASKED_DIGITS + receiver.account_last4,
+        masked_account=masked_account(receiver.account_last4),
         provider_account_id=receiver.provider_account_id,
         enabled=receiver.enabled,
         blocked_reason=issuance_block(receiver),
@@ -123,10 +127,7 @@ def configure_receiver(
             receiver.updated_at = now
             db.add(receiver)
     except IntegrityError as error:
-        if (
-            isinstance(error.orig, UniqueViolation)
-            and error.orig.diag.constraint_name == PROVIDER_ACCOUNT_CONSTRAINT
-        ):
+        if is_unique_violation(error, PROVIDER_ACCOUNT_CONSTRAINT):
             raise ReceiverAccountTakenError from None
         raise
     return describe_receiver(receiver)
@@ -145,12 +146,25 @@ def read_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -
     return describe_receiver(receiver)
 
 
-def issuing_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -> ReceiverView:
-    receiver = accessible_receiver(db, actor, merchant_id)
+def issuable(receiver: ReceivingAccount | None) -> ReceivingAccount:
     reason = issuance_block(receiver)
     if reason is not None or receiver is None:
         raise IssuanceBlockedError(reason)
-    return describe_receiver(receiver)
+    return receiver
+
+
+def issuing_receiver(db: Session, actor: IdentitySummary, merchant_id: uuid.UUID) -> ReceiverView:
+    return describe_receiver(issuable(accessible_receiver(db, actor, merchant_id)))
+
+
+def held_issuing_receiver(db: Session, merchant_id: uuid.UUID) -> ReceivingAccount:
+    return issuable(
+        db.scalar(
+            select(ReceivingAccount)
+            .where(ReceivingAccount.merchant_id == merchant_id)
+            .with_for_update(read=True)
+        )
+    )
 
 
 def list_receivers(db: Session) -> dict[uuid.UUID, ReceiverView]:
