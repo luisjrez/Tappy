@@ -13,7 +13,7 @@ Ticket: [#35](https://github.com/luisjrez/Tappy/issues/35) · Historia: [H6 #6](
 - **Base y revisiones:**
   - Base: rama B26 `0490ed2` ([PR #82](https://github.com/luisjrez/Tappy/pull/82)), stack #68.
   - Candidato: `675e62f`.
-  - Correcciones de la review: `27d4eb2`, revisión final del código. La VC01 se repitió sobre ella. `9678241` solo renombra un test (nit de la ronda 2), sin cambio de comportamiento.
+  - Correcciones de la review: `27d4eb2`, revisión final del código. La VC01 se repitió sobre ella. `9678241` solo renombra un test (nit de la ronda 2) y `80c9d7c` lo formatea, sin cambio de comportamiento.
 - **Entorno:** macOS, Colima + Compose (Postgres 18), Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -295,7 +295,7 @@ AC PASS / AC aplicables = 3/3 = **100%**. El arrastre de B10 también pasa.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `675e62f` | APPROVE | REQUEST_CHANGES | Ver detalle debajo de la tabla |
-| 2 | `27d4eb2` + `d3d9f95` | APPROVE | APPROVE | Máximo de 50 corregido y probado; evidencia fiel. Nit aplicado en `9678241`: el test del límite se llama `test_fifty_is_the_largest_accepted_limit` |
+| 2 | `27d4eb2` + `d3d9f95` | APPROVE | APPROVE | Máximo de 50 corregido y probado; evidencia fiel. Nit aplicado en `9678241` + `80c9d7c`: el test del límite se llama `test_fifty_is_the_largest_accepted_limit` |
 
 Detalle de la ronda 1, aplicado en `27d4eb2` con Red/Green:
 
