@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, StrictInt
 
-from tappy.sales.models import AttemptMethod, AttemptStatus, SaleStatus
+from tappy.sales.models import AttemptMethod, AttemptStatus, ExceptionReason, SaleStatus
 
 
 class SaleCreateRequest(BaseModel):
@@ -46,6 +46,16 @@ class TransferResponse(BaseModel):
     masked_account: str
 
 
+class ExceptionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    reason: ExceptionReason
+    expected_amount_cents: int | None
+    received_amount_cents: int | None
+    created_at: datetime
+    resolved_at: datetime | None
+
+
 class SaleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,3 +72,4 @@ class SaleResponse(BaseModel):
     attempts: list[AttemptResponse]
     confirmed_amount_cents: int
     transfers: list[TransferResponse]
+    exceptions: list[ExceptionResponse]

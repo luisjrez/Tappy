@@ -48,8 +48,7 @@ def test_valid_event_is_stored_durably_before_success(
         "|| '|' || payload_digest FROM webhook_events",
     )
     assert stored == (
-        f"pey|msg_synthetic_0001|codi.qr.payment_received|unmatched|"
-        f"{hashlib.sha256(body).hexdigest()}"
+        f"pey|msg_synthetic_0001|codi.qr.payment_received|review|{hashlib.sha256(body).hexdigest()}"
     )
     assert scalar(migrated_database_url, "SELECT payload FROM webhook_events") == body
 

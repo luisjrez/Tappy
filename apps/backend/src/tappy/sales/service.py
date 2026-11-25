@@ -25,6 +25,7 @@ from tappy.sales.models import (
     REFERENCE_LENGTH,
     AttemptMethod,
     AttemptStatus,
+    ExceptionReason,
     PaymentAttempt,
     Sale,
     SaleStatus,
@@ -69,6 +70,15 @@ class TransferView:
 
 
 @dataclass(frozen=True)
+class ExceptionView:
+    reason: ExceptionReason
+    expected_amount_cents: int | None
+    received_amount_cents: int | None
+    created_at: datetime
+    resolved_at: datetime | None
+
+
+@dataclass(frozen=True)
 class SaleView:
     id: str
     merchant_id: str
@@ -83,6 +93,7 @@ class SaleView:
     attempts: list[AttemptView]
     confirmed_amount_cents: int
     transfers: list[TransferView]
+    exceptions: list[ExceptionView]
 
 
 @dataclass(frozen=True)
@@ -156,6 +167,16 @@ def describe_sale(sale: Sale) -> SaleView:
                 masked_account(sale.account_last4),
             )
             for transfer in sale.transfers
+        ],
+        exceptions=[
+            ExceptionView(
+                exception.reason,
+                exception.expected_amount_cents,
+                exception.received_amount_cents,
+                exception.created_at,
+                exception.resolved_at,
+            )
+            for exception in sale.exceptions
         ],
     )
 

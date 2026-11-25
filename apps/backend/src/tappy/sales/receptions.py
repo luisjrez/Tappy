@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 class ProcessingSummary:
     applied: int
     unmatched: int
+    in_review: int
     duplicates: int
     failed: int
 
@@ -27,6 +28,7 @@ EVENT_STATUS_FOR = {
     EvidenceOutcome.APPLIED: EventStatus.APPLIED,
     EvidenceOutcome.DUPLICATE: EventStatus.DUPLICATE,
     EvidenceOutcome.UNMATCHED: EventStatus.UNMATCHED,
+    EvidenceOutcome.REVIEW: EventStatus.REVIEW,
 }
 
 
@@ -90,6 +92,7 @@ def process_received_events(database: Database, clock: Clock) -> ProcessingSumma
     return ProcessingSummary(
         applied=outcomes.count(EventStatus.APPLIED),
         unmatched=outcomes.count(EventStatus.UNMATCHED),
+        in_review=outcomes.count(EventStatus.REVIEW),
         duplicates=outcomes.count(EventStatus.DUPLICATE),
         failed=outcomes.count(None),
     )

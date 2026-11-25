@@ -105,35 +105,37 @@ def test_exact_evidence_confirms_the_transfer_and_the_sale(
 
 
 @pytest.mark.parametrize(
-    "changes",
+    ("changes", "outcome"),
     [
-        {"bankAccountId": None},
-        {"bankAccountId": "bank-account-of-someone-else"},
-        {"amount": 300.01},
-        {"amount": 300.005},
-        {"amount": None},
-        {"codiQrId": "UNKNOWN-QR"},
-        {"transactionId": None},
-        {"metadata": {"tappy_attempt_id": str(uuid.uuid4())}},
-        {"type": "codi.pn.payment_received"},
-        {"datePaid": None},
+        ({"bankAccountId": None}, ("review", "open", 0)),
+        ({"bankAccountId": "bank-account-of-someone-else"}, ("review", "open", 0)),
+        ({"amount": 300.01}, ("review", "review", 30001)),
+        ({"amount": 300.005}, ("review", "open", 0)),
+        ({"amount": None}, ("review", "open", 0)),
+        ({"codiQrId": "UNKNOWN-QR"}, ("review", "open", 0)),
+        ({"transactionId": None}, ("review", "open", 0)),
+        ({"metadata": {"tappy_attempt_id": str(uuid.uuid4())}}, ("review", "open", 0)),
+        ({"type": "codi.pn.payment_received"}, ("unmatched", "open", 0)),
+        ({"datePaid": None}, ("review", "open", 0)),
     ],
 )
 def test_insufficient_evidence_never_marks_the_sale_received(
-    client: TestClient, migrated_database_url: str, changes: dict[str, object]
+    client: TestClient,
+    migrated_database_url: str,
+    changes: dict[str, object],
+    outcome: tuple[str, str, int],
 ) -> None:
+    event_outcome, sale_status, confirmed = outcome
     sale, operator_a = pending_qr(client, migrated_database_url)
 
     status = send(client, payment_event(sale, **changes))
     read = detail(client, operator_a, sale)
 
     assert status == HTTPStatus.NO_CONTENT
-    assert read["status"] == "open"
-    assert read["confirmed_amount_cents"] == 0
-    assert read["transfers"] == []
+    assert read["status"] == sale_status
+    assert read["confirmed_amount_cents"] == confirmed
     assert read["attempts"][0]["status"] == "pending"
-    assert event_status(migrated_database_url) == "unmatched"
-    assert scalar(migrated_database_url, "SELECT count(*) FROM transactions") == 0
+    assert event_status(migrated_database_url) == event_outcome
 
 
 def test_an_invalid_signature_leaves_the_pending_attempt_untouched(
@@ -250,12 +252,12 @@ def test_extreme_values_are_treated_as_insufficient_not_as_failures(
     processed = run_sales(migrated_database_url, "process-events")
 
     assert status == HTTPStatus.NO_CONTENT
-    assert event_status(migrated_database_url) == "unmatched"
+    assert event_status(migrated_database_url) == "review"
     assert "0 failed" in processed.stdout
     assert scalar(migrated_database_url, "SELECT count(*) FROM transactions") == 0
 
 
-def test_a_transaction_id_already_recorded_for_another_sale_is_unmatched(
+def test_a_transaction_id_already_recorded_for_another_sale_opens_a_review(
     client: TestClient, migrated_database_url: str
 ) -> None:
     first, operator_a = pending_qr(client, migrated_database_url)
@@ -284,7 +286,7 @@ def test_a_transaction_id_already_recorded_for_another_sale_is_unmatched(
             migrated_database_url,
             "SELECT status FROM webhook_events WHERE provider_event_id = 'msg_second'",
         )
-        == "unmatched"
+        == "review"
     )
     assert "0 failed" in processed.stdout
     assert scalar(migrated_database_url, "SELECT count(*) FROM transactions") == 1

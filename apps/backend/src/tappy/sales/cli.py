@@ -8,6 +8,7 @@ from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, Settings, load_settings
 from tappy.platform.database import Database
 from tappy.sales.attempts import PendingReconciliation, pending_reconciliations, recover_interrupted
+from tappy.sales.exceptions import OpenException, open_exceptions
 from tappy.sales.receptions import process_received_events
 
 Handler = Callable[[Database, Settings], str]
@@ -49,8 +50,28 @@ def process_events(database: Database, _: Settings) -> str:
     duplicates = "duplicate" if summary.duplicates == 1 else "duplicates"
     return (
         f"{summary.applied} {noun} applied, {summary.unmatched} unmatched, "
-        f"{summary.duplicates} {duplicates}, {summary.failed} failed"
+        f"{summary.in_review} in review, {summary.duplicates} {duplicates}, "
+        f"{summary.failed} failed"
     )
+
+
+def describe_exception(open_exception: OpenException) -> str:
+    return "\n".join(
+        [
+            f"reason: {open_exception.reason}",
+            f"sale reference: {open_exception.sale_reference or 'unassociated'}",
+            f"event: {open_exception.event_id or 'none'}",
+            f"expected amount cents: {open_exception.expected_amount_cents}",
+            f"received amount cents: {open_exception.received_amount_cents}",
+            f"opened at: {open_exception.created_at.isoformat()}",
+        ]
+    )
+
+
+def exceptions(database: Database, _: Settings) -> str:
+    with database.transaction() as session:
+        found = [describe_exception(item) for item in open_exceptions(session)]
+    return "\n\n".join(found) if found else "No open payment exceptions"
 
 
 def describe_conflict(event: WebhookEvent, conflict: WebhookEventConflict) -> str:
@@ -76,6 +97,7 @@ COMMANDS: dict[str, Handler] = {
     "recover-interrupted": recover,
     "process-events": process_events,
     "event-conflicts": conflicts,
+    "exceptions": exceptions,
 }
 
 

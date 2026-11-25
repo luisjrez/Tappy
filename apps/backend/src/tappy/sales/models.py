@@ -33,6 +33,7 @@ FAILURE_CODE_MAX_LENGTH = 32
 JOB_CONSTRAINT = "uq_reconciliation_jobs_attempt_reason"
 JOB_REASON_MAX_LENGTH = 32
 TRANSFER_CONSTRAINT = "uq_transactions_provider_transaction"
+EXCEPTION_CONSTRAINT = "uq_payment_exceptions_event_reason"
 
 
 class SaleStatus(StrEnum):
@@ -73,6 +74,15 @@ class JobStatus(StrEnum):
     DONE = "done"
 
 
+class ExceptionReason(StrEnum):
+    AMOUNT_MISMATCH = "amount_mismatch"
+    RECEIVER_MISMATCH = "receiver_mismatch"
+    UNASSOCIATED = "unassociated"
+    CONFLICTING_TRANSFER = "conflicting_transfer"
+    INCOMPLETE_EVIDENCE = "incomplete_evidence"
+    SALE_NOT_OPEN = "sale_not_open"
+
+
 class Sale(Base):
     __tablename__ = "sales"
     __table_args__ = (
@@ -96,6 +106,9 @@ class Sale(Base):
     beneficiary_name: Mapped[str] = mapped_column(String(BENEFICIARY_NAME_MAX_LENGTH))
     account_last4: Mapped[str] = mapped_column(String(4))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    exceptions: Mapped[list[PaymentException]] = relationship(
+        order_by=lambda: [PaymentException.created_at, PaymentException.id], lazy="selectin"
+    )
     transfers: Mapped[list[Transfer]] = relationship(
         order_by=lambda: [Transfer.received_at, Transfer.id], lazy="selectin"
     )
@@ -175,3 +188,20 @@ class Transfer(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     webhook_event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("webhook_events.id"))
+
+
+class PaymentException(Base):
+    __tablename__ = "payment_exceptions"
+    __table_args__ = (UniqueConstraint("webhook_event_id", "reason", name=EXCEPTION_CONSTRAINT),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    sale_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("sales.id"), index=True)
+    transfer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("transactions.id"))
+    webhook_event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("webhook_events.id"))
+    reason: Mapped[ExceptionReason] = mapped_column(
+        enum_column(ExceptionReason, "payment_exception_reason", length=32)
+    )
+    expected_amount_cents: Mapped[int | None] = mapped_column(Integer)
+    received_amount_cents: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -238,7 +238,7 @@ def test_same_transaction_with_other_amount_is_not_hidden_as_duplicate(
 
     deliver(client, payment_body(sale, amount=310.0), Delivery(message_id="msg_e2"))
 
-    assert status_of(migrated_database_url, "msg_e2") == "unmatched"
+    assert status_of(migrated_database_url, "msg_e2") == "review"
     assert detail(client, operator_a, sale)["confirmed_amount_cents"] == AMOUNT
 
 

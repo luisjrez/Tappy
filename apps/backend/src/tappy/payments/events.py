@@ -23,6 +23,7 @@ class EventStatus(StrEnum):
     APPLIED = "applied"
     UNMATCHED = "unmatched"
     DUPLICATE = "duplicate"
+    REVIEW = "review"
 
 
 class StoreOutcome(StrEnum):
