@@ -1,5 +1,5 @@
 ticket = "B20"
-revision = "03e4b7d"
+revision = "808c499"
 
 [vc01]
 status = "PASS"
@@ -50,4 +50,6 @@ mode = "automated"
 tests = [
     "tests/sales/test_payment_exceptions.py::test_unassociable_evidence_stays_in_review_without_approximate_association",
     "tests/sales/test_payment_exceptions.py::test_reprocessing_an_incident_never_duplicates_it_or_the_money",
+    "tests/sales/test_payment_exceptions.py::test_reprocessing_keeps_the_event_in_review",
+    "tests/sales/test_payment_exceptions.py::test_incidents_without_an_event_are_not_duplicated",
 ]
