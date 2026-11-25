@@ -30,6 +30,7 @@ from tappy.sales.errors import (
     UnverifiedAttemptError,
 )
 from tappy.sales.evidence import hold_reference
+from tappy.sales.expiration import enqueue_job
 from tappy.sales.idempotency import (
     IdempotencyClaim,
     IdempotentOperation,
@@ -103,7 +104,7 @@ def held_open_sale(db: Session, sale_id: uuid.UUID) -> Sale:
     return sale
 
 
-def retried_attempt(db: Session, sale_id: uuid.UUID) -> PaymentAttempt | None:
+def attempt_to_retry(db: Session, sale_id: uuid.UUID) -> PaymentAttempt | None:
     active = db.scalar(
         select(PaymentAttempt.id).where(
             PaymentAttempt.sale_id == sale_id,
@@ -144,7 +145,7 @@ def reserve_attempt(
     held = held_open_sale(db, sale.id)
     receiver = held_issuing_receiver(db, held.merchant_id)
     ensure_same_receiver(held, receiver)
-    previous = retried_attempt(db, held.id)
+    previous = attempt_to_retry(db, held.id)
     attempt = PaymentAttempt(
         id=attempt_id,
         sale_id=held.id,
@@ -252,18 +253,8 @@ def record_issued_qr(
 def keep_for_reconciliation(
     db: Session, attempt: PaymentAttempt, reason: JobReason, now: datetime
 ) -> None:
-    if not move(attempt, AttemptStatus.RECONCILING, now):
-        return
-    db.add(
-        ReconciliationJob(
-            attempt_id=attempt.id,
-            reason=reason,
-            status=JobStatus.PENDING,
-            run_at=now,
-            created_at=now,
-        )
-    )
-    db.flush()
+    if move(attempt, AttemptStatus.RECONCILING, now):
+        enqueue_job(db, attempt.id, reason, now)
 
 
 def record_uncertain_qr(

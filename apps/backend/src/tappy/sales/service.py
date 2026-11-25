@@ -184,7 +184,11 @@ def next_action(attempt: PaymentAttempt) -> NextAction:
 
 def late_payment_possible(attempt: PaymentAttempt) -> bool:
     previous = attempt.previous_attempt
-    return previous is not None and previous.provider_request_id is not None
+    while previous is not None:
+        if previous.provider_request_id is not None:
+            return True
+        previous = previous.previous_attempt
+    return False
 
 
 def describe_sale(sale: Sale) -> SaleView:

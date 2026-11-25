@@ -30,18 +30,18 @@ def expire_due_attempts(db: Session, now: datetime, sale_id: uuid.UUID | None = 
     for attempt in due:
         if move(attempt, AttemptStatus.EXPIRED, now):
             expired += 1
-            verify_later(db, attempt, now)
+            enqueue_job(db, attempt.id, JobReason.EXPIRED, now)
     db.flush()
     return expired
 
 
-def verify_later(db: Session, attempt: PaymentAttempt, now: datetime) -> None:
+def enqueue_job(db: Session, attempt_id: uuid.UUID, reason: JobReason, now: datetime) -> None:
     db.execute(
         insert(ReconciliationJob)
         .values(
             id=uuid.uuid4(),
-            attempt_id=attempt.id,
-            reason=JobReason.EXPIRED,
+            attempt_id=attempt_id,
+            reason=reason,
             status=JobStatus.PENDING,
             run_at=now,
             created_at=now,

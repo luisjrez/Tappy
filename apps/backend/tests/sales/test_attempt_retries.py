@@ -15,6 +15,7 @@ from tappy.platform.database import Database
 from tappy.sales.attempts import AttemptRequest, reserve_attempt
 from tappy.sales.jobs import JobPolicy, JobRunner
 from tappy.sales.models import AttemptMethod
+from tappy.sales.reconciliation import reconcile_attempt
 from tests.payments.pey_support import CREATED, FakePey
 from tests.payments.webhook_support import settings_for
 from tests.sales.support import (
@@ -279,3 +280,49 @@ def test_concurrent_retries_leave_a_single_new_attempt(
     assert [item["id"] for item in read["attempts"]][1:] == [held.attempt.id]
     assert held.attempt.previous_attempt_id == read["attempts"][0]["id"]
     assert scalar(migrated_database_url, "SELECT count(*) FROM sales") == 1
+
+
+def test_the_late_payment_warning_covers_every_earlier_qr(
+    client: TestClient, migrated_database_url: str, clock: MovableClock, fake: SequentialPey
+) -> None:
+    sale, _, operator_a = expired_and_verified(client, migrated_database_url, clock, fake)
+    second = request_qr(client, operator_a, sale).json()
+    execute(
+        migrated_database_url,
+        "UPDATE payment_attempts SET status = 'failed', provider_request_id = NULL, "
+        "qr_payload = NULL, failure_code = 'INVALID_PARAMETERS' WHERE id = :id",
+        {"id": second["id"]},
+    )
+
+    third = request_qr(client, operator_a, sale).json()
+
+    assert third["previous_attempt_id"] == second["id"]
+    assert third["late_payment_possible"] is True
+
+
+class ExpiringDuringQuery(FakePey):
+    def __init__(self, database_url: str) -> None:
+        super().__init__(pages=[(200, {"items": [], "nextToken": None})])
+        self.database_url = database_url
+
+    def handle(self, request: Any) -> Response:
+        if request.method == "GET":
+            execute(self.database_url, "UPDATE payment_attempts SET status = 'expired'")
+        return super().handle(request)
+
+
+def test_a_query_made_before_the_expiration_never_verifies_it(
+    client: TestClient, migrated_database_url: str, clock: MovableClock
+) -> None:
+    sale, operator_a = open_sale(client, migrated_database_url)
+    first = request_qr(client, operator_a, sale).json()
+    database = Database.from_settings(build_settings(database_url=migrated_database_url))
+    try:
+        provider = ExpiringDuringQuery(migrated_database_url).provider()
+        report = reconcile_attempt(database, uuid.UUID(first["id"]), provider, "test", clock)
+    finally:
+        database.dispose()
+
+    assert report.result.value == "no_evidence"
+    assert follow(client, operator_a, sale)["attempts"][0]["verified_at"] is None
+    assert request_qr(client, operator_a, sale).json() == {"detail": UNVERIFIED}

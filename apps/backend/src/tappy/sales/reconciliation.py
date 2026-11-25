@@ -48,6 +48,7 @@ class QueryTarget:
     provider: ProviderName
     provider_request_id: str
     receiver_account: str
+    expired: bool
 
 
 @dataclass(frozen=True)
@@ -70,7 +71,11 @@ def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> Qu
     if attempt.provider_request_id is None or attempt.provider is not provider.name:
         return None
     return QueryTarget(
-        attempt.id, attempt.provider, attempt.provider_request_id, attempt.receiver_account
+        attempt.id,
+        attempt.provider,
+        attempt.provider_request_id,
+        attempt.receiver_account,
+        attempt.status is AttemptStatus.EXPIRED,
     )
 
 
@@ -118,8 +123,9 @@ def mark_verified(db: Session, attempt_id: uuid.UUID, now: datetime) -> bool:
     ).one()
     if attempt.status is not AttemptStatus.EXPIRED:
         return False
-    attempt.verified_at = now
-    attempt.updated_at = now
+    if attempt.verified_at is None:
+        attempt.verified_at = now
+        attempt.updated_at = now
     db.flush()
     return True
 
@@ -187,9 +193,11 @@ def reconcile_attempt(
             for payment in payments
         ]
         close_paid_jobs(db, ReconciliationJob.attempt_id == attempt_id)
-        report = report_for(db, attempt_id, outcomes)
-        if report.result is ReconciliationResult.NO_EVIDENCE and mark_verified(
-            db, attempt_id, clock.now()
-        ):
-            return report_for(db, attempt_id, outcomes, ReconciliationResult.VERIFIED)
-        return report
+        verified = (
+            target.expired
+            and EvidenceOutcome.REVIEW not in outcomes
+            and mark_verified(db, attempt_id, clock.now())
+        )
+        return report_for(
+            db, attempt_id, outcomes, ReconciliationResult.VERIFIED if verified else None
+        )

@@ -129,10 +129,10 @@ def test_finished_attempts_allow_a_new_reservation(
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
     reserve(client, operator_a, sale_id)
+    execute(migrated_database_url, "UPDATE payment_attempts SET status = :s", {"s": status})
     execute(
         migrated_database_url,
-        "UPDATE payment_attempts SET status = :s, verified_at = now()",
-        {"s": status},
+        "UPDATE payment_attempts SET verified_at = now() WHERE status = 'expired'",
     )
 
     retried = reserve(client, operator_a, sale_id)
