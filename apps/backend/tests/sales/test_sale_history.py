@@ -278,7 +278,9 @@ def test_history_keeps_confirmed_sales_after_the_receiver_is_disabled(
     assert blocked.json() == {"detail": BLOCKED_DISABLED}
 
 
-def test_fifty_is_the_largest_accepted_limit(client: TestClient, migrated_database_url: str) -> None:
+def test_fifty_is_the_largest_accepted_limit(
+    client: TestClient, migrated_database_url: str
+) -> None:
     ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
 
     response = history(client, bearer(client, OPERATOR_A), limit=50)
