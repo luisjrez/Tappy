@@ -41,7 +41,7 @@ tests = [
     "tests/payments/test_pey_adapter.py::test_server_errors_and_unknown_errors_are_uncertain",
     "tests/payments/test_pey_adapter.py::test_timeouts_and_connection_failures_are_uncertain",
     "tests/sales/test_pey_qr_flow.py::test_definitive_rejection_fails_the_attempt_with_its_code",
-    "tests/sales/test_pey_qr_flow.py::test_uncertain_response_keeps_the_attempt_creating",
+    "tests/sales/test_pey_qr_flow.py::test_uncertain_response_keeps_the_attempt_reconciling",
     "tests/sales/test_pey_qr_flow.py::test_a_provider_id_already_linked_to_another_attempt_is_uncertain",
 ]
 
