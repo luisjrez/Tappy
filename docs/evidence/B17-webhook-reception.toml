@@ -1,5 +1,5 @@
 ticket = "B17"
-revision = "5bdfcd6"
+revision = "0c951cb"
 
 [vc01]
 status = "PASS"
@@ -24,6 +24,7 @@ tests = [
     "tests/payments/test_webhook_reception.py::test_repeated_delivery_is_acknowledged_without_a_second_record",
     "tests/payments/test_webhook_reception.py::test_signatures_from_a_rotated_header_list_are_accepted",
     "tests/payments/test_webhook_reception.py::test_webhook_secret_setting_is_validated_like_any_configuration",
+    "tests/payments/test_webhook_reception.py::test_the_official_pey_event_shape_is_accepted",
 ]
 
 [[criteria]]
