@@ -9,10 +9,10 @@ from httpx2 import Response
 
 from tappy.payments.provider import IssuedQr, ProviderUnavailableError, QrOrder, UncertainReason
 from tappy.payments.simulator import SimulatedQrProvider
-from tappy.platform.config import Settings
+from tappy.platform.config import PROVIDER_TIMEOUT_PHASES, Settings
 from tappy.platform.database import Database
 from tappy.sales.attempts import AttemptRequest, recover_interrupted, reserve_attempt
-from tappy.sales.models import AttemptMethod
+from tappy.sales.models import AttemptMethod, JobReason
 from tests.sales.support import (
     AMOUNT,
     IDEMPOTENCY_HEADER,
@@ -26,7 +26,6 @@ from tests.sales.support import (
 )
 from tests.support import build_settings, execute, run_sales, scalar
 
-PHASES = 4
 RESERVED_AT = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
 
 
@@ -254,4 +253,12 @@ def test_creation_timeout_must_outlast_every_provider_timeout_phase() -> None:
     accepted = Settings.model_validate(
         {**base, "pey_timeout_seconds": 10, "attempt_creation_timeout_seconds": 41}
     )
-    assert accepted.attempt_creation_timeout_seconds > PHASES * accepted.pey_timeout_seconds
+    assert (
+        accepted.attempt_creation_timeout_seconds
+        > PROVIDER_TIMEOUT_PHASES * accepted.pey_timeout_seconds
+    )
+
+
+@pytest.mark.parametrize("reason", list(UncertainReason))
+def test_every_uncertain_reason_has_a_job_reason(reason: UncertainReason) -> None:
+    assert JobReason(reason.value).value == reason.value
