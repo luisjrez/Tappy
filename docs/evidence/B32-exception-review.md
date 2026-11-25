@@ -170,6 +170,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `3e4323e` | APPROVE | REQUEST_CHANGES | Ver detalle debajo de la tabla |
+| 2 | `9c9d6d1` + `a77d355` | APPROVE | APPROVE | Hallazgos de la ronda 1 cerrados. Nota registrada: en la captura del detalle, la columna de notas se recorta a ancho de teléfono |
 
 Detalle de la ronda 1. Las correcciones se aplicaron en `9c9d6d1` con Red/Green.
 
@@ -192,4 +193,4 @@ Detalle de la ronda 1. Las correcciones se aplicaron en `9c9d6d1` con Red/Green.
 - La lógica de render de `SalesView` y `ExceptionsView` está duplicada; extraer una base cuando haya una tercera vista.
 - Un trabajo `review_requested` puede coincidir con uno automático de B23: la consulta se repite, pero es idempotente.
 
-Hallazgos pendientes: se actualiza tras la ronda 2.
+Hallazgos pendientes: 0.

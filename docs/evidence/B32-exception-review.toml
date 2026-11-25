@@ -8,7 +8,7 @@ evidence = "docs/evidence/B32-exception-review.md#b32-vc01--api-antesdespués-y-
 
 [review]
 standards = "APPROVED"
-spec = "PENDING"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
