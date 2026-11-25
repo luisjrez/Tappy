@@ -1,5 +1,5 @@
 ticket = "B33"
-revision = "0081ba7"
+revision = "52d691e"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B33-operation-quotas.md#b33-vc01--api-antesdespués"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]

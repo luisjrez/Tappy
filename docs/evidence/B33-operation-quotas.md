@@ -15,7 +15,8 @@ Ticket: [#41](https://github.com/luisjrez/Tappy/issues/41) · Historia: [H7 #7](
 - **Base y revisiones:**
   - Base: rama B32 `dfab69b` ([PR #88](https://github.com/luisjrez/Tappy/pull/88)), stack #68.
   - Candidato: `cd109cb`.
-  - Correcciones de la review: `0081ba7`, revisión final. Las pruebas, las mutaciones y la VC01 «después» se repitieron sobre ella.
+  - Correcciones de la review: `0081ba7`. Las pruebas, las mutaciones y la VC01 «después» se repitieron sobre ella.
+  - Revisión final: `52d691e`. Solo une los helpers de QR del test (detalle de Standards en la ronda 2) y añade a la README que las lecturas autenticadas siempre cuentan (`4011530`). Ninguno cambia el código de producción.
 - **Entorno:** macOS, Colima + Compose (Postgres 18) y Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -260,7 +261,7 @@ Los datos se eliminaron al terminar. Estado VC01: **PASS**.
 
 ## Checks
 
-`uv run python -m quality.check` sobre `0081ba7`, con `.env` exportado: PASS en todos los pasos.
+`uv run python -m quality.check` sobre `52d691e`, con `.env` exportado: PASS en todos los pasos.
 
 - format, lint, types (mypy strict) y hygiene;
 - migrations: upgrade/downgrade/upgrade de `0024` + `alembic check`;
@@ -281,7 +282,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `cd109cb` + `7e227bd` | APPROVE | REQUEST_CHANGES | Ver detalle debajo de la tabla |
-| 2 | `0081ba7` + evidencia | PENDING | PENDING | — |
+| 2 | `0081ba7` + `a7c8a7f` | APPROVE | APPROVE | Hallazgos de la ronda 1 cerrados. Notas opcionales aplicadas en `4011530` y `52d691e`: la README dice que las lecturas autenticadas siempre cuentan, también con `404`, y el helper de QR es uno solo |
 
 Detalle de la ronda 1. Las correcciones se aplicaron en `0081ba7`.
 
