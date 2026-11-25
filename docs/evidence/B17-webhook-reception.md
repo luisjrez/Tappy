@@ -108,4 +108,10 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 ## Review Standards/Spec
 
-Pendiente.
+| Ronda | Revisión | Standards | Spec | Hallazgos |
+| --- | --- | --- | --- | --- |
+| 1 | `b553a22` + `6090e12` | CHANGES_REQUESTED | APPROVE | Standards (hard): un `webhook-timestamp` de cientos de dígitos o un `webhook-id` de más de 255 caracteres causaban un 500 sin firma válida; el validador aceptaba secretos que no decodificaban (todas las peticiones fallarían); la ruta no usaba las dependencias comunes. Juicios: cuerpo y timestamp analizados dos veces, placeholders en `.env.example`, secciones de la plantilla. Spec (menores, pasados a arrastres en #26/#27): mismo id con contenido distinto se confirma y descarta; test de cobro intacto ante firma inválida para B18; retención del payload |
+| 2 | `5bdfcd6` + `e76ad36` | APPROVE | APPROVE | Corregido con Red/Green y VC01 repetida |
+| 3 | `0c951cb` + `a6952c6` | APPROVE | APPROVE | Cambio tras la aprobación: el esquema exigía un objeto `data` que los eventos oficiales de pey no traen (se habrían rechazado con 400); fixture oficial versionado y test Red→Green. Nota aceptada: el payload real trae datos del pagador (CLABE ordenante, correo), lo que hace prioritaria la retención/acceso en #26 |
+
+Hallazgos pendientes: 0.

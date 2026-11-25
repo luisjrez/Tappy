@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B17-webhook-reception.md#b17-vc01--resultado-inicial-del-webhook"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
