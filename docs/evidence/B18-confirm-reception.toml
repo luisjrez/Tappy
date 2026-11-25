@@ -1,5 +1,5 @@
 ticket = "B18"
-revision = "4d1224b"
+revision = "e6365fa"
 
 [vc01]
 status = "PASS"
@@ -23,7 +23,7 @@ tests = [
     "tests/sales/test_reception.py::test_exact_evidence_confirms_the_transfer_and_the_sale",
     "tests/sales/test_reception.py::test_the_operations_command_applies_stored_events",
     "tests/sales/test_reception.py::test_epoch_seconds_are_read_as_utc",
-    "tests/sales/test_reception.py::test_transfers_cannot_be_changed_once_recorded",
+    "tests/sales/test_reception.py::test_transfers_cannot_be_changed_or_removed_once_recorded",
 ]
 
 [[criteria]]
@@ -37,6 +37,8 @@ mode = "automated"
 tests = [
     "tests/sales/test_reception.py::test_insufficient_evidence_never_marks_the_sale_received",
     "tests/sales/test_reception.py::test_an_invalid_signature_leaves_the_pending_attempt_untouched",
+    "tests/sales/test_reception.py::test_extreme_values_are_treated_as_insufficient_not_as_failures",
+    "tests/sales/test_reception.py::test_a_transaction_id_already_recorded_for_another_sale_is_unmatched",
 ]
 
 [[criteria]]
