@@ -1,5 +1,5 @@
 ticket = "B16"
-revision = "1e3096e"
+revision = "ad31e26"
 
 [vc01]
 status = "PASS"
@@ -52,4 +52,6 @@ tests = [
     "tests/sales/test_uncertain_creation.py::test_interrupted_creations_are_moved_to_reconciliation_by_the_operations_command",
     "tests/sales/test_uncertain_creation.py::test_recent_creations_are_left_alone",
     "tests/sales/test_uncertain_creation.py::test_recovery_runs_are_idempotent",
+    "tests/sales/test_uncertain_creation.py::test_a_late_qr_for_a_recovered_attempt_is_kept_as_evidence",
+    "tests/sales/test_uncertain_creation.py::test_creation_timeout_must_outlast_every_provider_timeout_phase",
 ]
