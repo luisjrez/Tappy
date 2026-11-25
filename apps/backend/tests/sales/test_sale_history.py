@@ -169,7 +169,8 @@ def test_rows_carry_the_sale_summary_without_attempt_duplication(
     [
         {"status": "cancelled"},
         {"limit": 0},
-        {"limit": 101},
+        {"limit": 51},
+        {"foo": "1"},
         {"cursor": "not-a-cursor"},
         {"created_from": "2026-11-25T12:00:00"},
         {"created_from": "2026-11-26T00:00:00Z", "created_to": "2026-11-25T00:00:00Z"},
@@ -275,3 +276,11 @@ def test_history_keeps_confirmed_sales_after_the_receiver_is_disabled(
     assert rows[0]["masked_account"] == sale["masked_account"]
     assert blocked.status_code == HTTPStatus.CONFLICT
     assert blocked.json() == {"detail": BLOCKED_DISABLED}
+
+
+def test_a_page_holds_at_most_fifty_sales(client: TestClient, migrated_database_url: str) -> None:
+    ready_merchant(client, migrated_database_url, "Tienda Demo A", OPERATOR_A)
+
+    response = history(client, bearer(client, OPERATOR_A), limit=50)
+
+    assert response.status_code == HTTPStatus.OK

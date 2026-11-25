@@ -99,12 +99,12 @@ def read_history(
     params: Annotated[HistoryParams, Query()], actor: CurrentIdentity, db: SessionDependency
 ) -> HistoryResponse:
     query = HistoryQuery(
-        params.merchant_id,
-        params.status,
-        params.created_from,
-        params.created_to,
-        params.limit,
-        params.cursor,
+        merchant_id=params.merchant_id,
+        status=params.status,
+        created_from=params.created_from,
+        created_to=params.created_to,
+        limit=params.limit,
+        cursor=params.cursor,
     )
     try:
         return HistoryResponse.model_validate(sale_history(db, actor, query))

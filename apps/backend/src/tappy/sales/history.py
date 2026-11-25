@@ -75,7 +75,7 @@ class HistoryPage:
     next_cursor: str | None
 
 
-def filtered(db: Session, actor: IdentitySummary, query: HistoryQuery) -> Select[Sale]:
+def filtered_sales(db: Session, actor: IdentitySummary, query: HistoryQuery) -> Select[Sale]:
     sales = scoped_sales(actor)
     if query.merchant_id is not None:
         sales = sales.where(
@@ -106,7 +106,7 @@ def sale_history(db: Session, actor: IdentitySummary, query: HistoryQuery) -> Hi
         select(func.count(PaymentAttempt.id)).where(PaymentAttempt.sale_id == Sale.id)
     ).scalar_subquery()
     rows = db.execute(
-        filtered(db, actor, query)
+        filtered_sales(db, actor, query)
         .add_columns(confirmed, covered, attempts)
         .order_by(Sale.created_at.desc(), Sale.id.desc())
         .limit(query.limit + 1)

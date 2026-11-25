@@ -96,7 +96,7 @@ class HistoryParams(BaseModel):
     status: SaleStatus | None = None
     created_from: AwareDatetime | None = None
     created_to: AwareDatetime | None = None
-    limit: int = Field(default=20, ge=1, le=100)
+    limit: int = Field(default=20, ge=1, le=50)
     cursor: str | None = Field(default=None, max_length=256)
 
     @model_validator(mode="after")
