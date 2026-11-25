@@ -35,6 +35,15 @@ class AttemptResponse(BaseModel):
     created_at: datetime
 
 
+class TransferResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    provider_transaction_id: str
+    amount_cents: int
+    occurred_at: datetime | None
+    received_at: datetime
+
+
 class SaleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -49,3 +58,5 @@ class SaleResponse(BaseModel):
     masked_account: str
     created_at: datetime
     attempts: list[AttemptResponse]
+    received_amount_cents: int
+    transfers: list[TransferResponse]

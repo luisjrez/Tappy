@@ -19,6 +19,8 @@ EVENT_TYPE_MAX_LENGTH = 64
 
 class EventStatus(StrEnum):
     RECEIVED = "received"
+    APPLIED = "applied"
+    UNMATCHED = "unmatched"
 
 
 class WebhookEvent(Base):

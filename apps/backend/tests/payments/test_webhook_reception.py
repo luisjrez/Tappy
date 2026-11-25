@@ -1,42 +1,27 @@
-import base64
 import hashlib
-import hmac
 import json
 import time
-import uuid
 from collections.abc import Iterator
-from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx2 import Response
 
 from tappy.main import create_app
 from tappy.platform.config import Settings
+from tests.payments.webhook_support import (
+    EVENT,
+    MAX_BODY,
+    OTHER_SECRET,
+    SECRET,
+    Delivery,
+    deliver,
+    encoded,
+    settings_for,
+    signature,
+)
 from tests.support import UNREACHABLE_DATABASE_URL, build_settings, scalar
-
-SECRET_BYTES = b"synthetic-webhook-secret-for-tests-32b"
-SECRET = "whsec_" + base64.b64encode(SECRET_BYTES).decode()
-OTHER_SECRET = "whsec_" + base64.b64encode(b"another-synthetic-secret-0123456").decode()
-EVENT = {
-    "type": "codi.qr.payment_received",
-    "amount": 300.1,
-    "apiKeyId": "01HZZSYNTHETICAPIKEY0000",
-    "bankAccountId": "01HZY3K8Q4N6V7W8X9Y0Z1A2B3",
-    "codiQrId": "AB12CD34EF",
-    "datePaid": 1795000000,
-    "transactionId": "TX-SYNTHETIC-0001",
-    "metadata": {"tappy_attempt_id": str(uuid.uuid4()), "tappy_reference": "MSPE6WGBSK"},
-}
-MAX_BODY = 256 * 1024
-
-
-def settings_for(database_url: str) -> Settings:
-    return Settings.model_validate(
-        {**build_settings(database_url=database_url).model_dump(), "pey_webhook_secret": SECRET}
-    )
 
 
 @pytest.fixture
@@ -45,40 +30,8 @@ def client(migrated_database_url: str) -> Iterator[TestClient]:
         yield client
 
 
-def signature(secret: str, message_id: str, timestamp: str, body: bytes) -> str:
-    key = base64.b64decode(secret.removeprefix("whsec_"))
-    signed = f"{message_id}.{timestamp}.".encode() + body
-    return "v1," + base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
-
-
-@dataclass(frozen=True)
-class Delivery:
-    message_id: str = "msg_synthetic_0001"
-    timestamp: int | None = None
-    secret: str = SECRET
-    signed_body: bytes | None = None
-
-
-def deliver(client: TestClient, body: bytes, delivery: Delivery | None = None) -> Response:
-    options = delivery or Delivery()
-    stamp = str(int(time.time()) if options.timestamp is None else options.timestamp)
-    headers = {
-        "webhook-id": options.message_id,
-        "webhook-timestamp": stamp,
-        "webhook-signature": signature(
-            options.secret, options.message_id, stamp, options.signed_body or body
-        ),
-        "content-type": "application/json",
-    }
-    return client.post("/webhooks/pey", content=body, headers=headers)
-
-
 def event_count(database_url: str) -> object:
     return scalar(database_url, "SELECT count(*) FROM webhook_events")
-
-
-def encoded(event: object = EVENT) -> bytes:
-    return json.dumps(event, separators=(",", ":")).encode()
 
 
 def test_valid_event_is_stored_durably_before_success(
@@ -95,7 +48,7 @@ def test_valid_event_is_stored_durably_before_success(
         "|| '|' || payload_digest FROM webhook_events",
     )
     assert stored == (
-        f"pey|msg_synthetic_0001|codi.qr.payment_received|received|"
+        f"pey|msg_synthetic_0001|codi.qr.payment_received|unmatched|"
         f"{hashlib.sha256(body).hexdigest()}"
     )
     assert scalar(migrated_database_url, "SELECT payload FROM webhook_events") == body

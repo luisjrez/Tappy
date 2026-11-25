@@ -146,7 +146,8 @@ def test_simulated_acceptance_never_shows_a_payment(
     assert body["status"] == "open"
     assert [attempt["status"] for attempt in body["attempts"]] == ["pending"]
     assert "paid" not in detail.text
-    assert "received" not in detail.text.lower()
+    assert body["received_amount_cents"] == 0
+    assert body["transfers"] == []
     assert "transaction" not in detail.text.lower()
 
 

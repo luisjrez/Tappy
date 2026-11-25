@@ -32,6 +32,7 @@ PROVIDER_REQUEST_ID_MAX_LENGTH = 64
 FAILURE_CODE_MAX_LENGTH = 32
 JOB_CONSTRAINT = "uq_reconciliation_jobs_attempt_reason"
 JOB_REASON_MAX_LENGTH = 32
+TRANSFER_CONSTRAINT = "uq_transactions_provider_transaction"
 
 
 class SaleStatus(StrEnum):
@@ -95,6 +96,9 @@ class Sale(Base):
     beneficiary_name: Mapped[str] = mapped_column(String(BENEFICIARY_NAME_MAX_LENGTH))
     account_last4: Mapped[str] = mapped_column(String(4))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    transfers: Mapped[list[Transfer]] = relationship(
+        order_by=lambda: [Transfer.received_at, Transfer.id], lazy="selectin"
+    )
     attempts: Mapped[list[PaymentAttempt]] = relationship(
         back_populates="sale",
         order_by=lambda: [PaymentAttempt.created_at, PaymentAttempt.id],
@@ -147,3 +151,24 @@ class ReconciliationJob(Base):
     status: Mapped[JobStatus] = mapped_column(enum_column(JobStatus, "reconciliation_job_status"))
     run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Transfer(Base):
+    __tablename__ = "transactions"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_transaction_id", name=TRANSFER_CONSTRAINT),
+        CheckConstraint("amount_cents > 0", name="ck_transactions_amount_cents_positive"),
+        CheckConstraint(f"currency = '{CURRENCY}'", name="ck_transactions_currency_mxn"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    sale_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sales.id"), index=True)
+    attempt_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("payment_attempts.id"))
+    provider: Mapped[ProviderName] = mapped_column(enum_column(ProviderName, "transfer_provider"))
+    provider_transaction_id: Mapped[str] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(3))
+    receiver_account: Mapped[str] = mapped_column(String(PROVIDER_ACCOUNT_ID_MAX_LENGTH))
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    webhook_event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("webhook_events.id"))

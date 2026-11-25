@@ -7,6 +7,7 @@ from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, Settings, load_settings
 from tappy.platform.database import Database
 from tappy.sales.attempts import PendingReconciliation, pending_reconciliations, recover_interrupted
+from tappy.sales.receptions import process_received_events
 
 Handler = Callable[[Database, Settings], str]
 
@@ -41,9 +42,18 @@ def recover(database: Database, settings: Settings) -> str:
     return f"{moved} interrupted {noun} moved to reconciliation"
 
 
+def process_events(database: Database, _: Settings) -> str:
+    summary = process_received_events(database, SystemClock())
+    noun = "event" if summary.applied == 1 else "events"
+    return (
+        f"{summary.applied} {noun} applied, {summary.unmatched} unmatched, {summary.failed} failed"
+    )
+
+
 COMMANDS: dict[str, Handler] = {
     "reconciliations": reconciliations,
     "recover-interrupted": recover,
+    "process-events": process_events,
 }
 
 

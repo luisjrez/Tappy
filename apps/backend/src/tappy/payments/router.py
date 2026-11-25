@@ -10,6 +10,7 @@ from tappy.payments.webhooks import InvalidSignatureError, SignedDelivery, verif
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
 from tappy.platform.dependencies import ClockDependency, DatabaseDependency, SettingsDependency
+from tappy.sales.receptions import process_safely, stored_event_id
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 TOO_LARGE = "Webhook body is too large"
@@ -30,6 +31,10 @@ async def limited_body(request: Request, limit: int) -> bytes:
 def persist(database: Database, event: ReceivedEvent, clock: Clock) -> None:
     with database.transaction() as db:
         store_event(db, event, clock.now())
+
+
+def apply_stored(database: Database, event: ReceivedEvent, clock: Clock) -> None:
+    process_safely(database, stored_event_id(database, event.provider, event.message_id), clock)
 
 
 def signed_delivery(request: Request, body: bytes) -> SignedDelivery:
@@ -79,4 +84,5 @@ async def receive_pey(
         raise HTTPException(
             HTTPStatus.SERVICE_UNAVAILABLE, detail="Webhook storage is temporarily unavailable"
         ) from None
+    await run_in_threadpool(apply_stored, database, event, clock)
     return Response(status_code=HTTPStatus.NO_CONTENT)

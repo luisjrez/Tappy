@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -52,3 +53,14 @@ class QrProvider(Protocol):
     def simulated(self) -> bool: ...
 
     def create_qr(self, order: QrOrder) -> IssuedQr: ...
+
+
+@dataclass(frozen=True)
+class PaymentEvidence:
+    provider: ProviderName
+    provider_request_id: str | None
+    attempt_id: uuid.UUID | None
+    provider_transaction_id: str | None
+    amount_cents: int | None
+    receiver_account: str | None
+    occurred_at: datetime | None

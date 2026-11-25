@@ -59,6 +59,14 @@ class AttemptView:
 
 
 @dataclass(frozen=True)
+class TransferView:
+    provider_transaction_id: str
+    amount_cents: int
+    occurred_at: datetime | None
+    received_at: datetime
+
+
+@dataclass(frozen=True)
 class SaleView:
     id: str
     merchant_id: str
@@ -71,6 +79,8 @@ class SaleView:
     masked_account: str
     created_at: datetime
     attempts: list[AttemptView]
+    received_amount_cents: int
+    transfers: list[TransferView]
 
 
 @dataclass(frozen=True)
@@ -133,6 +143,16 @@ def describe_sale(sale: Sale) -> SaleView:
         masked_account=masked_account(sale.account_last4),
         created_at=sale.created_at,
         attempts=[describe_attempt(attempt) for attempt in sale.attempts],
+        received_amount_cents=sum(transfer.amount_cents for transfer in sale.transfers),
+        transfers=[
+            TransferView(
+                transfer.provider_transaction_id,
+                transfer.amount_cents,
+                transfer.occurred_at,
+                transfer.received_at,
+            )
+            for transfer in sale.transfers
+        ],
     )
 
 
