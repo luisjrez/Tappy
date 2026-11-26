@@ -2,7 +2,7 @@
 
 Ticket: [#49](https://github.com/luisjrez/Tappy/issues/49) · Historia: [H2 #2](https://github.com/luisjrez/Tappy/issues/2) · Protocolo: [TICKET_QUALITY_PROTOCOL](../planning/TICKET_QUALITY_PROTOCOL.md) · Manifiesto: [B41-password-recovery-request.toml](B41-password-recovery-request.toml)
 
-> **Estado: BLOCKED por B41-TC06.** La entrega real a un buzón controlado requiere proveedor SMTP y remitente autorizados que aún no existen. El resto del ticket está implementado y verificado con Mailpit (SMTP de prueba). B41/B42 nacieron en un stack lateral con base B08 (decisión del usuario, 2026-11-20); tras mergearse B01–B10 a `main`, la rama se integró sobre `main` (ver «Integración con `main`»).
+> **La entrega real (B41-TC06) salió a su propio ticket, [#113](https://github.com/luisjrez/Tappy/issues/113), por decisión del responsable del producto (2026-11-26), y sigue sin ejecutarse.** Requiere proveedor SMTP y remitente autorizados que aún no existen. El resto del ticket está implementado y verificado con Mailpit (SMTP de prueba). B41/B42 nacieron en un stack lateral con base B08 (decisión del usuario, 2026-11-20); tras mergearse B01–B10 a `main`, la rama se integró sobre `main` (ver «Integración con `main`»).
 
 ## Revisiones y escenario
 
@@ -27,7 +27,7 @@ Ticket: [#49](https://github.com/luisjrez/Tappy/issues/49) · Historia: [H2 #2](
 | UC | AC | TC | Prueba real | Resultado |
 | --- | --- | --- | --- | --- |
 | B41-UC01 | B41-AC01 | B41-TC01 | `test_active_identity_receives_link_with_configured_origin` (SMTP real a Mailpit: destinatario, enlace con origen configurado, token ausente de la respuesta); `test_deliver_command_sends_pending_email`; formulario del panel: `test_login_page_links_to_public_recovery_form`, `test_recovery_form_answers_generically_and_queues_only_for_real_accounts`, `test_recovery_form_requires_csrf` | PASS |
-| B41-UC01 | B41-AC01 | B41-TC06 | Entrega real a buzón controlado con remitente configurado | **BLOCKED** (sin proveedor) |
+| B41-UC01 | B41-AC01 | B41-TC06 | Entrega real a buzón controlado con remitente configurado | **Movido a #113**, donde sigue BLOCKED (sin proveedor) |
 | B41-UC02 | B41-AC02 | B41-TC02 | `test_unknown_or_inactive_accounts_get_the_same_answer_and_nothing_else` (mismo 202 y cuerpo; tras el worker, sin correo ni reset; la inactiva sigue inactiva); `test_request_path_does_identical_work_for_every_account` (activa/inactiva/inexistente: un trabajo, cero correos y resets en la petición); `test_response_time_does_not_reveal_existing_accounts` (medianas de 15 peticiones, diferencia < 20 ms) | PASS |
 | B41-UC03 | B41-AC03 | B41-TC03 | `test_limits_persist_across_processes_and_never_touch_credentials` (5 solicitudes en un proceso + 1 contra un servidor real en otro proceso del SO → solo 3 trabajos; login intacto); `test_origin_limit_applies_across_different_accounts` | PASS |
 | B41-UC04 | B41-AC04 | B41-TC04 | `test_provider_failure_is_retried_after_restart_without_changing_credentials` (fallo 451 → reintento programado → nuevo proceso entrega; login intacto); `test_delivery_gives_up_after_bounded_attempts`; `test_deliver_command_requires_known_subcommand`; `test_ambiguous_provider_response_is_retried_not_reported_as_delivered`; `test_undecryptable_email_fails_alone_without_blocking_the_queue` | PASS |
@@ -101,7 +101,7 @@ Checks sobre `8d14bcb` (con `.env` exportado): format, lint, types, hygiene, mig
 
 ## Umbral
 
-AC PASS / AC aplicables = 4/5 = **80%** (B41-AC01 BLOCKED por TC06). No alcanza el 97% y AC01 es obligatorio: **el gate de evidencia bloquea B41** hasta ejecutar TC06 con un proveedor real.
+Antes: AC PASS / AC aplicables = 4/5 = 80 % (AC01 BLOCKED por TC06). Tras mover TC06 a #113 (2026-11-26), AC01 se verifica con TC01 (Mailpit y Postgres aislado): **5/5 = 100 %**. La entrega real sigue sin demostrarse y #113 queda abierto y BLOCKED hasta tener proveedor.
 
 ## Review Standards/Spec
 
@@ -127,3 +127,13 @@ Ronda 1 sobre `f30a5a5`, sin violaciones duras; correcciones en `f02a52a`.
 | Standards | `RecoveryService.submit` como Middle Man | Se conserva: agrupa política y sellador para API, panel y worker |
 
 Re-revisión sobre `f02a52a`: sin hallazgos bloqueantes en ambos ejes (sin señal de enumeración; entrega por correo aislada; fragmento; HMAC; sin correos en claro fuera de `identities` y destinatario del outbox). Menores aplicados en `cbe0679` con Red/Green: un correo que ya agotó intentos (caídas repetidas a mitad de envío) se marca `failed` sin reenviar (`test_exhausted_email_is_not_sent_again_after_repeated_crashes`); cada trabajo de recuperación corre en su savepoint y un error de DB en uno no frena al resto; el worker borra intentos fuera de la ventana (`test_worker_discards_attempts_outside_the_window`). Ambos ejes aprobados. **B41 sigue BLOCKED por TC06** (80 %).
+
+## Integración con el stack #68 y prueba real movida (2026-11-26)
+
+- **Prueba real:** TC06 salió a #113 por decisión del responsable del producto, y el manifiesto ya no la incluye. La entrega real no está demostrada: #113 queda `ready-for-human` y BLOCKED hasta tener proveedor SMTP y remitente autorizados.
+- **Integración:**
+  - La rama integró `main` (B11–B34) y después B35+B36, ambas con merge commit.
+  - Conflictos: README, `pyproject.toml`, `models.py`, `main.py`, `config.py`, `identity/dependencies.py` y las importaciones de `backoffice/admin.py` y `backoffice/auth.py`. Se resolvieron como unión, conservando las dos partes.
+  - La exención `S603`/`S607` de `tests/test_persistence.py` ya vive en `tests/compose_support.py` (B34).
+- **Migración:** `0007_identity_password_recovery` pasa a `0026_identity_password_recovery`, con `down_revision = "0025_phone_requests"`, para mantener una sola cabeza encima de B36. El esquema que crea no cambia.
+- **Stack:** B41/B42 dejan el stack lateral #65 y siguen en el stack #68, encima de B36 (#115).

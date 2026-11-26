@@ -10,8 +10,8 @@ from tappy.backoffice.auth import AdminAuthProvider
 from tappy.backoffice.exceptions import ExceptionsView
 from tappy.backoffice.merchants import MerchantsView
 from tappy.backoffice.operators import OperatorsView
-from tappy.identity.recovery import RecoveryService
 from tappy.backoffice.sales import SalesView
+from tappy.identity.recovery import RecoveryService
 from tappy.identity.sessions import SessionPolicy
 from tappy.platform.clock import Clock
 from tappy.platform.config import Settings
