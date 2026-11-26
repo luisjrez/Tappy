@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import uuid
 from collections.abc import Iterator
@@ -324,12 +325,14 @@ def test_a_malformed_phone_number_is_refused(raw: str) -> None:
         normalized_phone(raw)
 
 
-def demo_list_settings(environment: str, numbers: str) -> Settings:
+def demo_list_settings(environment: str, numbers: str, provider: str = "simulated") -> Settings:
     return Settings.model_validate(
         {
             "environment": environment,
             "secret_key": VALID_SECRET,
             "database_url": "postgresql+psycopg://user:password@127.0.0.1/db",
+            "payment_provider": provider,
+            "pey_api_key": "test-pey-secret-0123456789abcdef",
             "phone_request_numbers": numbers,
         }
     )
@@ -348,6 +351,19 @@ def test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified(
         demo_list_settings(environment, CONSENTED)
 
     assert demo_list_settings(environment, "").phone_request_numbers == frozenset()
+
+
+def test_phone_requests_cannot_reach_the_real_provider_until_their_payments_can_be_verified() -> (
+    None
+):
+    with pytest.raises(ValidationError, match="until phone payments can be verified"):
+        demo_list_settings("test", CONSENTED, provider="pey")
+
+
+def test_a_list_built_in_code_is_held_to_the_same_ten_digit_rule() -> None:
+    assert phone_list(frozenset({CONSENTED})) == frozenset({CONSENTED})
+    with pytest.raises(ValueError, match="exactly 10 digits"):
+        phone_list(frozenset({"abc"}))
 
 
 def test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint(
@@ -401,8 +417,10 @@ def test_the_number_is_only_kept_behind_a_keyed_fingerprint(
         migrated_database_url,
         "SELECT request_digest FROM idempotency_requests WHERE operation = 'create_attempt'",
     )
+    unprefixed = hmac.new(VALID_SECRET.encode(), CONSENTED.encode(), hashlib.sha256).hexdigest()
     assert stored == keyed
     assert stored != unkeyed
+    assert stored != digest_of({**content, "phone": unprefixed})
     assert (
         scalar(
             migrated_database_url,

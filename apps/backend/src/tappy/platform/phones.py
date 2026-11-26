@@ -7,6 +7,7 @@ VISIBLE_DIGITS = 4
 SEPARATORS = re.compile(r"[ .-]")
 MEXICAN_PHONE = re.compile(rf"(?:\+?52)?([0-9]{{{PHONE_DIGITS}}})")
 PHONE_LIST_ENTRY = re.compile(rf"[0-9]{{{PHONE_DIGITS}}}")
+FINGERPRINT_PURPOSE = b"phone-idempotency:"
 
 
 class PhoneNumberError(ValueError):
@@ -26,13 +27,16 @@ def masked_phone(suffix: str) -> str:
 
 
 def phone_fingerprint(number: str, key: str) -> str:
-    return hmac.new(key.encode(), number.encode(), hashlib.sha256).hexdigest()
+    message = FINGERPRINT_PURPOSE + number.encode()
+    return hmac.new(key.encode(), message, hashlib.sha256).hexdigest()
 
 
-def phone_list(raw: object) -> frozenset[str]:
-    if isinstance(raw, frozenset):
-        return frozenset(str(entry) for entry in raw)
-    entries = [entry.strip() for entry in str(raw).split(",") if entry.strip()]
+def phone_list(raw: str | frozenset[str]) -> frozenset[str]:
+    entries = (
+        [entry.strip() for entry in raw.split(",") if entry.strip()]
+        if isinstance(raw, str)
+        else list(raw)
+    )
     if not all(PHONE_LIST_ENTRY.fullmatch(entry) for entry in entries):
         raise ValueError(f"Each permitted phone number must have exactly {PHONE_DIGITS} digits")
     return frozenset(entries)
