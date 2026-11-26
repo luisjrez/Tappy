@@ -160,11 +160,13 @@ Quotas are counted in Postgres (`operation_quotas`), so they hold across process
 
 ### Error references and logs
 
-- Every HTTP response carries an `X-Request-ID` header. A caller may send its own (8–64 letters, digits, `-` or `_`); anything else is replaced by a generated 32-character reference.
+- Every HTTP response carries an `X-Request-ID` header. A caller may send its own (8–64 letters, digits, `-` or `_`, not only digits, so it is never mistaken for a phone or a CLABE in the logs); anything else is replaced by a generated 32-character reference.
 - An unexpected error answers `500` with `{"detail": "Internal server error", "reference": "<X-Request-ID>"}` and logs `Unhandled error in <method> <route template>` with the traceback under the same reference, so a user's report can be matched to the log line. Expected errors keep their own status and `detail`.
 - `python -m tappy` (Uvicorn's own server and access lines included), `python -m tappy.sales` and `python -m tappy.identity` log to stderr as `time level logger [reference] message` (`-` outside a request). Every line, traceback included, is redacted before it is written:
-  - the configured secrets (`TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` and the database password) become `[redacted]`, and so do `Bearer` tokens and `whsec_` keys;
-  - CLABEs (18 digits, optionally grouped `3 3 11 1`) and Mexican phone numbers (10 digits, optionally grouped or prefixed with `52`/`+52`) keep only their last four digits (`**************6789`, `******5678`), also when URL-encoded in a logged path (`%2B52…`, `%20` between groups); digits inside longer identifiers (UUIDs, digests, ids) are left alone;
+  - the configured secrets (`TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` with and without its `whsec_` prefix, and the database password) become `[redacted]`, longest first, and so do `Bearer` tokens and `whsec_` keys. A configured secret shorter than 8 characters is not replaced, because it could not be told apart from ordinary words; use longer secrets;
+  - CLABEs keep only their last four digits (`**************6789`) when written as 18 digits or grouped `3 3 11 1` or `4 4 4 4 2`;
+  - Mexican phone numbers keep only their last four digits (`******5678`) when written as 10 digits, grouped `2 4 4` or `3 3 4` with spaces, dots or hyphens, with the area code in brackets (`(55) 1234 5678`), and optionally prefixed with `52`, `+52` or `+52 1`;
+  - both rules also apply when the number is URL-encoded in a logged path (`%2B52…`, `%20` between groups). Digits inside longer identifiers (UUIDs, digests, ids), amounts, dates and versions are left alone;
   - email addresses become `[email]`.
 - A command that fails unexpectedly logs `Command <name> failed` with the redacted traceback and exits `1`.
 - Each reconciliation job logs `Reconciliation job <id> for sale <reference> (attempt <id>): <outcome>`, so a sale reference can be followed through `run-jobs`.

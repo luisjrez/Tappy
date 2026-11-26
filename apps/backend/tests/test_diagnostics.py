@@ -35,8 +35,8 @@ from tests.support import (
     run_identity,
     run_sales,
     spawn_tappy,
+    wait_for_json,
 )
-from tests.test_startup import wait_for_json
 
 TOKEN = "synthetic-bearer-leak-token-0001"
 PEY_KEY = "pey-synthetic-api-key-0001"
@@ -139,9 +139,11 @@ def test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced(
 ) -> None:
     kept = client.get("/health", headers={"X-Request-ID": "caller-ref-0001"})
     replaced = client.get("/health", headers={"X-Request-ID": "bad ref <script>"})
+    digits_only = client.get("/health", headers={"X-Request-ID": PHONE})
 
     assert kept.headers["X-Request-ID"] == "caller-ref-0001"
     assert GENERATED.fullmatch(replaced.headers["X-Request-ID"])
+    assert GENERATED.fullmatch(digits_only.headers["X-Request-ID"])
 
 
 def test_every_error_response_carries_its_reference(

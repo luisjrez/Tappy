@@ -1,3 +1,4 @@
+import json
 import os
 import socket
 import subprocess
@@ -5,6 +6,8 @@ import sys
 import time
 from datetime import datetime, timedelta
 from typing import IO
+from urllib.error import URLError
+from urllib.request import urlopen
 
 import pytest
 from pydantic import SecretStr
@@ -59,6 +62,18 @@ def spawn_tappy(
         stdout=subprocess.DEVNULL,
         stderr=stderr,
     )
+
+
+def wait_for_json(url: str, deadline_seconds: float) -> object:
+    deadline = time.monotonic() + deadline_seconds
+    while True:
+        try:
+            with urlopen(url, timeout=1) as response:
+                return json.load(response)
+        except URLError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.1)
 
 
 def free_port() -> int:

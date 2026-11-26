@@ -8,8 +8,14 @@ from tappy.platform.redaction import redact
     [
         ("clabe 002180700123456789", "clabe **************6789"),
         ("clabe 002 180 70012345678 9.", "clabe **************6789."),
+        ("clabe 0021 8070 0123 4567 89", "clabe **************6789"),
         ("phone 5512345678", "phone ******5678"),
         ("phone +525512345678", "phone ********5678"),
+        ("phone +5215512345678", "phone *********5678"),
+        ("phone +52 1 55 1234 5678", "phone *********5678"),
+        ("phone (55) 1234 5678", "phone ******5678"),
+        ("phone (551) 234 5678", "phone ******5678"),
+        ("phone 55.1234.5678", "phone ******5678"),
         ("phone +52 55 1234 5678", "phone ********5678"),
         ("phone 52-551-234-5678", "phone ********5678"),
         ("phone (55 1234 5678)", "phone (******5678)"),
@@ -43,6 +49,16 @@ def test_identifiers_amounts_and_dates_are_kept(kept: str) -> None:
 
 
 def test_configured_secrets_are_replaced_wherever_they_appear() -> None:
-    assert redact("url user:pw-123@host and pw-123", ["pw-123", ""]) == (
+    assert redact("url user:pw-123456@host and pw-123456", ["pw-123456", ""]) == (
         "url user:[redacted]@host and [redacted]"
     )
+
+
+def test_a_longer_secret_is_replaced_whole_even_when_it_contains_a_shorter_one() -> None:
+    assert redact("key outer-inner-secret", ["inner-secret", "outer-inner-secret"]) == (
+        "key [redacted]"
+    )
+
+
+def test_a_secret_too_short_to_tell_apart_from_ordinary_words_is_not_replaced() -> None:
+    assert redact("tappy.sales.cli started", ["tappy"]) == "tappy.sales.cli started"

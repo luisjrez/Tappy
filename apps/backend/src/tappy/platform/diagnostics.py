@@ -13,7 +13,7 @@ from tappy.platform.config import Settings
 from tappy.platform.redaction import redact
 
 HEADER = "X-Request-ID"
-SAFE_REFERENCE = re.compile(r"[A-Za-z0-9_-]{8,64}")
+SAFE_REFERENCE = re.compile(r"(?!\d+\Z)[A-Za-z0-9_-]{8,64}")
 HANDLER_NAME = "tappy"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s [%(reference)s] %(message)s"
 NO_REFERENCE = "-"

@@ -126,14 +126,17 @@ def test_the_backlog_command_prints_each_indicator_with_its_age(
 
     lines = run_sales(migrated_database_url, "backlog").stdout.splitlines()
 
-    patterns = [
-        r"received webhook events: 2 \(oldest received 18\d s ago\)",
-        r"due reconciliation jobs: 2 \(oldest due 72\d\d s ago\)",
-        r"leased reconciliation jobs: 2 \(1 with an expired lease\)",
-        r"exhausted reconciliation jobs: 1",
-        r"attempts creating longer than 60 s: 1 \(oldest updated 6\d\d s ago\)",
-        r"open payment exceptions: 1",
+    expected = [
+        (r"received webhook events: 2 \(oldest received (\d+) s ago\)", 3 * 60),
+        (r"due reconciliation jobs: 2 \(oldest due (\d+) s ago\)", 120 * 60),
+        (r"leased reconciliation jobs: 2 \(1 with an expired lease\)", None),
+        (r"exhausted reconciliation jobs: 1", None),
+        (r"attempts creating longer than 60 s: 1 \(oldest updated (\d+) s ago\)", 10 * 60),
+        (r"open payment exceptions: 1", None),
     ]
-    assert len(lines) == len(patterns)
-    for line, pattern in zip(lines, patterns, strict=True):
-        assert re.fullmatch(pattern, line), line
+    assert len(lines) == len(expected)
+    for line, (pattern, minimum_age) in zip(lines, expected, strict=True):
+        found = re.fullmatch(pattern, line)
+        assert found, line
+        if minimum_age is not None:
+            assert minimum_age <= int(found.group(1)) < minimum_age + 60, line
