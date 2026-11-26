@@ -1,5 +1,5 @@
 ticket = "B34"
-revision = "c23d9bb"
+revision = "842a4e8"
 
 [vc01]
 status = "PASS"
@@ -24,6 +24,10 @@ tests = [
     "tests/test_diagnostics.py::test_configured_secrets_never_reach_a_log_line",
     "tests/test_diagnostics.py::test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced",
     "tests/test_diagnostics.py::test_every_error_response_carries_its_reference",
+    "tests/test_diagnostics.py::test_server_and_command_lines_go_through_the_same_redacted_format",
+    "tests/test_redaction.py::test_sensitive_values_are_masked",
+    "tests/test_redaction.py::test_identifiers_amounts_and_dates_are_kept",
+    "tests/test_redaction.py::test_configured_secrets_are_replaced_wherever_they_appear",
 ]
 
 [[criteria]]
@@ -49,4 +53,6 @@ id = "B34-TC03"
 mode = "automated"
 tests = [
     "tests/test_backup_restore.py::test_a_runner_interrupted_after_the_restore_finishes_the_job_once_and_can_be_followed",
+    "tests/sales/test_backlog.py::test_every_backlog_indicator_counts_only_what_is_waiting",
+    "tests/sales/test_backlog.py::test_the_backlog_command_prints_each_indicator_with_its_age",
 ]
