@@ -1,5 +1,5 @@
 ticket = "B36"
-revision = "3698a3f"
+revision = "59b3566"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B36-phone-request.md#b36-vc01--api-celular"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
@@ -43,6 +43,8 @@ tests = [
     "tests/sales/test_phone_requests.py::test_a_malformed_phone_number_is_refused",
     "tests/sales/test_phone_requests.py::test_the_demo_list_only_accepts_ten_digit_numbers",
     "tests/sales/test_phone_requests.py::test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified",
+    "tests/sales/test_phone_requests.py::test_phone_requests_stay_off_the_real_provider_until_verifiable",
+    "tests/sales/test_phone_requests.py::test_a_list_built_in_code_is_held_to_the_same_ten_digit_rule",
     "tests/sales/test_phone_requests.py::test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider",
 ]
 

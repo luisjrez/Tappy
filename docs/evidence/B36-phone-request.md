@@ -12,6 +12,7 @@ Ticket: [#44](https://github.com/luisjrez/Tappy/issues/44) · Historia: [H8 #8](
   - Base: rama B34 `6a474a8` ([PR #110](https://github.com/luisjrez/Tappy/pull/110)), stack #68.
   - Candidato de la ronda 1: `9dfb78e` (función) + `669f3da` (ajuste de tests anteriores).
   - Candidato de la ronda 2: `3698a3f` (correcciones de la ronda 1).
+  - Revisión final: `59b3566`. Notas de la ronda 2 en `4fabf71` y nombre de test más corto en `59b3566`.
 - **Entorno:** macOS, Postgres 18.6 aislado (Colima + Compose) y Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Contrato de pey usado
@@ -30,7 +31,7 @@ Ticket: [#44](https://github.com/luisjrez/Tappy/issues/44) · Historia: [H8 #8](
   - acepta espacios, puntos, guiones y el prefijo `52`/`+52`, y reduce a 10 dígitos ASCII;
   - todo lo demás (9 u 11 dígitos, letras, otros países, dígitos de ancho completo) se rechaza.
 - **Habilitación condicionada:** `TAPPY_PHONE_REQUEST_NUMBERS` es la lista de números de prueba consentidos, de 10 dígitos cada uno y validados al arrancar.
-  - **Solo en `TAPPY_ENVIRONMENT=test` hasta que exista verificación** (B37). En cualquier otro ambiente la aplicación no arranca con la lista.
+  - **Solo con `TAPPY_ENVIRONMENT=test` y el proveedor simulado hasta que exista verificación** (B37). En cualquier otro ambiente, o con `TAPPY_PAYMENT_PROVIDER=pey`, la aplicación no arranca con la lista. Así ninguna solicitud real sale antes de B37.
   - El motivo: hoy un intento `phone` no se puede consultar, así que si vence sin pago o pierde la respuesta bloquearía la venta para siempre. Un intento vencido exige verificación antes de otro, y uno `reconciling` sigue activo.
   - Permitir otro intento sin verificar podría cobrar dos veces, así que el canal no se puede habilitar en vivo.
   - Vacía (el valor por defecto) → `409 Phone payment requests are not enabled`.
@@ -40,7 +41,7 @@ Ticket: [#44](https://github.com/luisjrez/Tappy/issues/44) · Historia: [H8 #8](
   - número ausente en `phone`, número presente en otro método, número mal formado o no permitido → error;
   - en todos esos casos no se reserva intento, no se consume cuota y no se llama a pey.
 - **Mismo motor de intentos:** clave de idempotencia, cuota, receptor e intento activo.
-  - La huella de la clave incluye un HMAC del número con `TAPPY_SECRET_KEY`, así que la misma clave con otro número da `409`.
+  - La huella de la clave incluye un HMAC del número con `TAPPY_SECRET_KEY` y un prefijo de propósito (`phone-idempotency:`), separado de la firma de sesiones. La misma clave con otro número da `409`.
   - La huella no se puede invertir probando los 10^10 números (arquitectura §11: «hash con clave»).
 - **Proveedor:**
   - `QrProvider.request_phone_payment(PhoneOrder) -> IssuedPhoneRequest`;
@@ -62,7 +63,7 @@ Ticket: [#44](https://github.com/luisjrez/Tappy/issues/44) · Historia: [H8 #8](
 | UC | AC | TC | Tests | Resultado |
 | --- | --- | --- | --- | --- |
 | B36-UC01 | B36-AC01 | B36-TC01 | `test_a_consented_number_creates_a_pending_request_that_keeps_the_provider_ids`:<br>• `201`, `pending`, `wait_for_payment`, `transactionId` y `codiId` conservados, referencia de venta y `******5678`;<br>• sin campos de entrega o lectura;<br>• el cuerpo enviado a pey cumple el esquema oficial;<br>• ninguna fila de intentos contiene el número completo.<br>Además `test_the_simulated_provider_creates_a_marked_pending_request`, `test_a_phone_number_is_normalized_to_ten_digits`, `test_the_number_is_only_kept_behind_a_keyed_fingerprint` (la huella guardada es el HMAC, no un `sha256` sin clave, y ninguna fila de idempotencia contiene el número) y `test_a_withdrawn_phone_request_asks_for_no_action` | PASS |
-| B36-UC02 | B36-AC02 | B36-TC02 | `test_an_invalid_number_is_rejected_without_an_attempt_or_a_provider_request`, `test_the_number_is_required_for_phone_requests_and_refused_for_qr`, `test_a_number_outside_the_demo_list_is_refused_without_a_provider_request`, `test_phone_requests_stay_disabled_until_numbers_are_configured`, `test_a_malformed_phone_number_is_refused`, `test_the_demo_list_only_accepts_ten_digit_numbers`, `test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified` y `test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider`. En todos, 0 intentos y 0 peticiones a pey | PASS |
+| B36-UC02 | B36-AC02 | B36-TC02 | `test_an_invalid_number_is_rejected_without_an_attempt_or_a_provider_request`, `test_the_number_is_required_for_phone_requests_and_refused_for_qr`, `test_a_number_outside_the_demo_list_is_refused_without_a_provider_request`, `test_phone_requests_stay_disabled_until_numbers_are_configured`, `test_a_malformed_phone_number_is_refused`, `test_the_demo_list_only_accepts_ten_digit_numbers`, `test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified`, `test_phone_requests_stay_off_the_real_provider_until_verifiable`, `test_a_list_built_in_code_is_held_to_the_same_ten_digit_rule` y `test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider`. En todos, 0 intentos y 0 peticiones a pey | PASS |
 | B36-UC03 | B36-AC03 | B36-TC03 | `test_a_lost_provider_answer_keeps_one_verifying_attempt_and_the_retry_does_not_resend`:<br>• timeout → `202 reconciling` con trabajo `timeout:pending`;<br>• misma clave → `200`, el mismo intento y una sola petición a pey;<br>• misma clave con otro número → `409`.<br>Además `test_a_server_error_or_an_unusable_answer_keeps_the_request_verifying`, `test_a_definitive_rejection_fails_the_phone_request_with_its_code` `test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint` y `test_an_expired_phone_request_blocks_new_attempts_until_payments_can_be_verified`, que documenta el bloqueo por el que el canal queda solo para tests | PASS |
 
 ## TDD
@@ -138,6 +139,14 @@ M12 lista sin validar: 1 failed, 39 passed in 12.80s
 
 - **R4 sobrevive a propósito.** El router ya exige el número para `phone`, así que la excepción de `pending_order` es una comprobación defensiva sin camino posible desde la API.
 - **Hallazgo de la ronda 1 confirmado:** con R1 revertido, el canal se podría habilitar en `local`, `integration` o `production`.
+
+**Notas de la ronda 2 (`4fabf71`):**
+
+```
+M13 huella sin prefijo de proposito: 1 failed, 41 passed in 12.60s
+M14 lista aceptada con pey: 1 failed, 41 passed in 12.91s
+M15 frozenset sin validar: 1 failed, 41 passed in 12.82s
+```
 
 ## Cambios esperados en tests anteriores (`669f3da`)
 
@@ -218,7 +227,8 @@ AC PASS / AC aplicables = 3/3 = **100 %**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `669f3da` | REQUEST_CHANGES | REQUEST_CHANGES | Standards 3 + 4 notas, Spec 2 + 2 notas (ver abajo) |
-| 2 | `3698a3f` | PENDING | PENDING | — |
+| 2 | `3698a3f` | APPROVE | APPROVE | Sin bloqueantes; Standards 3 notas, Spec 1 nota |
+| 3 | `4fabf71` | APPROVE | APPROVE | Notas de la ronda 2 aplicadas y confirmadas. Nota de Standards (nombre de test) aplicada en `59b3566` |
 
 ### Hallazgos de la ronda 1 y su corrección (`3698a3f`)
 
@@ -234,3 +244,15 @@ AC PASS / AC aplicables = 3/3 = **100 %**.
 7. **`pending_order` callaba la falta de número** (Standards, nota) → ahora lanza un error explícito (R4).
 8. **`429` de `/codi/pn` tratado como definitivo** (Spec, nota). Es la misma pregunta abierta que B15 arrastró a B35, y se suma a su paso 4 (comentario en #43): si un `429` de `/codi/pn` pudo crear la solicitud, reintentar enviaría otra al pagador.
 9. **Intento retirado con `hide_qr`** (Spec, nota) → para `phone` es `none`, con su test.
+
+### Notas de la ronda 2 y su corrección (`4fabf71`, `59b3566`)
+
+1. **Lista construida en código sin validar** (Standards) → `phone_list(str | frozenset[str])` valida las dos formas (M15).
+2. **Huella con la misma clave que las sesiones** (Standards) → prefijo `phone-idempotency:`. El test compara además contra el HMAC sin prefijo (M13), y el README avisa que rotar la clave convierte en `409` un reintento en curso con la misma clave.
+3. **Tipo de entrada abierto** (Standards) → `str | frozenset[str]`.
+4. **`test` con pey real podía enviar solicitudes** (Spec) → la lista se rechaza también si el proveedor no es el simulado (M14).
+5. **Nombre de test largo** (Standards, ronda 3) → `test_phone_requests_stay_off_the_real_provider_until_verifiable`.
+
+## Estado final
+
+Standards y Spec aprueban (APPROVE) la ronda 3 sobre `4fabf71`. La revisión final `59b3566` solo acorta el nombre de un test que Standards pidió. AC 3/3 = 100 %, VC01 PASS.
