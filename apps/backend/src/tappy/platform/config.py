@@ -9,6 +9,8 @@ from pydantic import Field, SecretStr, ValidationError, field_validator, model_v
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from tappy.platform.phones import phone_list
+
 ENV_PREFIX = "TAPPY_"
 PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
 PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
@@ -60,6 +62,17 @@ class Settings(BaseSettings):
     sale_max_amount_cents: int = Field(
         default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
     )
+    phone_request_numbers: str = ""
+
+    @property
+    def phone_request_allowlist(self) -> frozenset[str]:
+        return phone_list(self.phone_request_numbers)
+
+    @field_validator("phone_request_numbers")
+    @classmethod
+    def ten_digit_phone_numbers(cls, raw: str) -> str:
+        phone_list(raw)
+        return raw
 
     @property
     def quota_window(self) -> timedelta:

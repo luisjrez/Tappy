@@ -30,6 +30,7 @@ class AttemptCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     method: AttemptMethod
+    phone_number: str | None = Field(default=None, max_length=32)
 
 
 class AttemptResponse(BaseModel):
@@ -43,6 +44,8 @@ class AttemptResponse(BaseModel):
     simulated: bool
     provider_request_id: str | None
     qr_payload: str | None
+    provider_folio: str | None
+    payer_phone: str | None
     failure_code: str | None
     created_at: datetime
     expires_at: datetime | None

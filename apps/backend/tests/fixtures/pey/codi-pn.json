@@ -1,0 +1,135 @@
+{
+  "source": "https://docs.pey.mx/openapi.json",
+  "openapi_version": "2026-10-20",
+  "sha256": "568e0255f334cbf8e4830324b2301e7c0d37158d90cf3a7bb8d839dd0f345c5a",
+  "operation": "POST /codi/pn",
+  "request_schema": {
+    "type": "object",
+    "required": [
+      "amount",
+      "phoneNumber"
+    ],
+    "properties": {
+      "amount": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1000000,
+        "description": "The amount to charge in MXN (Mexican Peso). Must be greater than 0 and up to 1,000,000."
+      },
+      "phoneNumber": {
+        "type": "string",
+        "pattern": "^[0-9]{10}$",
+        "description": "The 10-digit phone number of the payer to send the push notification to."
+      },
+      "concept": {
+        "type": "string",
+        "description": "The concept shown to the payer."
+      },
+      "expiration": {
+        "type": "integer",
+        "minimum": 360,
+        "default": 360,
+        "description": "Expiration time for the push notification in seconds. Defaults to 360 (6 minutes) if not provided. Must be greater than or equal to 360."
+      },
+      "numRef": {
+        "type": "string",
+        "pattern": "^[0-9]{1,7}$",
+        "default": "0",
+        "description": "Numeric reference for the payment. Must be up to 7 digits (digits only)."
+      },
+      "bankAccountId": {
+        "type": "string",
+        "description": "Pey identifier (ULID) of the bank account that will receive the payment, registered through [Register Bank Account](/docs/api/register-bank-account/). The account must have `codiStatus: ACTIVE`. When omitted, the payment goes to the CoDi payment account linked to your API key."
+      },
+      "metadata": {
+        "type": "object",
+        "maxProperties": 50,
+        "propertyNames": {
+          "maxLength": 40
+        },
+        "additionalProperties": {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "description": "Optional set of key/value pairs to attach custom data to the push notification. Up to 50 pairs; keys up to 40 characters; values up to 500 characters. Values must be scalar (string, number, boolean, or null) - nested objects and arrays are not allowed. All values are stored and returned as strings (e.g. \"123\", \"false\", \"null\")."
+      }
+    }
+  },
+  "request_example": {
+    "amount": 150.0,
+    "phoneNumber": "5512345678",
+    "concept": "Order #12345",
+    "expiration": 360,
+    "numRef": "1234567"
+  },
+  "responses": {
+    "200": {
+      "default": {
+        "transactionId": "01J5KXYZ1234567890ABCD",
+        "codiId": "12345678901234567890"
+      }
+    },
+    "400": {
+      "missingPhone": {
+        "error": {
+          "message": "Missing phoneNumber",
+          "type": "INCOMPLETE_PARAMETERS",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "invalidPhone": {
+        "error": {
+          "message": "phoneNumber must be a 10-digit string",
+          "type": "INVALID_PARAMETER",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "invalidAmount": {
+        "error": {
+          "message": "Amount must be a number greater than 0",
+          "type": "INVALID_AMOUNT",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "codiNotEnabled": {
+        "error": {
+          "message": "API key does not have CoDi enabled",
+          "type": "INVALID_STATE",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "429": {
+      "default": {
+        "error": {
+          "message": "API call limit reached for the current period",
+          "type": "CALL_LIMIT_REACHED",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "503": {
+      "maintenance": {
+        "error": {
+          "message": "This endpoint is under maintenance, please try again later",
+          "type": "SERVICE_UNAVAILABLE",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "500": {
+      "invokeError": {
+        "error": {
+          "message": "Error creating CoDi push notification",
+          "type": "INTERNAL_SERVER_ERROR",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    }
+  }
+}

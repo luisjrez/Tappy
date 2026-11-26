@@ -14,6 +14,7 @@ from tappy.merchants.models import Merchant
 from tappy.merchants.receivers import held_issuing_receiver, masked_account
 from tappy.merchants.service import accessible_merchant, scoped_ids
 from tappy.platform.persistence import is_unique_violation
+from tappy.platform.phones import masked_phone
 from tappy.platform.quotas import QuotaOperation, QuotaPolicy, merchant_scope, reserve_quota
 from tappy.sales.errors import InvalidConceptError, NoReceptionError, SaleNotFoundError
 from tappy.sales.expiration import expire_due_attempts
@@ -54,6 +55,8 @@ class SaleRequest:
 class NextAction(StrEnum):
     WAIT_FOR_QR = "wait_for_qr"
     SHOW_QR = "show_qr"
+    WAIT_FOR_REQUEST = "wait_for_request"
+    WAIT_FOR_PAYMENT = "wait_for_payment"
     WAIT_FOR_VERIFICATION = "wait_for_verification"
     VERIFY_BEFORE_RETRY = "verify_before_retry"
     HIDE_QR = "hide_qr"
@@ -69,6 +72,10 @@ NEXT_ACTIONS = {
     AttemptStatus.FAILED: NextAction.NEW_ATTEMPT,
     AttemptStatus.PAID: NextAction.NONE,
 }
+PHONE_NEXT_ACTIONS = {
+    AttemptStatus.CREATING: NextAction.WAIT_FOR_REQUEST,
+    AttemptStatus.PENDING: NextAction.WAIT_FOR_PAYMENT,
+}
 
 
 @dataclass(frozen=True)
@@ -81,6 +88,8 @@ class AttemptView:
     simulated: bool
     provider_request_id: str | None
     qr_payload: str | None
+    provider_folio: str | None
+    payer_phone: str | None
     failure_code: str | None
     created_at: datetime
     expires_at: datetime | None
@@ -195,6 +204,10 @@ def describe_attempt(attempt: PaymentAttempt) -> AttemptView:
         simulated=attempt.simulated,
         provider_request_id=attempt.provider_request_id,
         qr_payload=attempt.qr_payload,
+        provider_folio=attempt.provider_folio,
+        payer_phone=(
+            None if attempt.payer_phone_suffix is None else masked_phone(attempt.payer_phone_suffix)
+        ),
         failure_code=attempt.failure_code,
         created_at=attempt.created_at,
         expires_at=attempt.expires_at,
@@ -215,6 +228,8 @@ def next_action(attempt: PaymentAttempt) -> NextAction:
         return NextAction.NONE
     if attempt.status is AttemptStatus.EXPIRED and attempt.verified_at is not None:
         return NextAction.NEW_ATTEMPT
+    if attempt.method is AttemptMethod.PHONE and attempt.status in PHONE_NEXT_ACTIONS:
+        return PHONE_NEXT_ACTIONS[attempt.status]
     return NEXT_ACTIONS[attempt.status]
 
 

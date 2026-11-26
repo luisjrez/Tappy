@@ -12,8 +12,10 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from tappy.payments.pey_events import cents, invalid_bank_time, paid_at
 from tappy.payments.provider import (
+    IssuedPhoneRequest,
     IssuedQr,
     PaymentsQueryError,
+    PhoneOrder,
     ProviderName,
     ProviderRejectedError,
     ProviderUnavailableError,
@@ -55,6 +57,13 @@ class CreatedQr(BaseModel):
     qr_string: str = Field(alias="qrString", min_length=1)
 
 
+class CreatedPush(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    transaction_id: str = Field(alias="transactionId", min_length=1, max_length=64)
+    codi_id: str = Field(alias="codiId", min_length=1, max_length=32)
+
+
 class ErrorDetail(BaseModel):
     type: str = Field(pattern=r"^[A-Z_]{1,32}$")
 
@@ -83,7 +92,7 @@ def pesos(amount_cents: int) -> float:
     return sent
 
 
-def qr_request(order: QrOrder, qr_window: timedelta) -> dict[str, object]:
+def qr_request(order: QrOrder | PhoneOrder, qr_window: timedelta) -> dict[str, object]:
     body: dict[str, object] = {
         "amount": pesos(order.amount_cents),
         "bankAccountId": order.receiver_account,
@@ -93,6 +102,10 @@ def qr_request(order: QrOrder, qr_window: timedelta) -> dict[str, object]:
     if order.concept is not None:
         body["concept"] = order.concept
     return body
+
+
+def push_request(order: PhoneOrder, qr_window: timedelta) -> dict[str, object]:
+    return {**qr_request(order, qr_window), "phoneNumber": order.phone_number}
 
 
 def rejection_code(response: httpx2.Response) -> str:
@@ -108,6 +121,14 @@ def issued_qr(response: httpx2.Response, valid_for: timedelta) -> IssuedQr:
     except ValidationError:
         raise ProviderUnavailableError(UncertainReason.INVALID_RESPONSE) from None
     return IssuedQr(created.id, created.qr_string, valid_for)
+
+
+def issued_push(response: httpx2.Response, valid_for: timedelta) -> IssuedPhoneRequest:
+    try:
+        created = CreatedPush.model_validate_json(response.content)
+    except ValidationError:
+        raise ProviderUnavailableError(UncertainReason.INVALID_RESPONSE) from None
+    return IssuedPhoneRequest(created.transaction_id, created.codi_id, valid_for)
 
 
 def retry_after(response: httpx2.Response) -> timedelta | None:
@@ -184,6 +205,18 @@ class PeyQrProvider:
         except ProviderUnavailableError as error:
             raise PaymentsQueryError(NETWORK_PROBLEMS[error.reason]) from None
         raise PaymentsQueryError(QueryProblem.TOO_MANY_PAGES)
+
+    def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest:
+        with self.client() as client:
+            response = client.post("/codi/pn", json=push_request(order, self.settings.qr_window))
+        logger.info(
+            "pey phone request for attempt %s answered %s", order.attempt_id, response.status_code
+        )
+        if response.status_code == httpx2.codes.OK:
+            return issued_push(response, self.settings.qr_window)
+        if response.status_code in REJECTED_STATUSES:
+            raise ProviderRejectedError(rejection_code(response))
+        raise ProviderUnavailableError(UncertainReason.SERVER_ERROR)
 
     def create_qr(self, order: QrOrder) -> IssuedQr:
         response = self.post(order)

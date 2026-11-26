@@ -15,6 +15,8 @@ QUERY_FIXTURE: dict[str, Any] = json.loads((FIXTURES / "codi-qr-transactions.jso
 API_KEY = "test-pey-secret-0123456789abcdef"
 BASE_URL = "https://pey.test"
 CREATED: dict[str, Any] = FIXTURE["responses"]["201"]["default"]
+PUSH_FIXTURE: dict[str, Any] = json.loads((FIXTURES / "codi-pn.json").read_text())
+PUSH_CREATED: dict[str, Any] = PUSH_FIXTURE["responses"]["200"]["default"]
 
 
 def response(status: int, body: object) -> httpx2.Response:

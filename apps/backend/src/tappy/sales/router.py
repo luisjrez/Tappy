@@ -8,12 +8,14 @@ from tappy.identity.dependencies import CurrentIdentity, CurrentOperator
 from tappy.merchants.errors import IssuanceBlockedError, MerchantNotFoundError
 from tappy.payments.dependencies import QrProviderDependency
 from tappy.payments.provider import ProviderRejectedError
+from tappy.platform.config import Settings
 from tappy.platform.dependencies import (
     ClockDependency,
     DatabaseDependency,
     SessionDependency,
     SettingsDependency,
 )
+from tappy.platform.phones import PhoneNumberError, normalized_phone
 from tappy.platform.quota_responses import QuotaExceededResponse
 from tappy.platform.quotas import QuotaOperation, QuotaPolicy, identity_scope, reserve_quota
 from tappy.sales.attempts import AttemptOutcome, AttemptRequest, request_attempt
@@ -29,6 +31,7 @@ from tappy.sales.errors import (
 )
 from tappy.sales.history import InvalidCursorError, sale_history
 from tappy.sales.idempotency import KEY_PATTERN, IdempotencyConflictError
+from tappy.sales.models import AttemptMethod
 from tappy.sales.schemas import (
     AttemptCreateRequest,
     AttemptResponse,
@@ -73,6 +76,11 @@ def sale_read_quota(
 
 
 SaleReadQuota = Depends(sale_read_quota)
+PROVIDER_LABELS = {
+    AttemptMethod.QR: "QR",
+    AttemptMethod.PHONE: "phone request",
+    AttemptMethod.LINK: "payment link",
+}
 OUTCOME_STATUS = {
     AttemptOutcome.CREATED: HTTPStatus.CREATED,
     AttemptOutcome.REPLAYED: HTTPStatus.OK,
@@ -190,7 +198,34 @@ def attempt_request(
     settings: SettingsDependency,
 ) -> AttemptRequest:
     quota = QuotaPolicy(settings.attempt_creation_quota, settings.quota_window)
-    return AttemptRequest(actor, sale_id, payload.method, idempotency_key, quota)
+    phone_number = permitted_phone(payload, settings)
+    return AttemptRequest(actor, sale_id, payload.method, idempotency_key, quota, phone_number)
+
+
+def permitted_phone(payload: AttemptCreateRequest, settings: Settings) -> str | None:
+    if payload.method is not AttemptMethod.PHONE:
+        if payload.phone_number is not None:
+            raise HTTPException(
+                HTTPStatus.UNPROCESSABLE_CONTENT,
+                detail="A phone number is only accepted for phone requests",
+            )
+        return None
+    if payload.phone_number is None:
+        raise HTTPException(
+            HTTPStatus.UNPROCESSABLE_CONTENT, detail="Phone requests need a phone number"
+        )
+    try:
+        number = normalized_phone(payload.phone_number)
+    except PhoneNumberError as error:
+        raise HTTPException(HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(error)) from None
+    if not settings.phone_request_allowlist:
+        raise HTTPException(HTTPStatus.CONFLICT, detail="Phone payment requests are not enabled")
+    if number not in settings.phone_request_allowlist:
+        raise HTTPException(
+            HTTPStatus.UNPROCESSABLE_CONTENT,
+            detail="The phone number is not permitted for payment requests",
+        )
+    return number
 
 
 @router.post(
@@ -209,7 +244,10 @@ def attempt_request(
                 "or key reused"
             )
         },
-        HTTPStatus.BAD_GATEWAY: {"description": "QR provider rejected the request; attempt failed"},
+        HTTPStatus.BAD_GATEWAY: {"description": "Provider rejected the request; attempt failed"},
+        HTTPStatus.UNPROCESSABLE_CONTENT: {
+            "description": "Invalid request, or a phone number missing, malformed or not permitted"
+        },
         HTTPStatus.ACCEPTED: {
             "model": AttemptResponse,
             "description": "Provider outcome uncertain: the attempt is kept reconciling",
@@ -230,7 +268,10 @@ def reserve(
     except ProviderRejectedError as error:
         raise HTTPException(
             HTTPStatus.BAD_GATEWAY,
-            detail=f"The QR provider rejected the request ({error.code})",
+            detail=(
+                f"The {PROVIDER_LABELS[request.method]} provider rejected the request "
+                f"({error.code})"
+            ),
         ) from None
     except (
         ActiveAttemptError,

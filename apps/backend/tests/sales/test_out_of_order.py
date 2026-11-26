@@ -13,7 +13,9 @@ from httpx2 import Response
 
 from tappy.payments.events import ReceivedEvent, store_event
 from tappy.payments.provider import (
+    IssuedPhoneRequest,
     IssuedQr,
+    PhoneOrder,
     ProviderName,
     ProviderUnavailableError,
     QrOrder,
@@ -108,6 +110,9 @@ class EarlyPaymentProvider:
         if self.scenario.then_times_out:
             raise ProviderUnavailableError(UncertainReason.TIMEOUT)
         return IssuedQr(self.scenario.issued_id, PAYLOAD)
+
+    def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest:
+        raise NotImplementedError
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
         return []

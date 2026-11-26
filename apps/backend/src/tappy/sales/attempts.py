@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
@@ -12,7 +13,9 @@ from tappy.identity.provisioning import IdentitySummary
 from tappy.merchants.models import ReceivingAccount
 from tappy.merchants.receivers import held_issuing_receiver
 from tappy.payments.provider import (
+    IssuedPhoneRequest,
     IssuedQr,
+    PhoneOrder,
     ProviderName,
     ProviderRejectedError,
     ProviderUnavailableError,
@@ -64,6 +67,7 @@ class AttemptRequest:
     method: AttemptMethod
     idempotency_key: str
     quota: QuotaPolicy
+    phone_number: str | None = None
 
 
 class AttemptOutcome(StrEnum):
@@ -91,6 +95,8 @@ class OpenReconciliation:
 
 def reservation_claim(request: AttemptRequest, sale: Sale) -> IdempotencyClaim:
     content = {"sale_id": str(sale.id), "method": request.method.value}
+    if request.phone_number is not None:
+        content["phone"] = hashlib.sha256(request.phone_number.encode()).hexdigest()
     return IdempotencyClaim(
         uuid.UUID(request.actor.reference),
         IdempotentOperation.CREATE_ATTEMPT,
@@ -161,6 +167,7 @@ def reserve_attempt(
         simulated=provider.simulated,
         receiver_account=held.receiver_account,
         previous_attempt_id=None if previous is None else previous.id,
+        payer_phone_suffix=None if request.phone_number is None else request.phone_number[-4:],
         created_at=now,
         updated_at=now,
     )
@@ -169,11 +176,24 @@ def reserve_attempt(
     return AttemptReservation(describe_attempt(attempt), AttemptOutcome.CREATED)
 
 
-def pending_qr_order(db: Session, attempt_id: uuid.UUID) -> QrOrder | None:
+def pending_order(
+    db: Session, attempt_id: uuid.UUID, phone_number: str | None
+) -> QrOrder | PhoneOrder | None:
     attempt = db.get_one(PaymentAttempt, attempt_id)
-    if attempt.method is not AttemptMethod.QR or attempt.status is not AttemptStatus.CREATING:
+    if attempt.status is not AttemptStatus.CREATING:
         return None
     sale = db.get_one(Sale, attempt.sale_id)
+    if attempt.method is AttemptMethod.PHONE and phone_number is not None:
+        return PhoneOrder(
+            attempt.id,
+            sale.reference,
+            sale.amount_cents,
+            sale.concept,
+            attempt.receiver_account,
+            phone_number,
+        )
+    if attempt.method is not AttemptMethod.QR:
+        return None
     return QrOrder(
         attempt.id, sale.reference, sale.amount_cents, sale.concept, attempt.receiver_account
     )
@@ -199,9 +219,11 @@ def record_rejected_qr(db: Session, attempt_id: uuid.UUID, code: str, now: datet
         db.flush()
 
 
-def conflicting_qr(issued: IssuedQr, attempt: PaymentAttempt) -> ProviderUnavailableError:
+def conflicting_qr(
+    issued: IssuedQr | IssuedPhoneRequest, attempt: PaymentAttempt
+) -> ProviderUnavailableError:
     logger.warning(
-        "QR %s conflicts with the QR of attempt %s or of another attempt; attempt kept",
+        "Provider id %s conflicts with attempt %s or with another attempt; attempt kept",
         issued.provider_request_id,
         attempt.id,
     )
@@ -255,6 +277,48 @@ def record_issued_qr(
     return describe_attempt(attempt)
 
 
+def record_issued_phone(
+    db: Session,
+    attempt_id: uuid.UUID,
+    issued: IssuedPhoneRequest,
+    now: datetime,
+    expires_at: datetime | None,
+) -> AttemptView:
+    hold_reference(db, attempt_provider(db, attempt_id), issued.provider_request_id)
+    attempt = held_attempt(db, attempt_id)
+    if attempt.provider_request_id not in (None, issued.provider_request_id):
+        raise conflicting_qr(issued, attempt)
+    try:
+        with db.begin_nested():
+            attempt.provider_request_id = issued.provider_request_id
+            attempt.provider_folio = issued.folio
+            attempt.expires_at = expires_at
+            attempt.updated_at = now
+            if attempt.status is AttemptStatus.CREATING:
+                move(attempt, AttemptStatus.PENDING, now)
+    except IntegrityError as error:
+        if is_unique_violation(error, PROVIDER_REQUEST_CONSTRAINT):
+            raise conflicting_qr(issued, attempt) from None
+        raise
+    db.flush()
+    return describe_attempt(attempt)
+
+
+def issue(
+    database: Database, provider: QrProvider, order: QrOrder | PhoneOrder, clock: Clock
+) -> AttemptView:
+    requested_at = clock.now()
+    if isinstance(order, PhoneOrder):
+        requested = provider.request_phone_payment(order)
+        expires_at = None if requested.valid_for is None else requested_at + requested.valid_for
+        with database.transaction() as db:
+            return record_issued_phone(db, order.attempt_id, requested, clock.now(), expires_at)
+    issued = provider.create_qr(order)
+    expires_at = None if issued.valid_for is None else requested_at + issued.valid_for
+    with database.transaction() as db:
+        return record_issued_qr(db, order.attempt_id, issued, clock.now(), expires_at)
+
+
 def keep_for_reconciliation(
     db: Session, attempt: PaymentAttempt, reason: JobReason, now: datetime
 ) -> None:
@@ -278,16 +342,12 @@ def request_attempt(
         order = (
             None
             if reservation.outcome is AttemptOutcome.REPLAYED
-            else pending_qr_order(db, uuid.UUID(reservation.attempt.id))
+            else pending_order(db, uuid.UUID(reservation.attempt.id), request.phone_number)
         )
     if order is None:
         return reservation
-    requested_at = clock.now()
     try:
-        issued = provider.create_qr(order)
-        expires_at = None if issued.valid_for is None else requested_at + issued.valid_for
-        with database.transaction() as db:
-            recorded = record_issued_qr(db, order.attempt_id, issued, clock.now(), expires_at)
+        recorded = issue(database, provider, order, clock)
     except ProviderRejectedError as rejection:
         with database.transaction() as db:
             record_rejected_qr(db, order.attempt_id, rejection.code, clock.now())
