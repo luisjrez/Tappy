@@ -204,6 +204,30 @@ Then point a process at the restored database (`TAPPY_DATABASE_URL=…/tappy_res
 
 Switch the application to the restored database only after these checks. The procedure is tested end to end against a disposable Compose project (`tests/test_backup_restore.py`), never against the development or a production database. Dumps contain the stored webhook bodies and must be handled as sensitive data.
 
+## Real QR test
+
+The end-to-end test against pey with real money is manual, small and authorized. It never runs from CI or the test suite, and a simulation or a fake pey server never counts as this test. **Status: blocked.** The prerequisites below are not met yet ([docs/research/pey-validation.md](../../docs/research/pey-validation.md), open questions 1 and 2).
+
+Before running it, every prerequisite must be confirmed in writing:
+
+1. **Access:** an authorized pey account, its API key and webhook secret, delivered to the operator running the test (never through git, issues or chat).
+2. **Receiver:** a receiving account whose holder is eligible under pey's terms (each merchant receives in its own account; a concentrating account is forbidden) and that is enabled in Tappy.
+3. **Environment:** pey confirms which environment the key belongs to; if it is production, the participants agree that the payment is real and is not refunded.
+4. **Participants and amount:** who creates the sale, who pays, and the agreed amount, kept as small as pey allows.
+
+Rehearse first. `tests/sales/test_rehearsal.py` runs the same path against a fake pey server: a lost response retried with the same key, an application restart, the payment notification delivered, redelivered and sent again under another id, and a reconciliation query. It must end with one reception of the agreed amount.
+
+Then, with the real configuration exported only in the operator's shell:
+
+1. Create the sale and its QR (`POST /sales`, `POST /sales/{id}/attempts`), and pay it with the agreed amount.
+2. Wait for the webhook, or run `uv run python -m tappy.sales reconcile <attempt-id>`.
+3. Read `GET /sales/{id}`, `GET /sales`, `GET /merchants/{id}/summary/daily` and `uv run python -m tappy.sales backlog`.
+
+Record the result in its own file, `docs/evidence/B35-real-qr-run.md`, separate from the rehearsal evidence. Keep it sanitized:
+
+- **Record:** the date, the sale reference, pey's QR and transaction ids, the amount, the statuses, the `X-Request-ID` of each call, and the comparison with the rehearsal.
+- **Never record:** keys, secrets, full CLABEs or accounts, phone numbers, names or emails of payers, raw webhook bodies or screenshots that show them.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.
