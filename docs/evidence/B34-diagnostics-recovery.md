@@ -503,7 +503,7 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | 1 | `c23d9bb` | REQUEST_CHANGES | REQUEST_CHANGES | Standards 5, Spec 9 (ver abajo) |
 | 2 | `842a4e8` | APPROVE | APPROVE | Sin bloqueantes; Standards 4 y Spec 4 sugerencias (ver abajo) |
 | 3 | `a37fc63` | APPROVE | APPROVE | Sin bloqueantes; las dos revisiones señalan que un secreto corto queda visible sin aviso, y Spec, que faltaban dos tests en la fila de trazabilidad |
-| 4 | `bcdb773` | PENDING | PENDING | — |
+| 4 | `bcdb773` | APPROVE | APPROVE | Sin bloqueantes. Tres notas aceptadas sin aplicar (ver abajo) |
 
 ### Hallazgos de la ronda 1 y su corrección
 
@@ -550,3 +550,15 @@ Además, la VC01 de la ronda 2 encontró el `+52` codificado en URL sin enmascar
    - Se eligió el aviso en lugar de rechazar la configuración (propuesta de Spec) para no romper una base local sin contraseña o con una contraseña corta. El README pide secretos más largos.
    - **Red:** `test_a_configured_secret_too_short_to_redact_is_named_without_its_value` falló con `assert 0 == 1` antes del cambio.
 2. **Faltaban dos tests en la fila de trazabilidad de TC01** (Spec) → añadidos, con el test del aviso.
+
+### Notas de la ronda 4, aceptadas sin aplicar
+
+Las dos revisiones aprobaron `bcdb773`. Las tres notas restantes son cosméticas o teóricas y se registran sin abrir otra ronda:
+
+1. **Nombre del ajuste** (Standards): el aviso dice «The database password» mientras los demás nombran la variable de entorno. Es solo redacción; el aviso nunca muestra el valor.
+2. **Duplicación en el test del aviso** (Standards): repite la preparación del fixture `log_stream` en línea. No cambia lo que se prueba.
+3. **`whsec_` corto** (Spec): solo se mide la longitud del valor completo. Un `TAPPY_PEY_WEBHOOK_SECRET` como `whsec_abc` dejaría `abc` sin redactar y sin aviso. Los secretos reales de webhook son cadenas base64 largas, así que es teórico.
+
+## Estado final
+
+Standards y Spec: **APPROVE** sobre `bcdb773` (evidencia `05d4230`). AC 3/3 = 100 %, VC01 PASS y todos los checks en verde.

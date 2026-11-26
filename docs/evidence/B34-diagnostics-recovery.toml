@@ -7,8 +7,8 @@ modality = "comparison"
 evidence = "docs/evidence/B34-diagnostics-recovery.md#b34-vc01--respuestas-logs-y-comandos"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
