@@ -58,6 +58,6 @@ def create_app(
     for router in API_ROUTERS:
         app.include_router(router, max_body_size=settings.api_max_body_bytes)
     app.include_router(webhooks_router.router)
-    app.include_router(reset_page.router)
+    app.include_router(reset_page.router, max_body_size=settings.api_max_body_bytes)
     mount_admin(app, settings, database, app.state.clock, app.state.recovery)
     return app

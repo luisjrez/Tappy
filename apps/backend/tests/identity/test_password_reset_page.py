@@ -136,6 +136,17 @@ def test_oversized_form_fields_are_rejected(client: TestClient, settings: Settin
     assert "x" * 300 not in response.text
 
 
+def test_an_oversized_form_body_is_refused_before_it_is_read(
+    client: TestClient, settings: Settings
+) -> None:
+    response = client.post(
+        "/password-reset",
+        data={"token": "x", "new_password": "y" * (settings.api_max_body_bytes + 1)},
+    )
+
+    assert response.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+
+
 @pytest.mark.parametrize("origin", ["null", "https://evil.example"])
 def test_null_or_foreign_origin_is_rejected(
     client: TestClient, settings: Settings, migrated_database_url: str, origin: str
