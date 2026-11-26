@@ -1,0 +1,59 @@
+ticket = "B36"
+revision = "669f3da"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B36-phone-request.md#b36-vc01--api-celular"
+
+[review]
+standards = "PENDING"
+spec = "PENDING"
+pending_findings = 0
+
+[[criteria]]
+id = "B36-AC01"
+use_cases = ["B36-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B36-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_phone_requests.py::test_a_consented_number_creates_a_pending_request_that_keeps_the_provider_ids",
+    "tests/sales/test_phone_requests.py::test_the_simulated_provider_creates_a_marked_pending_request",
+    "tests/sales/test_phone_requests.py::test_a_phone_number_is_normalized_to_ten_digits",
+]
+
+[[criteria]]
+id = "B36-AC02"
+use_cases = ["B36-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B36-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_phone_requests.py::test_an_invalid_number_is_rejected_without_an_attempt_or_a_provider_request",
+    "tests/sales/test_phone_requests.py::test_the_number_is_required_for_phone_requests_and_refused_for_qr",
+    "tests/sales/test_phone_requests.py::test_a_number_outside_the_demo_list_is_refused_without_a_provider_request",
+    "tests/sales/test_phone_requests.py::test_phone_requests_stay_disabled_until_numbers_are_configured",
+    "tests/sales/test_phone_requests.py::test_a_malformed_phone_number_is_refused",
+    "tests/sales/test_phone_requests.py::test_the_demo_list_only_accepts_ten_digit_numbers",
+    "tests/sales/test_phone_requests.py::test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider",
+]
+
+[[criteria]]
+id = "B36-AC03"
+use_cases = ["B36-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B36-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_phone_requests.py::test_a_lost_provider_answer_keeps_one_verifying_attempt_and_the_retry_does_not_resend",
+    "tests/sales/test_phone_requests.py::test_a_server_error_or_an_unusable_answer_keeps_the_request_verifying",
+    "tests/sales/test_phone_requests.py::test_a_definitive_rejection_fails_the_phone_request_with_its_code",
+    "tests/sales/test_phone_requests.py::test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint",
+]
