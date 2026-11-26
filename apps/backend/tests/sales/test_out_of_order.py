@@ -117,6 +117,9 @@ class EarlyPaymentProvider:
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
         return []
 
+    def phone_payments(self, provider_request_id: str) -> list[QrPayment]:
+        return []
+
 
 def client_with(database_url: str, provider: EarlyPaymentProvider) -> TestClient:
     return start_client(settings_for(database_url), database_url, provider)

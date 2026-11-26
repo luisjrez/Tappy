@@ -50,6 +50,7 @@ class QueryTarget:
     provider_request_id: str
     receiver_account: str
     expired: bool
+    method: AttemptMethod
 
 
 @dataclass(frozen=True)
@@ -69,11 +70,7 @@ def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> Qu
     attempt = db.get(PaymentAttempt, attempt_id)
     if attempt is None:
         raise AttemptNotFoundError
-    if (
-        attempt.method is not AttemptMethod.QR
-        or attempt.provider_request_id is None
-        or attempt.provider is not provider.name
-    ):
+    if attempt.provider_request_id is None or attempt.provider is not provider.name:
         return None
     return QueryTarget(
         attempt.id,
@@ -81,6 +78,7 @@ def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> Qu
         attempt.provider_request_id,
         attempt.receiver_account,
         attempt.status is AttemptStatus.EXPIRED,
+        attempt.method,
     )
 
 
@@ -183,10 +181,14 @@ def reconcile_attempt(
         if target is None:
             return report_for(db, attempt_id, [], ReconciliationResult.NOT_QUERYABLE)
     try:
-        payments = provider.qr_payments(target.provider_request_id)
+        payments = (
+            provider.phone_payments(target.provider_request_id)
+            if target.method is AttemptMethod.PHONE
+            else provider.qr_payments(target.provider_request_id)
+        )
     except PaymentsQueryError as error:
         logger.warning(
-            "QR payments query for attempt %s failed (%s); payment stays unconfirmed",
+            "Payments query for attempt %s failed (%s); payment stays unconfirmed",
             attempt_id,
             error.problem,
         )

@@ -33,7 +33,7 @@ from tests.sales.support import (
     ready_merchant,
     start_client,
 )
-from tests.support import VALID_SECRET, build_settings, execute, run_sales, scalar
+from tests.support import VALID_SECRET, build_settings, execute, scalar
 
 CONSENTED = "5512345678"
 OTHER_CONSENTED = "5587650000"
@@ -343,21 +343,6 @@ def test_the_demo_list_only_accepts_ten_digit_numbers() -> None:
         demo_list_settings("test", "5512345678,551234")
 
 
-@pytest.mark.parametrize("environment", ["local", "integration", "production"])
-def test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified(
-    environment: str,
-) -> None:
-    with pytest.raises(ValidationError, match="until phone payments can be verified"):
-        demo_list_settings(environment, CONSENTED)
-
-    assert demo_list_settings(environment, "").phone_request_numbers == frozenset()
-
-
-def test_phone_requests_stay_off_the_real_provider_until_verifiable() -> None:
-    with pytest.raises(ValidationError, match="until phone payments can be verified"):
-        demo_list_settings("test", CONSENTED, provider="pey")
-
-
 def test_a_list_built_in_code_is_held_to_the_same_ten_digit_rule() -> None:
     assert phone_list(frozenset({CONSENTED})) == frozenset({CONSENTED})
     with pytest.raises(ValueError, match="exactly 10 digits"):
@@ -371,6 +356,7 @@ def test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint(
     created = request_phone(
         client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED}
     ).json()
+    fake.pages = [(200, {"id": created["provider_request_id"], "status": "PENDING"})]
     database = Database.from_settings(build_settings(database_url=migrated_database_url))
     try:
         report = reconcile_attempt(
@@ -379,8 +365,10 @@ def test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint(
     finally:
         database.dispose()
 
-    assert report.result is ReconciliationResult.NOT_QUERYABLE
-    assert fake.queries() == []
+    assert report.result is ReconciliationResult.NO_EVIDENCE
+    assert [request.url.path for request in fake.queries()] == [
+        f"/transaction/{created['provider_request_id']}"
+    ]
 
 
 def test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider(
@@ -428,30 +416,6 @@ def test_the_number_is_only_kept_behind_a_keyed_fingerprint(
         )
         == 0
     )
-
-
-def test_an_expired_phone_request_blocks_new_attempts_until_payments_can_be_verified(
-    client: TestClient, migrated_database_url: str
-) -> None:
-    sale, operator = open_sale(client, migrated_database_url)
-    request_phone(client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED})
-    execute(
-        migrated_database_url,
-        "UPDATE payment_attempts SET expires_at = now() - interval '1 minute'",
-    )
-
-    expired = client.get(f"/sales/{sale['id']}", headers=operator).json()
-    batch = run_sales(migrated_database_url, "run-jobs")
-    retried = request_phone(client, operator, sale["id"], {"method": "qr"})
-
-    assert [(item["status"], item["next_action"]) for item in expired["attempts"]] == [
-        ("expired", "verify_before_retry")
-    ]
-    assert "exhausted: 1" in batch.stdout
-    assert retried.status_code == HTTPStatus.CONFLICT
-    assert retried.json() == {
-        "detail": "The previous attempt expired; verify it before creating another"
-    }
 
 
 def test_a_withdrawn_phone_request_asks_for_no_action(

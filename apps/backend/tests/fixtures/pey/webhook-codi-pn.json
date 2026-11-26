@@ -1,0 +1,37 @@
+{
+ "source": "https://docs.pey.mx/docs/webhooks/codi/pn/",
+ "retrieved": "2026-11-26",
+ "event": "codi.pn.payment_received",
+ "field_types": {
+  "amount": "number",
+  "apiKeyId": "string",
+  "bankAccountId": "string",
+  "concept": "string",
+  "datePaid": "number",
+  "metadata": "object",
+  "numRef": "string",
+  "transactionId": "string",
+  "type": "codi.pn.payment_received"
+ },
+ "example": {
+  "amount": 100,
+  "apiKeyId": "01M3QMMR6X9CBVDY1SF3G8QWNW",
+  "bankAccountId": "01JBAVWE4NS5TGXHWGMX3KH23Q",
+  "concept": "(dev) Order 45",
+  "datePaid": 1790724758,
+  "metadata": {
+   "clabe": "000000000000000000",
+   "bankCode": 40012,
+   "accountType": 40,
+   "description": "(dev) Order 45",
+   "trackingKey": "0192191042",
+   "externalMetadata": {
+    "orderId": "12345",
+    "customerEmail": "customer@example.com"
+   }
+  },
+  "numRef": "4567",
+  "transactionId": "01M3QR5E7XHXMNZDEPFH3JAWS0",
+  "type": "codi.pn.payment_received"
+ }
+}

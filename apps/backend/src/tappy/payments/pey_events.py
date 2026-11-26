@@ -6,6 +6,8 @@ from decimal import Decimal
 from tappy.payments.provider import PaymentEvidence, ProviderName
 
 QR_PAYMENT_RECEIVED = "codi.qr.payment_received"
+PHONE_PAYMENT_RECEIVED = "codi.pn.payment_received"
+REQUEST_ID_FIELDS = {QR_PAYMENT_RECEIVED: "codiQrId", PHONE_PAYMENT_RECEIVED: "transactionId"}
 CENTS_PER_PESO = Decimal(100)
 TEXT_MAX_LENGTH = 64
 
@@ -55,12 +57,12 @@ def evidence_from_pey(body: bytes, environment: str) -> PaymentEvidence | None:
         event = json.loads(body, parse_float=Decimal)
     except ValueError:
         return None
-    if not isinstance(event, dict) or event.get("type") != QR_PAYMENT_RECEIVED:
+    if not isinstance(event, dict) or event.get("type") not in REQUEST_ID_FIELDS:
         return None
     return PaymentEvidence(
         provider=ProviderName.PEY,
         environment=environment,
-        provider_request_id=text(event.get("codiQrId")),
+        provider_request_id=text(event.get(REQUEST_ID_FIELDS[event["type"]])),
         attempt_id=attempt_reference(event.get("metadata")),
         provider_transaction_id=text(event.get("transactionId")),
         amount_cents=cents(event.get("amount")),

@@ -19,11 +19,6 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from tappy.platform.phones import phone_list
 
 ENV_PREFIX = "TAPPY_"
-TEST_ENVIRONMENT = "test"
-PHONE_REQUESTS_UNVERIFIABLE = (
-    "TAPPY_PHONE_REQUEST_NUMBERS is only accepted in the test environment with the simulated "
-    "provider until phone payments can be verified"
-)
 PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
 PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
 PROVIDER_TIMEOUT_PHASES = 4
@@ -94,14 +89,6 @@ class Settings(BaseSettings):
     @classmethod
     def ten_digit_phone_numbers(cls, raw: str | frozenset[str]) -> frozenset[str]:
         return phone_list(raw)
-
-    @model_validator(mode="after")
-    def phone_requests_wait_for_verification(self) -> Self:
-        if self.phone_request_numbers and (
-            self.environment != TEST_ENVIRONMENT or self.payment_provider != "simulated"
-        ):
-            raise ValueError(PHONE_REQUESTS_UNVERIFIABLE)
-        return self
 
     @property
     def quota_window(self) -> timedelta:

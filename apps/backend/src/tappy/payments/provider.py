@@ -39,7 +39,7 @@ class QueryProblem(StrEnum):
 
 class PaymentsQueryError(Exception):
     def __init__(self, problem: QueryProblem, retry_after: timedelta | None = None) -> None:
-        super().__init__(f"QR payments query failed: {problem}")
+        super().__init__(f"Payments query failed: {problem}")
         self.problem = problem
         self.retry_after = retry_after
 
@@ -103,6 +103,8 @@ class QrProvider(Protocol):
     def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest: ...
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]: ...
+
+    def phone_payments(self, provider_request_id: str) -> list[QrPayment]: ...
 
 
 @dataclass(frozen=True)

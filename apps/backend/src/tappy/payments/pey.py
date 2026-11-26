@@ -140,27 +140,38 @@ def retry_after(response: httpx2.Response) -> timedelta | None:
     return timedelta(seconds=min(int(value), MAX_RETRY_AFTER_SECONDS))
 
 
-def query_page(response: httpx2.Response) -> QueryPage:
+def answered_json(response: httpx2.Response) -> object:
     if response.status_code != httpx2.codes.OK:
         problem = QUERY_PROBLEMS.get(response.status_code, QueryProblem.SERVER_ERROR)
         raise PaymentsQueryError(problem, retry_after(response))
     try:
-        return QueryPage.model_validate(json.loads(response.content, parse_float=Decimal))
+        return json.loads(response.content, parse_float=Decimal)
     except ValueError:
         raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
 
 
+def query_page(response: httpx2.Response) -> QueryPage:
+    try:
+        return QueryPage.model_validate(answered_json(response))
+    except ValidationError:
+        raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
+
+
+def queried_transaction(response: httpx2.Response) -> QueryItem:
+    try:
+        return QueryItem.model_validate(answered_json(response))
+    except ValidationError:
+        raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
+
+
+def paid_payment(item: QueryItem) -> QrPayment:
+    return QrPayment(
+        item.id, cents(item.amount), paid_at(item.date_paid), invalid_bank_time(item.date_paid)
+    )
+
+
 def paid_payments(page: QueryPage) -> list[QrPayment]:
-    return [
-        QrPayment(
-            item.id,
-            cents(item.amount),
-            paid_at(item.date_paid),
-            invalid_bank_time(item.date_paid),
-        )
-        for item in page.items
-        if item.status == PAID
-    ]
+    return [paid_payment(item) for item in page.items if item.status == PAID]
 
 
 class PeyQrProvider:
@@ -205,6 +216,15 @@ class PeyQrProvider:
         except ProviderUnavailableError as error:
             raise PaymentsQueryError(NETWORK_PROBLEMS[error.reason]) from None
         raise PaymentsQueryError(QueryProblem.TOO_MANY_PAGES)
+
+    def phone_payments(self, provider_request_id: str) -> list[QrPayment]:
+        path = f"/transaction/{quote(provider_request_id, safe='')}"
+        try:
+            with self.client() as client:
+                item = queried_transaction(client.get(path))
+        except ProviderUnavailableError as error:
+            raise PaymentsQueryError(NETWORK_PROBLEMS[error.reason]) from None
+        return [paid_payment(item)] if item.status == PAID else []
 
     def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest:
         response = self.post("/codi/pn", push_request(order, self.settings.qr_window))
