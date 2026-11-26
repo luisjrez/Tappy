@@ -16,10 +16,10 @@ Ticket: [#42](https://github.com/luisjrez/Tappy/issues/42) · Historia: [H7 #7](
   - no cambia ninguna aserción.
 - **Base y revisiones:**
   - Base: rama B33 `9133879` ([PR #107](https://github.com/luisjrez/Tappy/pull/107)), stack #68.
-  - Candidato de la ronda 1: `c23d9bb`.
-  - Candidato de la ronda 2: `842a4e8` (correcciones de la ronda 1 en `caf9960` y `842a4e8`).
-  - Candidato de la ronda 3: `a37fc63` (sugerencias no bloqueantes de la ronda 2).
-  - Candidato de la ronda 4: `bcdb773` (aviso de secretos cortos, sugerido por las dos revisiones de la ronda 3).
+  - Candidato de la ronda 1: `3157e18`.
+  - Candidato de la ronda 2: `5731dfd` (correcciones de la ronda 1 en `cb57014` y `5731dfd`).
+  - Candidato de la ronda 3: `213ce88` (sugerencias no bloqueantes de la ronda 2).
+  - Candidato de la ronda 4: `6e97271` (aviso de secretos cortos, sugerido por las dos revisiones de la ronda 3).
 - **Entorno:** macOS, Colima + Compose (Postgres 18.6 en los contenedores; `pg_dump` y `pg_restore` se ejecutan dentro del contenedor, con la misma versión que el servidor) y Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -104,7 +104,7 @@ Decisión registrada en el README:
 
 ## TDD
 
-### Ronda 1 (`c23d9bb`)
+### Ronda 1 (`3157e18`)
 
 **Red:** los tests se escribieron antes del código.
 
@@ -154,9 +154,9 @@ M9 backlog sin arriendos vencidos: 1 failed, 6 passed in 16.92s
     test_a_runner_interrupted_after_the_restore_finishes_the_job_once_and_can_be_followed
 ```
 
-### Ronda 2 (`caf9960`, `842a4e8`): correcciones de la review
+### Ronda 2 (`cb57014`, `5731dfd`): correcciones de la review
 
-**Red sobre `c23d9bb`** con los tests nuevos y endurecidos: fallan 9.
+**Red sobre `3157e18`** con los tests nuevos y endurecidos: fallan 9.
 
 ```
 FAILED tests/test_redaction.py::test_sensitive_values_are_masked[clabe 002 180 70012345678 9.-clabe **************6789.]
@@ -176,10 +176,10 @@ FAILED tests/test_diagnostics.py::test_server_and_command_lines_go_through_the_s
   - un id de QR perdía dígitos;
   - la llave del webhook sin `whsec_` llegaba al log;
   - Uvicorn escribía con su formato propio (`INFO:     Started server process`), sin referencia ni redacción.
-- **Caracterización:** `tests/sales/test_backlog.py` y la nueva aserción de TC03 ya pasan sobre `c23d9bb`. Cubren comportamiento existente que la review pidió probar, y su eficacia se demuestra con las mutaciones M15–M19.
-- **Hallazgo de VC01:** la VC01 de esta ronda mostró que un `+52` codificado en URL (`%2B525512345678`) seguía sin enmascararse en la línea de acceso. Se añadieron 4 casos que fallaron (3 de forma codificada y 1 de `%20` antes del número) y después la corrección `842a4e8`.
+- **Caracterización:** `tests/sales/test_backlog.py` y la nueva aserción de TC03 ya pasan sobre `3157e18`. Cubren comportamiento existente que la review pidió probar, y su eficacia se demuestra con las mutaciones M15–M19.
+- **Hallazgo de VC01:** la VC01 de esta ronda mostró que un `+52` codificado en URL (`%2B525512345678`) seguía sin enmascararse en la línea de acceso. Se añadieron 4 casos que fallaron (3 de forma codificada y 1 de `%20` antes del número) y después la corrección `5731dfd`.
 
-**Mutaciones** sobre `caf9960`, con `tests/test_diagnostics.py`, `tests/test_redaction.py`, `tests/sales/test_backlog.py` y `tests/test_backup_restore.py`:
+**Mutaciones** sobre `cb57014`, con `tests/test_diagnostics.py`, `tests/test_redaction.py`, `tests/sales/test_backlog.py` y `tests/test_backup_restore.py`:
 
 ```
 M1 formato sin redactar: 3 failed, 24 passed
@@ -208,7 +208,7 @@ M19 excepciones resueltas contadas: 2 failed, 25 passed
   - M17: la semilla tenía un trabajo agotado y uno `done`, así que contar `done` daba lo mismo. Se añadió un segundo trabajo `done`.
   - Repetidas, las dos fallan (las cifras de arriba son las de la repetición).
 
-Mutaciones de la forma codificada, sobre `842a4e8`:
+Mutaciones de la forma codificada, sobre `5731dfd`:
 
 ```
 M20 sin %2B como prefijo: 3 failed, 24 passed
@@ -217,9 +217,9 @@ M22 codificacion contada como digitos: 4 failed, 23 passed
 M23 sin inicio tras %20: 1 failed, 26 passed
 ```
 
-### Ronda 3 (`a37fc63`): sugerencias no bloqueantes de la ronda 2
+### Ronda 3 (`213ce88`): sugerencias no bloqueantes de la ronda 2
 
-**Red sobre `cf004aa`** con los tests nuevos: fallan 9.
+**Red sobre `22908b7`** con los tests nuevos: fallan 9.
 
 ```
 FAILED tests/test_redaction.py::test_sensitive_values_are_masked[clabe 0021 8070 0123 4567 89-clabe **************6789]
@@ -234,7 +234,7 @@ FAILED tests/test_diagnostics.py::test_a_safe_caller_reference_is_kept_and_an_un
 9 failed, 30 passed in 6.29s
 ```
 
-**Mutaciones** sobre `a37fc63`, con `tests/test_diagnostics.py` y `tests/test_redaction.py`:
+**Mutaciones** sobre `213ce88`, con `tests/test_diagnostics.py` y `tests/test_redaction.py`:
 
 ```
 M24 sin prefijo movil 1: 2 failed, 33 passed
@@ -261,7 +261,7 @@ M30 referencia solo de digitos aceptada: 1 failed, 34 passed
 
 ## B34-VC01 — respuestas, logs y comandos
 
-Las secciones A y B son de la ronda 1 (`c23d9bb`); la sección C repite el escenario sobre el candidato de la ronda 2 (`842a4e8`) y lo compara con `c23d9bb`.
+Las secciones A y B son de la ronda 1 (`3157e18`); la sección C repite el escenario sobre el candidato de la ronda 2 (`5731dfd`) y lo compara con `3157e18`.
 
 ### A. Respuestas y logs, antes/después
 
@@ -270,7 +270,7 @@ Las secciones A y B son de la ronda 1 (`c23d9bb`); la sección C repite el escen
   - una contraseña que contiene un teléfono;
   - un `Bearer` y una CLABE en el cuerpo;
   - la contraseña de la base va en la URL de configuración.
-- **Revisiones:** mismo script en `9133879` (antes) y en `c23d9bb` (después).
+- **Revisiones:** mismo script en `9133879` (antes) y en `3157e18` (después).
 
 #### Antes (`9133879`)
 
@@ -280,7 +280,7 @@ Las secciones A y B son de la ronda 1 (`c23d9bb`); la sección C repite el escen
 
 Log: uvicorn registra `Exception in ASGI application` con la traza de `OperationalError`, sin ninguna referencia que la relacione con la respuesta. El cliente no tiene con qué reportar el error.
 
-#### Después (`c23d9bb`)
+#### Después (`3157e18`)
 
 - POST /auth/login con la base caída → 500 · X-Request-ID: `9b518d1bf6654e18a7b5409102bd3d98` · `{"detail": "Internal server error", "reference": "9b518d1bf6654e18a7b5409102bd3d98"}`
 - PUT /merchants/{id}/receiver con Bearer y CLABE, base caída → 500 · X-Request-ID: `92dda5caf13c44fb8d1ca79d07a37aad` · `{"detail": "Internal server error", "reference": "92dda5caf13c44fb8d1ca79d07a37aad"}`
@@ -387,13 +387,13 @@ open payment exceptions: 0
 
 - Trabajo: `done 2`; intento verificado: `True`; base de origen sin cambios: trabajo `pending`.
 
-### C. Ronda 2: `c23d9bb` (antes) frente a `842a4e8` (después)
+### C. Ronda 2: `3157e18` (antes) frente a `5731dfd` (después)
 
 Mismo proceso con la base caída, más una petición `GET /health?phone=%2B525512345678&clabe=002180700123456789` (valores sintéticos).
 
 #### Líneas de Uvicorn
 
-Antes (`c23d9bb`), con el formato propio de Uvicorn, sin referencia y sin redacción:
+Antes (`3157e18`), con el formato propio de Uvicorn, sin referencia y sin redacción:
 
 ```
 INFO:     Started server process [48271]
@@ -401,7 +401,7 @@ INFO:     127.0.0.1:64589 - "POST /auth/login HTTP/1.1" 500 Internal Server Erro
 INFO:     127.0.0.1:64589 - "GET /health?phone=%2B525512345678&clabe=002180700123456789 HTTP/1.1" 200 OK
 ```
 
-Después (`842a4e8`), cada línea de acceso lleva la referencia de su respuesta y la consulta sale enmascarada:
+Después (`5731dfd`), cada línea de acceso lleva la referencia de su respuesta y la consulta sale enmascarada:
 
 ```
 INFO uvicorn.error [-] Started server process [51438]
@@ -413,7 +413,7 @@ INFO uvicorn.access [vc01-caller-ref] 127.0.0.1:64854 - "GET /health HTTP/1.1" 2
 
 Apariciones de cada valor sensible en el log del servidor:
 
-| Valor sintético | `c23d9bb` | `842a4e8` |
+| Valor sintético | `3157e18` | `5731dfd` |
 | --- | --- | --- |
 | Token `Bearer` | 0 | 0 |
 | CLABE | 1 | 0 |
@@ -427,8 +427,8 @@ Las respuestas HTTP no cambian entre las dos revisiones: `500` con referencia en
 
 `python -m tappy.sales backlog` y `python -m tappy.identity show --email vc01-operador@tappy.example`, con `TAPPY_DATABASE_URL` en el puerto cerrado:
 
-- **Antes (`c23d9bb`):** exit 1 con una traza de Python sin formato (145 y 138 líneas), fuera del log y sin redacción.
-- **Después (`842a4e8`):** exit 1 con una línea de log y la traza redactada debajo:
+- **Antes (`3157e18`):** exit 1 con una traza de Python sin formato (145 y 138 líneas), fuera del log y sin redacción.
+- **Después (`5731dfd`):** exit 1 con una línea de log y la traza redactada debajo:
 
   ```
   ERROR tappy.sales.cli [-] Command backlog failed
@@ -440,7 +440,7 @@ Las respuestas HTTP no cambian entre las dos revisiones: `500` con referencia en
 
 #### Respaldo y restauración con `--single-transaction`
 
-Repetido sobre `842a4e8` con el procedimiento del README, ahora encadenado y con `--single-transaction`, en el proyecto Compose desechable `tappy-compose-a270bf8364fa`. Venta sintética `EE1FJ76YJ2`.
+Repetido sobre `5731dfd` con el procedimiento del README, ahora encadenado y con `--single-transaction`, en el proyecto Compose desechable `tappy-compose-a270bf8364fa`. Venta sintética `EE1FJ76YJ2`.
 
 - Restaurar sobre `tappy` → rechazado por `createdb` (exit 1).
 - Restaurar en `tappy_restored` → OK; `GET /ready` = 200; venta `open` y trabajo `expired pending`.
@@ -449,9 +449,9 @@ Repetido sobre `842a4e8` con el procedimiento del README, ahora encadenado y con
 - Al final: trabajo `done 2`, intento verificado y base de origen sin cambios.
 
 
-### D. Ronda 3: `a37fc63`
+### D. Ronda 3: `213ce88`
 
-Mismo script de la sección C sobre `a37fc63`, más una petición con `X-Request-ID: 5512345678`:
+Mismo script de la sección C sobre `213ce88`, más una petición con `X-Request-ID: 5512345678`:
 
 - `GET /health` con referencia de solo dígitos → 200 · `X-Request-ID: ada90acf5cd34f5c8507a0ae2c7eecb8` (se genera una nueva).
 - El resto de respuestas es igual que en la sección C, y la línea de acceso sigue enmascarando `phone=********5678&clabe=**************6789`.
@@ -464,7 +464,7 @@ Mismo script de la sección C sobre `a37fc63`, más una petición con `X-Request
   - una referencia válida del cliente se respeta;
   - no hay valores sensibles ni en la respuesta ni en el log;
   - antes no había referencia y la conexión se cortaba en la siguiente petición;
-  - en la ronda 2, las líneas de Uvicorn y los fallos de los comandos pasan por el mismo formato redactado, y la CLABE y el teléfono que `c23d9bb` dejaba en la línea de acceso desaparecen.
+  - en la ronda 2, las líneas de Uvicorn y los fallos de los comandos pasan por el mismo formato redactado, y la CLABE y el teléfono que `3157e18` dejaba en la línea de acceso desaparecen.
 - **TC02:**
   - la restauración en `tappy_restored` queda lista (`/ready` 200), con la venta y su trabajo pendiente visibles en `backlog` y `reconciliations`;
   - restaurar sobre la base en uso se rechaza;
@@ -478,7 +478,7 @@ Estado VC01: **PASS**.
 
 ## Checks
 
-`uv run python -m quality.check` sobre `bcdb773`, con `.env` exportado:
+`uv run python -m quality.check` sobre `6e97271`, con `.env` exportado:
 
 - format, lint, types (mypy strict) y hygiene: PASS;
 - migrations: PASS; sin migraciones nuevas, solo upgrade/downgrade/upgrade + `alembic check`;
@@ -486,7 +486,7 @@ Estado VC01: **PASS**.
 - api: PASS, 15 contratos sin diferencias (no registran `X-Request-ID`; ver «Aplicabilidad»);
 - evidence: B01–B33 APPROVED. B34 queda bloqueado solo porque su review está `PENDING`, que es lo esperado antes de la ronda 4.
 
-Rondas anteriores, con los mismos pasos en PASS: `c23d9bb` (ronda 1) con 583 tests `842a4e8` (ronda 2) con 608 y `a37fc63` (ronda 3) con 616.
+Rondas anteriores, con los mismos pasos en PASS: `3157e18` (ronda 1) con 583 tests `5731dfd` (ronda 2) con 608 y `213ce88` (ronda 3) con 616.
 
 ## Supresiones
 
@@ -500,17 +500,17 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
-| 1 | `c23d9bb` | REQUEST_CHANGES | REQUEST_CHANGES | Standards 5, Spec 9 (ver abajo) |
-| 2 | `842a4e8` | APPROVE | APPROVE | Sin bloqueantes; Standards 4 y Spec 4 sugerencias (ver abajo) |
-| 3 | `a37fc63` | APPROVE | APPROVE | Sin bloqueantes; las dos revisiones señalan que un secreto corto queda visible sin aviso, y Spec, que faltaban dos tests en la fila de trazabilidad |
-| 4 | `bcdb773` | APPROVE | APPROVE | Sin bloqueantes. Tres notas aceptadas sin aplicar (ver abajo) |
+| 1 | `3157e18` | REQUEST_CHANGES | REQUEST_CHANGES | Standards 5, Spec 9 (ver abajo) |
+| 2 | `5731dfd` | APPROVE | APPROVE | Sin bloqueantes; Standards 4 y Spec 4 sugerencias (ver abajo) |
+| 3 | `213ce88` | APPROVE | APPROVE | Sin bloqueantes; las dos revisiones señalan que un secreto corto queda visible sin aviso, y Spec, que faltaban dos tests en la fila de trazabilidad |
+| 4 | `6e97271` | APPROVE | APPROVE | Sin bloqueantes. Tres notas aceptadas sin aplicar (ver abajo) |
 
 ### Hallazgos de la ronda 1 y su corrección
 
 **Standards**
 
 1. Las líneas de Uvicorn saltaban la redacción (su configuración por defecto no propaga) → `log_config=None` y test con un proceso real.
-2. Las expresiones de CLABE/teléfono enmascaraban dígitos de UUID y no reconocían `+52` → reglas con límites de token, formas agrupadas y `+52`; casos unitarios en `tests/test_redaction.py` (22 en `842a4e8`, 30 en `a37fc63`).
+2. Las expresiones de CLABE/teléfono enmascaraban dígitos de UUID y no reconocían `+52` → reglas con límites de token, formas agrupadas y `+52`; casos unitarios en `tests/test_redaction.py` (22 en `5731dfd`, 30 en `213ce88`).
 3. El filtro mutaba el `LogRecord` y podía fallar en `getMessage` → `RedactingFormatter` redacta la línea ya formateada.
 4. El fixture de logs no restauraba el nivel raíz → restaurado.
 5. Prefijo del proyecto Compose ligado a persistencia → `tappy-compose-`.
@@ -526,9 +526,9 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 8. Redacción de la evidencia («15 contratos», «cada indicador…») y aserciones de la contraseña de la base y la llave del webhook → corregidas; la referencia dentro del pool de hilos la cubre el aviso del proveedor.
 9. TC03 no comprobaba que el dueño interrumpido perdiera su reclamo → `held_claim` es `None` tras la reanudación.
 
-Además, la VC01 de la ronda 2 encontró el `+52` codificado en URL sin enmascarar → corregido en `842a4e8`.
+Además, la VC01 de la ronda 2 encontró el `+52` codificado en URL sin enmascarar → corregido en `5731dfd`.
 
-### Sugerencias de la ronda 2 y su corrección (`a37fc63`)
+### Sugerencias de la ronda 2 y su corrección (`213ce88`)
 
 **Standards**
 
@@ -544,7 +544,7 @@ Además, la VC01 de la ronda 2 encontró el `+52` codificado en URL sin enmascar
 3. Formatos sin cubrir (`(55) 1234 5678`, `55.1234.5678`, CLABE `4 4 4 4 2`), y el README era más amplio que las reglas → formatos añadidos, y el README nombra exactamente las agrupaciones.
 4. Detalles desactualizados de la evidencia (número de casos y venta de TC03) → corregidos.
 
-### Sugerencias de la ronda 3 y su corrección (`bcdb773`)
+### Sugerencias de la ronda 3 y su corrección (`6e97271`)
 
 1. **Un secreto de menos de 8 caracteres queda visible sin que nadie lo note** (Standards y Spec). `configure_logging` avisa una vez por proceso, con un `WARNING` que nombra el ajuste y nunca su valor.
    - Se eligió el aviso en lugar de rechazar la configuración (propuesta de Spec) para no romper una base local sin contraseña o con una contraseña corta. El README pide secretos más largos.
@@ -553,12 +553,21 @@ Además, la VC01 de la ronda 2 encontró el `+52` codificado en URL sin enmascar
 
 ### Notas de la ronda 4, aceptadas sin aplicar
 
-Las dos revisiones aprobaron `bcdb773`. Las tres notas restantes son cosméticas o teóricas y se registran sin abrir otra ronda:
+Las dos revisiones aprobaron `6e97271`. Las tres notas restantes son cosméticas o teóricas y se registran sin abrir otra ronda:
 
 1. **Nombre del ajuste** (Standards): el aviso dice «The database password» mientras los demás nombran la variable de entorno. Es solo redacción; el aviso nunca muestra el valor.
 2. **Duplicación en el test del aviso** (Standards): repite la preparación del fixture `log_stream` en línea. No cambia lo que se prueba.
 3. **`whsec_` corto** (Spec): solo se mide la longitud del valor completo. Un `TAPPY_PEY_WEBHOOK_SECRET` como `whsec_abc` dejaría `abc` sin redactar y sin aviso. Los secretos reales de webhook son cadenas base64 largas, así que es teórico.
 
+## Historia reescrita antes del push
+
+La protección de push de GitHub rechazó la rama: el token sintético de `tests/test_diagnostics.py` (`TOKEN`) tenía el formato de una llave de prueba de Stripe. No era un secreto real, pero no se quiso marcar como excepción en el repositorio.
+
+- Las 10 confirmaciones de B34 se reescribieron con `git filter-branch --tree-filter`. El único cambio es esa línea, que ahora vale `synthetic-bearer-leak-token-0001`.
+- Mensajes y orden de las confirmaciones son los mismos. Todos los hashes de este documento ya son los nuevos.
+- Equivalencias de las revisiones revisadas: `c23d9bb`→`3157e18`, `842a4e8`→`5731dfd`, `a37fc63`→`213ce88`, `bcdb773`→`6e97271`.
+- Los tests de B34 se volvieron a ejecutar sobre la historia reescrita (ver «Estado final»).
+
 ## Estado final
 
-Standards y Spec: **APPROVE** sobre `bcdb773` (evidencia `05d4230`). AC 3/3 = 100 %, VC01 PASS y todos los checks en verde.
+Standards y Spec: **APPROVE** sobre `6e97271` (evidencia `6435c49`). AC 3/3 = 100 %, VC01 PASS y todos los checks en verde.
