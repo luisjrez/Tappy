@@ -10,7 +10,7 @@ LOCAL_PASSWORD = "synthetic-persistence-password"
 
 class ComposeProject:
     def __init__(self) -> None:
-        self.name = f"tappy-persistence-{uuid4().hex[:12]}"
+        self.name = f"tappy-compose-{uuid4().hex[:12]}"
         self.port = free_port()
         self.environment = isolated_environment(
             {

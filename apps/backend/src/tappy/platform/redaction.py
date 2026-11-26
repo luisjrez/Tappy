@@ -6,12 +6,18 @@ VISIBLE_DIGITS = 4
 BEARER = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
 WEBHOOK_SECRET = re.compile(r"\bwhsec_[A-Za-z0-9+/=]+")
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-CLABE = re.compile(r"(?<!\d)\d{18}(?!\d)")
-PHONE = re.compile(r"(?<!\d)\d{10}(?!\d)")
+ALONE_BEFORE = r"(?<![\w+-])"
+ALONE_AFTER = r"(?![\w-])"
+CLABE = re.compile(ALONE_BEFORE + r"(?:\d{18}|\d{3} \d{3} \d{11} \d)" + ALONE_AFTER)
+PHONE = re.compile(
+    ALONE_BEFORE
+    + r"(?:\+?52[ -]?)?(?:\d{10}|\d{2}[ -]\d{4}[ -]\d{4}|\d{3}[ -]\d{3}[ -]\d{4})"
+    + ALONE_AFTER
+)
 
 
 def masked_digits(match: re.Match[str]) -> str:
-    digits = match.group()
+    digits = re.sub(r"\D", "", match.group())
     return "*" * (len(digits) - VISIBLE_DIGITS) + digits[-VISIBLE_DIGITS:]
 
 

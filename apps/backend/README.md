@@ -162,12 +162,13 @@ Quotas are counted in Postgres (`operation_quotas`), so they hold across process
 
 - Every HTTP response carries an `X-Request-ID` header. A caller may send its own (8–64 letters, digits, `-` or `_`); anything else is replaced by a generated 32-character reference.
 - An unexpected error answers `500` with `{"detail": "Internal server error", "reference": "<X-Request-ID>"}` and logs `Unhandled error in <method> <route template>` with the traceback under the same reference, so a user's report can be matched to the log line. Expected errors keep their own status and `detail`.
-- `python -m tappy` and `python -m tappy.sales` log to stderr as `time level logger [reference] message` (`-` outside a request). Every line, traceback included, is redacted before it is written:
+- `python -m tappy` (Uvicorn's own server and access lines included), `python -m tappy.sales` and `python -m tappy.identity` log to stderr as `time level logger [reference] message` (`-` outside a request). Every line, traceback included, is redacted before it is written:
   - the configured secrets (`TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` and the database password) become `[redacted]`, and so do `Bearer` tokens and `whsec_` keys;
-  - 18-digit CLABEs and 10-digit phone numbers keep only their last four digits (`**************6789`, `******5678`);
+  - CLABEs (18 digits, optionally grouped `3 3 11 1`) and Mexican phone numbers (10 digits, optionally grouped or prefixed with `52`/`+52`) keep only their last four digits (`**************6789`, `******5678`); digits inside longer identifiers (UUIDs, digests, ids) are left alone;
   - email addresses become `[email]`.
+- A command that fails unexpectedly logs `Command <name> failed` with the redacted traceback and exits `1`.
 - Each reconciliation job logs `Reconciliation job <id> for sale <reference> (attempt <id>): <outcome>`, so a sale reference can be followed through `run-jobs`.
-- Stored webhook bodies (`webhook_events.payload`, `webhook_event_conflicts.payload`) may contain payer data from pey's `metadata` (originating CLABE, tracking key, external metadata). They are evidence of a reception. They are never logged, never returned by the API or the back office, and are readable only with direct database access. The commands diagnose with event ids, digests, types and statuses only. How long they are kept and when they are purged or minimized is still a pending product decision; until then they are kept.
+- Stored webhook bodies (`webhook_events.payload`, `webhook_event_conflicts.payload`) may contain payer data from pey's `metadata` (originating CLABE, tracking key, external metadata). They are evidence of a reception. They are never logged, never returned by the API or the back office, and are readable only with direct database access. The commands diagnose with event ids, digests, types and statuses only. How long they are kept and when they are purged or minimized is a pending product decision ([#109](https://github.com/luisjrez/Tappy/issues/109)); until then they are kept.
 
 ### Backlog
 
@@ -180,16 +181,17 @@ Quotas are counted in Postgres (`operation_quotas`), so they hold across process
 - `attempts creating longer than TAPPY_ATTEMPT_CREATION_TIMEOUT_SECONDS`;
 - `open payment exceptions`.
 
-Each count with something waiting shows how long the oldest item has waited, in seconds. `reconciliations` lists the open jobs with their sale reference, and `run-jobs` resumes them.
+Received events, due jobs and stalled creations also show how long their oldest item has waited, in seconds. `reconciliations` lists the open jobs with their sale reference, and `run-jobs` resumes them.
 
 ### Backup and restore
 
-Back up with the server's own `pg_dump` (the custom format keeps the schema, the Alembic version and every row, pending jobs and stored events included). Always restore into a **new** database: `createdb` refuses a name that already exists, so a restore never overwrites the running database.
+Back up with the server's own `pg_dump` (the custom format keeps the schema, the Alembic version and every row, pending jobs and stored events included). Always restore into a **new** database: `createdb` refuses a name that already exists, so a restore never overwrites the running database. Each step runs only if the previous one succeeded, and `--single-transaction` leaves the new database empty if the restore fails halfway.
 
 ```sh
-docker compose exec -T db pg_dump --format=custom --no-owner -U tappy -d tappy > tappy.dump
-docker compose exec -T db createdb -U tappy tappy_restored
-docker compose exec -T db pg_restore --no-owner --exit-on-error -U tappy -d tappy_restored < tappy.dump
+docker compose exec -T db pg_dump --format=custom --no-owner -U tappy -d tappy > tappy.dump \
+  && docker compose exec -T db createdb -U tappy tappy_restored \
+  && docker compose exec -T db pg_restore --no-owner --exit-on-error --single-transaction \
+    -U tappy -d tappy_restored < tappy.dump
 ```
 
 Then point a process at the restored database (`TAPPY_DATABASE_URL=…/tappy_restored`) and check it:

@@ -66,30 +66,27 @@ class RequestReference:
             current_reference.reset(token)
 
 
-class RedactingFilter(logging.Filter):
-    def __init__(self, secrets: tuple[str, ...]) -> None:
-        super().__init__()
-        self.secrets = secrets
-
+class ReferenceFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.reference = current_reference.get()
-        record.msg = redact(record.getMessage(), self.secrets)
-        record.args = None
-        if record.exc_info:
-            record.exc_text = redact(
-                logging.Formatter().formatException(record.exc_info), self.secrets
-            )
         return True
+
+
+class RedactingFormatter(logging.Formatter):
+    def __init__(self, secrets: tuple[str, ...]) -> None:
+        super().__init__(LOG_FORMAT)
+        self.secrets = secrets
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact(super().format(record), self.secrets)
 
 
 def configured_secrets(settings: Settings) -> tuple[str, ...]:
     values = [settings.secret_key, settings.pey_api_key, settings.pey_webhook_secret]
+    revealed = [value.get_secret_value() for value in values if value]
     password = make_url(settings.database_url.get_secret_value()).password
-    return tuple(
-        secret
-        for secret in [*(value.get_secret_value() for value in values if value), password]
-        if secret
-    )
+    bare = [secret.removeprefix("whsec_") for secret in revealed]
+    return tuple(secret for secret in dict.fromkeys([*revealed, *bare, password]) if secret)
 
 
 def configure_logging(settings: Settings, stream: TextIO | None = None) -> logging.Handler:
@@ -98,8 +95,8 @@ def configure_logging(settings: Settings, stream: TextIO | None = None) -> loggi
         root.removeHandler(existing)
     handler = logging.StreamHandler(stream)
     handler.set_name(HANDLER_NAME)
-    handler.setFormatter(logging.Formatter(LOG_FORMAT))
-    handler.addFilter(RedactingFilter(configured_secrets(settings)))
+    handler.setFormatter(RedactingFormatter(configured_secrets(settings)))
+    handler.addFilter(ReferenceFilter())
     root.addHandler(handler)
     root.setLevel(logging.INFO)
     return handler

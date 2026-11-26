@@ -4,6 +4,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
+from typing import IO
 
 import pytest
 from pydantic import SecretStr
@@ -49,12 +50,14 @@ def run_tappy(environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def spawn_tappy(environment: dict[str, str]) -> subprocess.Popen[bytes]:
+def spawn_tappy(
+    environment: dict[str, str], stderr: IO[bytes] | int = subprocess.DEVNULL
+) -> subprocess.Popen[bytes]:
     return subprocess.Popen(
         TAPPY_COMMAND,
         env=isolated_environment(environment),
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=stderr,
     )
 
 

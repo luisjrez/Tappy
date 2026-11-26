@@ -1,4 +1,5 @@
 import argparse
+import logging
 import sys
 import uuid
 from collections.abc import Callable, Sequence
@@ -23,6 +24,7 @@ from tappy.sales.reconciliation import (
 )
 
 Handler = Callable[[Database, Settings, argparse.Namespace], str]
+logger = logging.getLogger(__name__)
 
 
 def describe(job: OpenReconciliation) -> str:
@@ -237,6 +239,9 @@ def main(arguments: Sequence[str]) -> int:
         print(command(database, settings, options))
     except AttemptNotFoundError as error:
         print(error, file=sys.stderr)
+        return 1
+    except Exception:
+        logger.exception("Command %s failed", options.command)
         return 1
     finally:
         database.dispose()

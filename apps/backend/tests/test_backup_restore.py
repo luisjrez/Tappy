@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from tappy.main import create_app
 from tappy.platform.database import Database
 from tappy.platform.schema import upgrade_to_head
-from tappy.sales.jobs import JobPolicy, claim_jobs
+from tappy.sales.jobs import ClaimedJob, JobPolicy, claim_jobs, held_claim
 from tests.compose_support import ComposeProject
 from tests.sales.support import (
     AMOUNT,
@@ -73,6 +73,7 @@ def restore(project: ComposeProject, dump: bytes, name: str) -> str:
         "pg_restore",
         "--no-owner",
         "--exit-on-error",
+        "--single-transaction",
         "-U",
         "tappy",
         "-d",
@@ -85,6 +86,15 @@ def restore(project: ComposeProject, dump: bytes, name: str) -> str:
 def readiness(database_url: str) -> int:
     with TestClient(create_app(build_settings(database_url=database_url))) as client:
         return client.get("/ready").status_code
+
+
+def still_held(database_url: str, job: ClaimedJob) -> bool:
+    database = Database.from_settings(build_settings(database_url=database_url))
+    try:
+        with database.transaction() as db:
+            return held_claim(db, job) is not None
+    finally:
+        database.dispose()
 
 
 def line_of(output: str, prefix: str) -> str:
@@ -145,6 +155,7 @@ def test_a_runner_interrupted_after_the_restore_finishes_the_job_once_and_can_be
     after = run_sales(restored, "backlog")
 
     assert len(interrupted) == 1
+    assert still_held(restored, interrupted[0]) is False
     assert line_of(before.stdout, "leased reconciliation jobs:") == (
         "leased reconciliation jobs: 1 (1 with an expired lease)"
     )

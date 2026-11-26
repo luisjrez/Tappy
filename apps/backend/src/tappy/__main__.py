@@ -12,4 +12,4 @@ except ConfigurationError as error:
     sys.exit(str(error))
 
 configure_logging(settings)
-uvicorn.run(create_app(settings), host=settings.host, port=settings.port)
+uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_config=None)
