@@ -7,11 +7,14 @@ from sqlalchemy.orm import Session
 from tappy.identity.errors import IdentityNotFoundError
 from tappy.identity.lifecycle import deactivate_and_revoke
 from tappy.identity.models import Identity, Role
+from tappy.identity.passwords import PasswordPolicy
 from tappy.identity.provisioning import IdentitySummary, provision_identity
 
 
-def create_operator(db: Session, email: str, initial_password: str) -> IdentitySummary:
-    return provision_identity(db, email, initial_password, Role.OPERATOR)
+def create_operator(
+    db: Session, email: str, initial_password: str, policy: PasswordPolicy
+) -> IdentitySummary:
+    return provision_identity(db, email, initial_password, Role.OPERATOR, policy)
 
 
 def list_operators(db: Session) -> list[IdentitySummary]:

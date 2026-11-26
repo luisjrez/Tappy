@@ -10,6 +10,7 @@ from starlette_admin.views import CustomView
 
 from tappy.identity.errors import IdentityError
 from tappy.identity.operators import create_operator, deactivate_operator, list_operators
+from tappy.identity.passwords import PasswordPolicy
 from tappy.identity.provisioning import IdentitySummary
 from tappy.platform.clock import Clock
 from tappy.platform.database import Database
@@ -22,10 +23,13 @@ class OperatorsView(CustomView):
     icon = "fa fa-users"
     path = OPERATORS_PATH
 
-    def __init__(self, database: Database, clock: Clock, admin_base_url: str) -> None:
+    def __init__(
+        self, database: Database, clock: Clock, admin_base_url: str, policy: PasswordPolicy
+    ) -> None:
         super().__init__()
         self.database = database
         self.clock = clock
+        self.policy = policy
         self.operators_url = f"{admin_base_url}{OPERATORS_PATH}"
 
     def operators(self) -> list[IdentitySummary]:
@@ -34,7 +38,7 @@ class OperatorsView(CustomView):
 
     def register(self, email: str, initial_password: str) -> IdentitySummary:
         with self.database.transaction() as db:
-            return create_operator(db, email, initial_password)
+            return create_operator(db, email, initial_password, self.policy)
 
     def retire(self, reference: uuid.UUID) -> IdentitySummary:
         with self.database.transaction() as db:

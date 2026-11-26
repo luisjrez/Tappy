@@ -5,7 +5,14 @@ from datetime import timedelta
 from typing import Annotated, Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
+from pydantic import (
+    Field,
+    SecretStr,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -46,6 +53,8 @@ class Settings(BaseSettings):
     admin_secure_cookies: bool = True
     public_base_url: str = Field(default="http://127.0.0.1:8000", pattern=r"^https?://[^/?#]+$")
     password_reset_ttl_seconds: int = Field(default=1800, ge=300)
+    password_min_length: int = Field(default=12, ge=8, le=128)
+    password_max_length: int = Field(default=128, ge=12, le=1024)
     recovery_limit_per_email: int = Field(default=3, ge=1)
     recovery_limit_per_origin: int = Field(default=10, ge=1)
     recovery_window_seconds: int = Field(default=3600, ge=60)
@@ -159,6 +168,14 @@ class Settings(BaseSettings):
                 "TAPPY_JOB_BACKOFF_MAX_SECONDS must be at least TAPPY_JOB_BACKOFF_SECONDS"
             )
         return self
+
+    @field_validator("password_max_length")
+    @classmethod
+    def password_bounds_are_consistent(cls, maximum: int, info: ValidationInfo) -> int:
+        minimum = info.data.get("password_min_length")
+        if isinstance(minimum, int) and minimum > maximum:
+            raise ValueError("must not be lower than TAPPY_PASSWORD_MIN_LENGTH")
+        return maximum
 
 
 class ConfigurationError(Exception):

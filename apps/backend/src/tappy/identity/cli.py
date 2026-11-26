@@ -3,9 +3,11 @@ import getpass
 import logging
 import sys
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from tappy.identity.errors import IdentityError, PasswordPolicyError
 from tappy.identity.lifecycle import deactivate_identity
+from tappy.identity.passwords import PasswordPolicy
 from tappy.identity.provisioning import (
     IdentitySummary,
     find_identity,
@@ -17,7 +19,14 @@ from tappy.platform.config import ConfigurationError, load_settings
 from tappy.platform.database import Database
 from tappy.platform.diagnostics import configure_logging
 
-Handler = Callable[[Database, str], str]
+
+@dataclass(frozen=True)
+class CommandContext:
+    database: Database
+    policy: PasswordPolicy
+
+
+Handler = Callable[[CommandContext, str], str]
 logger = logging.getLogger(__name__)
 
 
@@ -41,22 +50,22 @@ def describe(summary: IdentitySummary) -> str:
     )
 
 
-def bootstrap_admin(database: Database, email: str) -> str:
+def bootstrap_admin(context: CommandContext, email: str) -> str:
     normalized_email = normalize_email(email)
     password = read_password()
-    with database.transaction() as session:
-        summary = provision_admin(session, normalized_email, password)
+    with context.database.transaction() as session:
+        summary = provision_admin(session, normalized_email, password, context.policy)
     return "Administrator provisioned\n" + describe(summary)
 
 
-def deactivate(database: Database, email: str) -> str:
-    with database.transaction() as session:
+def deactivate(context: CommandContext, email: str) -> str:
+    with context.database.transaction() as session:
         summary = deactivate_identity(session, email, SystemClock().now())
     return "Identity deactivated; its sessions were revoked\n" + describe(summary)
 
 
-def show(database: Database, email: str) -> str:
-    with database.transaction() as session:
+def show(context: CommandContext, email: str) -> str:
+    with context.database.transaction() as session:
         return describe(find_identity(session, email))
 
 
@@ -88,7 +97,9 @@ def main(arguments: Sequence[str]) -> int:
     configure_logging(settings)
     database = Database.from_settings(settings)
     try:
-        print(handler(database, options.email))
+        print(
+            handler(CommandContext(database, PasswordPolicy.from_settings(settings)), options.email)
+        )
     except IdentityError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

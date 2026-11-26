@@ -173,6 +173,7 @@ def test_there_is_no_public_sign_up_route(client: TestClient) -> None:
         "/auth/refresh",
         "/auth/logout",
         "/auth/password-reset/request",
+        "/auth/password-reset/confirm",
         "/operators",
         "/operators/{reference}/deactivate",
         "/merchants",

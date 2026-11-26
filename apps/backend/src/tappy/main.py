@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from tappy.backoffice.admin import mount_admin
-from tappy.identity import operators_router
+from tappy.identity import operators_router, reset_page
 from tappy.identity import router as identity_router
 from tappy.identity.recovery import RecoveryService
 from tappy.merchants import router as merchants_router
@@ -58,5 +58,6 @@ def create_app(
     for router in API_ROUTERS:
         app.include_router(router, max_body_size=settings.api_max_body_bytes)
     app.include_router(webhooks_router.router)
+    app.include_router(reset_page.router, max_body_size=settings.api_max_body_bytes)
     mount_admin(app, settings, database, app.state.clock, app.state.recovery)
     return app

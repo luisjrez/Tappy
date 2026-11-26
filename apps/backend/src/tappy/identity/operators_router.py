@@ -16,8 +16,9 @@ from tappy.identity.operators import (
     find_operator,
     list_operators,
 )
+from tappy.identity.passwords import PasswordPolicy
 from tappy.identity.schemas import IdentityResponse, OperatorCreateRequest
-from tappy.platform.dependencies import ClockDependency, SessionDependency
+from tappy.platform.dependencies import ClockDependency, SessionDependency, SettingsDependency
 
 router = APIRouter(
     prefix="/operators",
@@ -45,9 +46,13 @@ def not_found(error: IdentityNotFoundError) -> HTTPException:
         HTTPStatus.UNPROCESSABLE_CONTENT: {"description": "Invalid email or password policy"},
     },
 )
-def create(payload: OperatorCreateRequest, db: SessionDependency) -> IdentityResponse:
+def create(
+    payload: OperatorCreateRequest, db: SessionDependency, settings: SettingsDependency
+) -> IdentityResponse:
     try:
-        operator = create_operator(db, payload.email, payload.initial_password)
+        operator = create_operator(
+            db, payload.email, payload.initial_password, PasswordPolicy.from_settings(settings)
+        )
     except IdentityAlreadyExistsError as error:
         raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(error)) from None
     except (InvalidEmailError, PasswordPolicyError) as error:

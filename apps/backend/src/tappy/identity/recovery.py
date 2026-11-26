@@ -12,8 +12,11 @@ from sqlalchemy.orm import Session
 
 from tappy.identity.errors import InvalidEmailError
 from tappy.identity.models import Identity, IdentityStatus
-from tappy.identity.provisioning import by_email, normalize_email
+from tappy.identity.passwords import PasswordPolicy
+from tappy.identity.provisioning import IdentitySummary, by_email, normalize_email
 from tappy.identity.recovery_models import PasswordResetRequest, RecoveryAttempt, RecoveryJob
+from tappy.identity.reset import PasswordChange, confirm_password_reset
+from tappy.identity.tokens import token_digest
 from tappy.notifications.outbox import enqueue_email
 from tappy.notifications.sealing import Sealer
 from tappy.notifications.transport import Envelope
@@ -23,6 +26,11 @@ from tappy.platform.database import Database
 RESET_PATH = "/password-reset"
 SUBJECT = "Reset your Tappy password"
 RECOVERY_ACCEPTED = "If the account exists, a recovery email may be sent"
+CHANGED_SUBJECT = "Your Tappy password was changed"
+CHANGED_BODY = (
+    "The password of your Tappy account was just changed and every open session was closed.\n\n"
+    "If it was not you, contact your Tappy administrator right away."
+)
 MAXIMUM_EMAIL_LENGTH = 254
 JOB_BATCH_SIZE = 50
 
@@ -62,16 +70,28 @@ class RecoverySubmission:
 class RecoveryService:
     policy: RecoveryPolicy
     sealer: Sealer
+    password_policy: PasswordPolicy
 
     @classmethod
     def from_settings(cls, settings: Settings) -> RecoveryService:
-        return cls(RecoveryPolicy.from_settings(settings), Sealer.from_settings(settings))
+        return cls(
+            RecoveryPolicy.from_settings(settings),
+            Sealer.from_settings(settings),
+            PasswordPolicy.from_settings(settings),
+        )
 
     def submit(self, db: Session, submission: RecoverySubmission, now: datetime) -> None:
         submit_recovery(db, submission, now, self.policy, self.sealer)
 
     def process_jobs(self, database: Database, now: datetime) -> int:
         return process_recovery_jobs(database, now, self.policy, self.sealer)
+
+    def notify_password_changed(self, db: Session, identity: Identity, now: datetime) -> None:
+        enqueue_email(db, Envelope(identity.email, CHANGED_SUBJECT, CHANGED_BODY), self.sealer, now)
+
+    def confirm(self, db: Session, token: str, new_password: str, now: datetime) -> IdentitySummary:
+        change = PasswordChange(token, new_password, self.password_policy)
+        return confirm_password_reset(db, change, now, self.notify_password_changed)
 
 
 def within_limit(db: Session, digest: str, limit: int, since: datetime, now: datetime) -> bool:
@@ -127,7 +147,7 @@ def issue_reset(
     db.add(
         PasswordResetRequest(
             identity_id=identity.id,
-            token_digest=hashlib.sha256(token.encode()).hexdigest(),
+            token_digest=token_digest(token),
             created_at=now,
             expires_at=now + policy.token_lifetime,
         )

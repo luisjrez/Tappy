@@ -12,7 +12,7 @@ from tappy.identity.errors import (
     InvalidEmailError,
 )
 from tappy.identity.models import Identity, IdentityStatus, Role
-from tappy.identity.passwords import hash_password
+from tappy.identity.passwords import DEFAULT_POLICY, PasswordPolicy
 
 
 @dataclass(frozen=True)
@@ -45,17 +45,25 @@ def find_identity(session: Session, email: str) -> IdentitySummary:
     return IdentitySummary.of(identity)
 
 
-def provision_admin(session: Session, email: str, password: str) -> IdentitySummary:
-    return provision_identity(session, email, password, Role.ADMIN)
+def provision_admin(
+    session: Session, email: str, password: str, policy: PasswordPolicy = DEFAULT_POLICY
+) -> IdentitySummary:
+    return provision_identity(session, email, password, Role.ADMIN, policy)
 
 
-def provision_identity(session: Session, email: str, password: str, role: Role) -> IdentitySummary:
+def provision_identity(
+    session: Session,
+    email: str,
+    password: str,
+    role: Role,
+    policy: PasswordPolicy = DEFAULT_POLICY,
+) -> IdentitySummary:
     normalized_email = normalize_email(email)
     if session.scalar(select(Identity.id).where(by_email(normalized_email))) is not None:
         raise IdentityAlreadyExistsError
     identity = Identity(
         email=normalized_email,
-        password_hash=hash_password(password),
+        password_hash=policy.hash(password),
         role=role,
         status=IdentityStatus.ACTIVE,
     )

@@ -57,6 +57,13 @@ database = "migrated"
 body = { email = "nadie@tappy.example" }
 
 [[cases]]
+name = "password-reset-confirm-invalid"
+method = "POST"
+path = "/auth/password-reset/confirm"
+database = "migrated"
+body = { token = "unknown-token", new_password = "frase sintetica larga 2026" }
+
+[[cases]]
 name = "merchants-unauthenticated"
 method = "GET"
 path = "/merchants"
