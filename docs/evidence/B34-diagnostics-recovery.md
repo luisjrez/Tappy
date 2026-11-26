@@ -18,6 +18,7 @@ Ticket: [#42](https://github.com/luisjrez/Tappy/issues/42) · Historia: [H7 #7](
   - Base: rama B33 `9133879` ([PR #107](https://github.com/luisjrez/Tappy/pull/107)), stack #68.
   - Candidato de la ronda 1: `c23d9bb`.
   - Candidato de la ronda 2: `842a4e8` (correcciones de la ronda 1 en `caf9960` y `842a4e8`).
+  - Candidato de la ronda 3: `a37fc63` (sugerencias no bloqueantes de la ronda 2).
 - **Entorno:** macOS, Colima + Compose (Postgres 18.6 en los contenedores; `pg_dump` y `pg_restore` se ejecutan dentro del contenedor, con la misma versión que el servidor) y Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -25,7 +26,7 @@ Ticket: [#42](https://github.com/luisjrez/Tappy/issues/42) · Historia: [H7 #7](
 ### Referencia correlacionable (`tappy.platform.diagnostics`)
 
 - **`RequestReference`** es un middleware ASGI.
-  - Toda respuesta HTTP lleva `X-Request-ID`. Se acepta la del cliente si cumple `[A-Za-z0-9_-]{8,64}`; si no, se genera una de 32 caracteres hexadecimales.
+  - Toda respuesta HTTP lleva `X-Request-ID`. Se acepta la del cliente si cumple `[A-Za-z0-9_-]{8,64}` y no es solo de dígitos (si no, la redacción podría enmascararla en el log como teléfono o CLABE); si no, se genera una de 32 caracteres hexadecimales.
   - La referencia vive en un `ContextVar`, así que también llega a los endpoints que corren en el pool de hilos.
 - **Error inesperado:**
   - El cliente recibe `500` con `{"detail": "Internal server error", "reference": …}`; nunca recibe el mensaje interno.
@@ -42,11 +43,11 @@ Ticket: [#42](https://github.com/luisjrez/Tappy/issues/42) · Historia: [H7 #7](
 
 `RedactingFormatter` redacta la línea ya formateada completa (mensaje y traza). No modifica el `LogRecord`, así que otros handlers no se ven afectados. `ReferenceFilter` solo añade la referencia.
 
-- **Secretos configurados:** `TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` (con y sin el prefijo `whsec_`) y la contraseña de la base → `[redacted]`.
+- **Secretos configurados:** `TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` (con y sin el prefijo `whsec_`) y la contraseña de la base → `[redacted]`, del más largo al más corto, para que uno contenido en otro no deje partes del mayor. Los de menos de 8 caracteres no se reemplazan: no se distinguen de palabras normales (una contraseña `tappy` borraría `tappy.sales.cli` y además revelaría cuál es). El README pide secretos más largos.
 - **Credenciales en texto:** `Bearer …` y `whsec_…` → `[redacted]`.
 - **Datos personales y bancarios:**
-  - CLABE de 18 dígitos, también agrupada `3 3 11 1` → `**************6789`;
-  - teléfono mexicano de 10 dígitos, también agrupado (`55 1234 5678`, `551-234-5678`) o con `52`/`+52` → `******5678` u `********5678`;
+  - CLABE de 18 dígitos, también agrupada `3 3 11 1` o `4 4 4 4 2` → `**************6789`;
+  - teléfono mexicano de 10 dígitos, también agrupado `2 4 4` o `3 3 4` con espacios, puntos o guiones, con la lada entre paréntesis (`(55) 1234 5678`) y con `52`, `+52` o `+52 1` → `******5678` (más asteriscos por cada dígito del prefijo);
   - las dos reglas aceptan la forma codificada en URL de una ruta registrada (`%2B52…`, `%20` entre grupos);
   - correo → `[email]`.
 - **Lo que no se toca:** dígitos dentro de identificadores más largos (UUID, digest, ids de QR o de pey, `A1234567890`), montos y fechas.
@@ -214,6 +215,39 @@ M21 sin %20 entre grupos: 1 failed, 26 passed
 M22 codificacion contada como digitos: 4 failed, 23 passed
 M23 sin inicio tras %20: 1 failed, 26 passed
 ```
+
+### Ronda 3 (`a37fc63`): sugerencias no bloqueantes de la ronda 2
+
+**Red sobre `cf004aa`** con los tests nuevos: fallan 9.
+
+```
+FAILED tests/test_redaction.py::test_sensitive_values_are_masked[clabe 0021 8070 0123 4567 89-clabe **************6789]
+FAILED tests/test_redaction.py::test_sensitive_values_are_masked[phone +5215512345678-phone *********5678]
+FAILED tests/test_redaction.py::test_sensitive_values_are_masked[phone +52 1 55 1234 5678-phone *********5678]
+FAILED tests/test_redaction.py::test_sensitive_values_are_masked[phone (55) 1234 5678-phone ******5678]
+FAILED tests/test_redaction.py::test_sensitive_values_are_masked[phone (551) 234 5678-phone ******5678]
+FAILED tests/test_redaction.py::test_sensitive_values_are_masked[phone 55.1234.5678-phone ******5678]
+FAILED tests/test_redaction.py::test_a_longer_secret_is_replaced_whole_even_when_it_contains_a_shorter_one
+FAILED tests/test_redaction.py::test_a_secret_too_short_to_tell_apart_from_ordinary_words_is_not_replaced
+FAILED tests/test_diagnostics.py::test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced
+9 failed, 30 passed in 6.29s
+```
+
+**Mutaciones** sobre `a37fc63`, con `tests/test_diagnostics.py` y `tests/test_redaction.py`:
+
+```
+M24 sin prefijo movil 1: 2 failed, 33 passed
+M25 sin lada entre parentesis: 2 failed, 33 passed
+M26 sin punto como separador: 1 failed, 34 passed
+M27 sin CLABE en grupos de 4: 1 failed, 34 passed
+M28 secretos en orden de llegada: 1 failed, 34 passed
+M29 secretos cortos reemplazados: 1 failed, 34 passed
+M30 referencia solo de digitos aceptada: 1 failed, 34 passed
+```
+
+**Sondeo de falsos positivos** tras aceptar `.` como separador: 100 000 UUID, 100 000 ids hexadecimales y 100 000 decimales aleatorios salen sin cambios. Versiones (`1.2.3`), IP (`192.168.100.200`), montos (`1234.56`), fechas (`2026.11.25`) y horas con microsegundos tampoco cambian.
+
+**Refactor:** `wait_for_json` pasa de `tests/test_startup.py` a `tests/support.py`, y su exención `S310` se mueve con él. La comprobación de antigüedades del `backlog` usa un mínimo y una holgura de 60 s, en lugar de rangos estrechos.
 
 ## Aplicabilidad por superficie
 
@@ -413,6 +447,15 @@ Repetido sobre `842a4e8` con el procedimiento del README, ahora encadenado y con
 - `run-jobs` reclama 1 y registra `Reconciliation job … for sale EE1FJ76YJ2 (…): verified`; la segunda ejecución reclama 0.
 - Al final: trabajo `done 2`, intento verificado y base de origen sin cambios.
 
+
+### D. Ronda 3: `a37fc63`
+
+Mismo script de la sección C sobre `a37fc63`, más una petición con `X-Request-ID: 5512345678`:
+
+- `GET /health` con referencia de solo dígitos → 200 · `X-Request-ID: ada90acf5cd34f5c8507a0ae2c7eecb8` (se genera una nueva).
+- El resto de respuestas es igual que en la sección C, y la línea de acceso sigue enmascarando `phone=********5678&clabe=**************6789`.
+- Apariciones en el log del token, la CLABE, el teléfono, la contraseña de la base y `TAPPY_SECRET_KEY`: 0 de cada uno.
+
 **Validación:**
 
 - **TC01:**
@@ -427,26 +470,26 @@ Repetido sobre `842a4e8` con el procedimiento del README, ahora encadenado y con
   - el origen no cambia.
 - **TC03:**
   - el arriendo vencido de un ejecutor interrumpido aparece en `backlog`;
-  - `run-jobs` lo completa una sola vez y el log nombra la venta `6GKF5KZDHZ`;
+  - `run-jobs` lo completa una sola vez y el log nombra la venta (`6GKF5KZDHZ` en la ronda 1, `EE1FJ76YJ2` en la repetición de la ronda 2);
   - la segunda ejecución no reclama nada y el `backlog` final queda vacío.
 
 Estado VC01: **PASS**.
 
 ## Checks
 
-`uv run python -m quality.check` sobre `842a4e8`, con `.env` exportado:
+`uv run python -m quality.check` sobre `a37fc63`, con `.env` exportado:
 
 - format, lint, types (mypy strict) y hygiene: PASS;
 - migrations: PASS; sin migraciones nuevas, solo upgrade/downgrade/upgrade + `alembic check`;
-- tests: PASS, 608 passed, con Postgres real aislado y proyectos Compose desechables;
+- tests: PASS, 616 passed, con Postgres real aislado y proyectos Compose desechables;
 - api: PASS, 15 contratos sin diferencias (no registran `X-Request-ID`; ver «Aplicabilidad»);
-- evidence: B01–B33 APPROVED. B34 queda bloqueado solo porque su review está `PENDING`, que es lo esperado antes de la ronda 2.
+- evidence: B01–B33 APPROVED. B34 queda bloqueado solo porque su review está `PENDING`, que es lo esperado antes de la ronda 3.
 
-En la ronda 1 (`c23d9bb`) los mismos pasos dieron PASS con 583 tests.
+Rondas anteriores, con los mismos pasos en PASS: `c23d9bb` (ronda 1) con 583 tests y `842a4e8` (ronda 2) con 608.
 
 ## Supresiones
 
-Ninguna nueva: la exención existente `S603`/`S607` se mueve con `ComposeProject` a `tests/compose_support.py`.
+Ninguna nueva. Las exenciones existentes se mueven con su código: `S603`/`S607` con `ComposeProject` a `tests/compose_support.py`, y `S310` con `wait_for_json` de `tests/test_startup.py` a `tests/support.py`.
 
 ## Umbral
 
@@ -457,14 +500,15 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `c23d9bb` | REQUEST_CHANGES | REQUEST_CHANGES | Standards 5, Spec 9 (ver abajo) |
-| 2 | `842a4e8` | PENDING | PENDING | — |
+| 2 | `842a4e8` | APPROVE | APPROVE | Sin bloqueantes; Standards 4 y Spec 4 sugerencias (ver abajo) |
+| 3 | `a37fc63` | PENDING | PENDING | — |
 
 ### Hallazgos de la ronda 1 y su corrección
 
 **Standards**
 
 1. Las líneas de Uvicorn saltaban la redacción (su configuración por defecto no propaga) → `log_config=None` y test con un proceso real.
-2. Las expresiones de CLABE/teléfono enmascaraban dígitos de UUID y no reconocían `+52` → reglas con límites de token, formas agrupadas y `+52`; 17 casos unitarios en `tests/test_redaction.py`.
+2. Las expresiones de CLABE/teléfono enmascaraban dígitos de UUID y no reconocían `+52` → reglas con límites de token, formas agrupadas y `+52`; casos unitarios en `tests/test_redaction.py` (22 en `842a4e8`, 30 en `a37fc63`).
 3. El filtro mutaba el `LogRecord` y podía fallar en `getMessage` → `RedactingFormatter` redacta la línea ya formateada.
 4. El fixture de logs no restauraba el nivel raíz → restaurado.
 5. Prefijo del proyecto Compose ligado a persistencia → `tappy-compose-`.
@@ -481,3 +525,19 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 9. TC03 no comprobaba que el dueño interrumpido perdiera su reclamo → `held_claim` es `None` tras la reanudación.
 
 Además, la VC01 de la ronda 2 encontró el `+52` codificado en URL sin enmascarar → corregido en `842a4e8`.
+
+### Sugerencias de la ronda 2 y su corrección (`a37fc63`)
+
+**Standards**
+
+1. `wait_for_json` se importaba de un módulo de tests → movido a `tests/support.py`.
+2. Faltaban `+52 1` y la lada entre paréntesis → añadidos, con casos.
+3. Antigüedades del `backlog` con rangos estrechos → mínimo esperado más una holgura de 60 s.
+4. Los secretos se reemplazaban en orden de llegada → del más largo al más corto, con un test de secretos contenidos.
+
+**Spec**
+
+1. Una referencia del cliente de 10 o 18 dígitos se enmascararía en el log y dejaría de coincidir con el encabezado → se rechazan las referencias de solo dígitos.
+2. Una contraseña corta borraría palabras normales de los logs → no se reemplazan secretos de menos de 8 caracteres; documentado en el README.
+3. Formatos sin cubrir (`(55) 1234 5678`, `55.1234.5678`, CLABE `4 4 4 4 2`), y el README era más amplio que las reglas → formatos añadidos, y el README nombra exactamente las agrupaciones.
+4. Detalles desactualizados de la evidencia (número de casos y venta de TC03) → corregidos.

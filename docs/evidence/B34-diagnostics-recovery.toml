@@ -1,5 +1,5 @@
 ticket = "B34"
-revision = "842a4e8"
+revision = "a37fc63"
 
 [vc01]
 status = "PASS"
@@ -28,6 +28,8 @@ tests = [
     "tests/test_redaction.py::test_sensitive_values_are_masked",
     "tests/test_redaction.py::test_identifiers_amounts_and_dates_are_kept",
     "tests/test_redaction.py::test_configured_secrets_are_replaced_wherever_they_appear",
+    "tests/test_redaction.py::test_a_longer_secret_is_replaced_whole_even_when_it_contains_a_shorter_one",
+    "tests/test_redaction.py::test_a_secret_too_short_to_tell_apart_from_ordinary_words_is_not_replaced",
 ]
 
 [[criteria]]
