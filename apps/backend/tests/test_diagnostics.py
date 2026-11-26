@@ -44,6 +44,7 @@ CLABE = "002180700123456789"
 PHONE = "5512345678"
 EMAIL = "pagador.sintetico@example.com"
 GENERATED = re.compile(r"[0-9a-f]{32}")
+SMTP_PASSWORD = "synthetic-smtp-password-0001"
 WEBHOOK_KEY = "whsec_" + base64.b64encode(b"synthetic-webhook-key-0123456789").decode()
 
 
@@ -57,7 +58,11 @@ class ExplodingProvider(SimulatedQrProvider):
 
 def diagnostic_settings(database_url: str) -> Settings:
     return build_settings(database_url=database_url).model_copy(
-        update={"pey_api_key": SecretStr(PEY_KEY), "pey_webhook_secret": SecretStr(WEBHOOK_KEY)}
+        update={
+            "pey_api_key": SecretStr(PEY_KEY),
+            "pey_webhook_secret": SecretStr(WEBHOOK_KEY),
+            "smtp_password": SecretStr(SMTP_PASSWORD),
+        }
     )
 
 
@@ -121,13 +126,14 @@ def test_configured_secrets_never_reach_a_log_line(
     logger = logging.getLogger("tappy.payments.pey")
 
     password = make_url(settings.database_url.get_secret_value()).password
-    secrets = (PEY_KEY, VALID_SECRET, WEBHOOK_KEY.removeprefix("whsec_"), password)
+    secrets = (PEY_KEY, VALID_SECRET, WEBHOOK_KEY.removeprefix("whsec_"), password, SMTP_PASSWORD)
 
-    logger.warning("pey key %s, app secret %s, webhook %s, database %s", *secrets)
+    logger.warning("pey key %s, app secret %s, webhook %s, database %s, smtp %s", *secrets)
 
     log = log_stream.getvalue()
     assert (
-        "pey key [redacted], app secret [redacted], webhook [redacted], database [redacted]" in log
+        "pey key [redacted], app secret [redacted], webhook [redacted], database [redacted], "
+        "smtp [redacted]" in log
     )
     for secret in secrets:
         assert secret

@@ -50,6 +50,13 @@ database = "migrated"
 body = { email = "nuevo@tappy.example", initial_password = "frase sintetica 2026" }
 
 [[cases]]
+name = "password-reset-request"
+method = "POST"
+path = "/auth/password-reset/request"
+database = "migrated"
+body = { email = "nadie@tappy.example" }
+
+[[cases]]
 name = "merchants-unauthenticated"
 method = "GET"
 path = "/merchants"

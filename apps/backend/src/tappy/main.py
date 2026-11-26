@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from tappy.backoffice.admin import mount_admin
 from tappy.identity import operators_router
 from tappy.identity import router as identity_router
+from tappy.identity.recovery import RecoveryService
 from tappy.merchants import router as merchants_router
 from tappy.payments import router as webhooks_router
 from tappy.payments.factory import provider_from
@@ -50,11 +51,12 @@ def create_app(
     app.state.database = database
     app.state.clock = clock or SystemClock()
     app.state.qr_provider = qr_provider or provider_from(settings)
+    app.state.recovery = RecoveryService.from_settings(settings)
     app.add_middleware(RequestReference)
     app.add_exception_handler(RequestValidationError, validation_error_response)
     app.add_exception_handler(QuotaExceededError, quota_exceeded_response)
     for router in API_ROUTERS:
         app.include_router(router, max_body_size=settings.api_max_body_bytes)
     app.include_router(webhooks_router.router)
-    mount_admin(app, settings, database, app.state.clock)
+    mount_admin(app, settings, database, app.state.clock, app.state.recovery)
     return app

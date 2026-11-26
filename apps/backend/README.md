@@ -94,6 +94,20 @@ Each merchant has at most one receiving account: an account already authorized a
 
 Disabling a receiving account only blocks new charges; the account and the merchant's records stay. The same rule decides availability in the API, the issuance check and the back office, where the **Merchants** page shows and edits each receiving account.
 
+## Password recovery
+
+`POST /auth/password-reset/request {"email": …}` (also the "Forgot your password?" form at `/admin/forgot-password`, linked from the panel login) always answers `202` with the same generic message, and the request does the same work for every account: it records rate-limit attempts and queues an encrypted recovery job. The worker later checks whether the account exists and is active and only then issues a token and an email, so neither the response nor its timing reveals which emails are registered.
+
+- The link is `TAPPY_PUBLIC_BASE_URL/password-reset#token=…`: its origin comes from configuration, never from the request `Host`, and the token travels in the URL fragment so it never reaches server logs. Tokens are random, valid for `TAPPY_PASSWORD_RESET_TTL_SECONDS` (default 1800) and stored only as SHA-256 digests.
+- Requests are limited per email (`TAPPY_RECOVERY_LIMIT_PER_EMAIL`, default 3) and per client origin (`TAPPY_RECOVERY_LIMIT_PER_ORIGIN`, default 10) within `TAPPY_RECOVERY_WINDOW_SECONDS` (default 3600). Limits are stored in Postgres as keyed HMAC digests (no plain email addresses), survive restarts, apply across processes and never block sign-in.
+- Recovery jobs and outbound emails keep their payload encrypted with a key derived from `TAPPY_SECRET_KEY` and purge it once processed or sent. Each email is claimed and counted in its own transaction before sending, retried with exponential backoff up to `TAPPY_DELIVERY_MAX_ATTEMPTS` (default 5); an undecryptable payload fails alone without blocking the queue. Delivery is at least once: an ambiguous SMTP failure is retried. Run the worker periodically:
+
+```sh
+uv run python -m tappy.notifications deliver
+```
+
+- SMTP: `TAPPY_SMTP_HOST`, `TAPPY_SMTP_PORT`, `TAPPY_SMTP_USERNAME`, `TAPPY_SMTP_PASSWORD`, `TAPPY_SMTP_STARTTLS`, `TAPPY_MAIL_FROM`. Locally Compose runs Mailpit (SMTP `127.0.0.1:1025`, inbox `http://127.0.0.1:8025`). Real delivery needs a provider and an authorized sender; it is not exercised in CI. The `/password-reset` page that consumes the token arrives with B42.
+
 ## Sales
 
 A sale is the commercial obligation to receive a fixed amount. Creating one does not request money from the bank and does not mean anything was paid.
@@ -164,7 +178,7 @@ Quotas are counted in Postgres (`operation_quotas`), so they hold across process
 - Every HTTP response carries an `X-Request-ID` header. A caller may send its own (8–64 letters, digits, `-` or `_`, not only digits, so it is never mistaken for a phone or a CLABE in the logs); anything else is replaced by a generated 32-character reference.
 - An unexpected error answers `500` with `{"detail": "Internal server error", "reference": "<X-Request-ID>"}` and logs `Unhandled error in <method> <route template>` with the traceback under the same reference, so a user's report can be matched to the log line. Expected errors keep their own status and `detail`.
 - `python -m tappy` (Uvicorn's own server and access lines included), `python -m tappy.sales` and `python -m tappy.identity` log to stderr as `time level logger [reference] message` (`-` outside a request). Every line, traceback included, is redacted before it is written:
-  - the configured secrets (`TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` with and without its `whsec_` prefix, and the database password) become `[redacted]`, longest first, and so do `Bearer` tokens and `whsec_` keys. A configured secret shorter than 8 characters is not replaced, because it could not be told apart from ordinary words: the process warns at startup which setting is too short (never its value). Use longer secrets;
+  - the configured secrets (`TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` with and without its `whsec_` prefix, `TAPPY_SMTP_PASSWORD` and the database password) become `[redacted]`, longest first, and so do `Bearer` tokens and `whsec_` keys. A configured secret shorter than 8 characters is not replaced, because it could not be told apart from ordinary words: the process warns at startup which setting is too short (never its value). Use longer secrets;
   - CLABEs keep only their last four digits (`**************6789`) when written as 18 digits or grouped `3 3 11 1` or `4 4 4 4 2`;
   - Mexican phone numbers keep only their last four digits (`******5678`) when written as 10 digits, grouped `2 4 4` or `3 3 4` with spaces, dots or hyphens, with the area code in brackets (`(55) 1234 5678`), and optionally prefixed with `52`, `+52` or `+52 1`;
   - both rules also apply when the number is URL-encoded in a logged path (`%2B52…`, `%20` between groups). Digits inside longer identifiers (UUIDs, digests, ids), amounts, dates and versions are left alone;

@@ -41,3 +41,13 @@ class OperatorCreateRequest(BaseModel):
 
     email: str = Field(min_length=1, max_length=254)
     initial_password: str = Field(min_length=1, max_length=1024)
+
+
+class PasswordResetRequestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=1, max_length=254)
+
+
+class AcceptedResponse(BaseModel):
+    detail: str

@@ -86,6 +86,7 @@ def named_secrets(settings: Settings) -> dict[str, str]:
         "TAPPY_SECRET_KEY": settings.secret_key,
         "TAPPY_PEY_API_KEY": settings.pey_api_key,
         "TAPPY_PEY_WEBHOOK_SECRET": settings.pey_webhook_secret,
+        "TAPPY_SMTP_PASSWORD": settings.smtp_password,
     }
     named = {name: value.get_secret_value() for name, value in values.items() if value}
     password = make_url(settings.database_url.get_secret_value()).password
