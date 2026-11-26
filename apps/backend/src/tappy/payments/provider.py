@@ -60,6 +60,23 @@ class QrOrder:
 
 
 @dataclass(frozen=True)
+class PhoneOrder:
+    attempt_id: uuid.UUID
+    reference: str
+    amount_cents: int
+    concept: str | None
+    receiver_account: str
+    phone_number: str
+
+
+@dataclass(frozen=True)
+class IssuedPhoneRequest:
+    provider_request_id: str
+    folio: str
+    valid_for: timedelta | None = None
+
+
+@dataclass(frozen=True)
 class IssuedQr:
     provider_request_id: str
     payload: str
@@ -82,6 +99,8 @@ class QrProvider(Protocol):
     def simulated(self) -> bool: ...
 
     def create_qr(self, order: QrOrder) -> IssuedQr: ...
+
+    def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest: ...
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]: ...
 

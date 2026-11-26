@@ -65,7 +65,7 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
 ) -> None:
     sale_id, operator_a = open_sale(client, migrated_database_url)
 
-    reserved = reserve(client, operator_a, sale_id, method="phone")
+    reserved = reserve(client, operator_a, sale_id, method="link")
     sale = client.get(f"/sales/{sale_id}", headers=operator_a).json()
 
     assert reserved.status_code == HTTPStatus.CREATED
@@ -74,11 +74,13 @@ def test_reserving_an_attempt_leaves_it_creating_on_the_sale(
         "id": attempt["id"],
         "sale_id": sale_id,
         "sale_reference": sale["reference"],
-        "method": "phone",
+        "method": "link",
         "status": "creating",
         "simulated": True,
         "provider_request_id": None,
         "qr_payload": None,
+        "provider_folio": None,
+        "payer_phone": None,
         "failure_code": None,
         "created_at": attempt["created_at"],
         "expires_at": None,
@@ -109,7 +111,7 @@ def test_repeating_a_reservation_returns_the_same_attempt(
     assert attempt_count(migrated_database_url) == 1
 
 
-@pytest.mark.parametrize("method", ["qr", "phone", "link"])
+@pytest.mark.parametrize("method", ["qr", "link"])
 def test_second_attempt_with_another_key_or_channel_conflicts(
     client: TestClient, migrated_database_url: str, method: str
 ) -> None:
@@ -255,7 +257,7 @@ def test_concurrent_reservations_leave_a_single_active_attempt(
             )
             held = reserve_attempt(racing, request, SimulatedQrProvider(), RESERVED_AT)
             with ThreadPoolExecutor(max_workers=1) as pool:
-                attempt = pool.submit(reserve, client, operator_a, sale_id, "phone")
+                attempt = pool.submit(reserve, client, operator_a, sale_id, "link")
                 wait_until_blocked_on_a_lock(migrated_database_url)
                 racing.commit()
                 response = attempt.result(timeout=10)
@@ -276,10 +278,10 @@ def test_interrupted_reservation_stays_recoverable_after_a_restart(
         sale_id, operator_a = open_sale(first, migrated_database_url)
 
         key = str(uuid.uuid4())
-        reserved = reserve(first, operator_a, sale_id, method="phone", key=key).json()
+        reserved = reserve(first, operator_a, sale_id, method="link", key=key).json()
 
     with app_client(settings) as restarted:
-        retried = reserve(restarted, operator_a, sale_id, method="phone", key=key)
+        retried = reserve(restarted, operator_a, sale_id, method="link", key=key)
         sale = restarted.get(f"/sales/{sale_id}", headers=operator_a).json()
 
     assert retried.status_code == HTTPStatus.OK

@@ -2,11 +2,24 @@ import secrets
 from collections.abc import Callable
 from datetime import timedelta
 
-from tappy.payments.provider import IssuedQr, ProviderName, QrOrder, QrPayment
+from tappy.payments.provider import (
+    IssuedPhoneRequest,
+    IssuedQr,
+    PhoneOrder,
+    ProviderName,
+    QrOrder,
+    QrPayment,
+)
+
+FOLIO_DIGITS = 17
 
 
 def simulated_identifier() -> str:
     return f"SIM-{secrets.token_hex(8).upper()}"
+
+
+def simulated_folio() -> str:
+    return f"SIM{secrets.randbelow(10**FOLIO_DIGITS):0{FOLIO_DIGITS}d}"
 
 
 class SimulatedQrProvider:
@@ -32,6 +45,9 @@ class SimulatedQrProvider:
             ]
         )
         return IssuedQr(self.id_factory(), payload, self.valid_for)
+
+    def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest:
+        return IssuedPhoneRequest(self.id_factory(), simulated_folio(), self.valid_for)
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
         return []

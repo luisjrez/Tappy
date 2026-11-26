@@ -29,6 +29,8 @@ REFERENCE_CONSTRAINT = "uq_sales_reference"
 ACTIVE_ATTEMPT_INDEX = "uq_payment_attempts_active_sale"
 PROVIDER_REQUEST_CONSTRAINT = "uq_payment_attempts_provider_request"
 PROVIDER_REQUEST_ID_MAX_LENGTH = 64
+PROVIDER_FOLIO_MAX_LENGTH = 32
+PHONE_SUFFIX_LENGTH = 4
 FAILURE_CODE_MAX_LENGTH = 32
 JOB_CONSTRAINT = "uq_reconciliation_jobs_attempt_reason"
 JOB_REASON_MAX_LENGTH = 32
@@ -158,6 +160,8 @@ class PaymentAttempt(Base):
     receiver_account: Mapped[str] = mapped_column(String(PROVIDER_ACCOUNT_ID_MAX_LENGTH))
     provider_request_id: Mapped[str | None] = mapped_column(String(PROVIDER_REQUEST_ID_MAX_LENGTH))
     qr_payload: Mapped[str | None] = mapped_column(Text)
+    provider_folio: Mapped[str | None] = mapped_column(String(PROVIDER_FOLIO_MAX_LENGTH))
+    payer_phone_suffix: Mapped[str | None] = mapped_column(String(PHONE_SUFFIX_LENGTH))
     failure_code: Mapped[str | None] = mapped_column(String(FAILURE_CODE_MAX_LENGTH))
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
