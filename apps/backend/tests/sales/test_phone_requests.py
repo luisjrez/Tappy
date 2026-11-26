@@ -344,3 +344,21 @@ def test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint(
 
     assert report.result is ReconciliationResult.NOT_QUERYABLE
     assert fake.queries() == []
+
+
+def test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider(
+    client: TestClient, migrated_database_url: str, fake: FakePey
+) -> None:
+    sale, operator = open_sale(client, migrated_database_url)
+    first = request_phone(
+        client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED}
+    )
+
+    second = request_phone(
+        client, operator, sale["id"], {"method": "phone", "phone_number": OTHER_CONSENTED}
+    )
+
+    assert first.status_code == HTTPStatus.CREATED
+    assert second.status_code == HTTPStatus.CONFLICT
+    assert len(posted(fake)) == 1
+    assert attempt_count(migrated_database_url) == 1

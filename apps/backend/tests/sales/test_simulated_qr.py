@@ -106,6 +106,8 @@ def test_creating_a_qr_returns_the_simulated_payload_pending(
         "simulated": True,
         "provider_request_id": Q1,
         "qr_payload": expected_payload(reference, attempt["id"]),
+        "provider_folio": None,
+        "payer_phone": None,
         "failure_code": None,
         "created_at": attempt["created_at"],
         "expires_at": attempt["expires_at"],
@@ -201,7 +203,7 @@ def test_default_simulator_issues_distinct_labelled_identifiers(
     assert first["provider_request_id"] != second["provider_request_id"]
 
 
-@pytest.mark.parametrize("method", ["phone", "link"])
+@pytest.mark.parametrize("method", ["link"])
 def test_other_channels_stay_reserved_without_calling_the_qr_provider(
     client: TestClient, migrated_database_url: str, simulator: RecordingSimulator, method: str
 ) -> None:
