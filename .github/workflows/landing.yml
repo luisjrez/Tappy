@@ -28,6 +28,7 @@ jobs:
           node-version-file: apps/landing/.node-version
           cache: npm
           cache-dependency-path: apps/landing/package-lock.json
+      - run: npm install --global npm@10.9.2
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run verify
