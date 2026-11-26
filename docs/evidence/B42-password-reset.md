@@ -140,3 +140,10 @@ Re-revisión 1 sobre `203fb0f`: hallazgo importante — una renovación concurre
   - `tests/support.py` deja que `run_command` acepte `extra_environment`, que `run_identity` reenvía.
 - **Migración:** `0008_identity_password_reset` pasa a `0027_identity_password_reset`, con `down_revision = "0026_identity_password_recovery"`. Queda una sola cabeza y el esquema no cambia.
 - **Prueba real de B41:** se movió a #113, que sigue BLOCKED. B42 no depende de ella para sus AC.
+- **Review de la integración:** Standards encontró que el formulario público `POST /password-reset` quedaba fuera del límite de cuerpo de B32/B33. Aceptaba y parseaba 200 KB, mientras `/auth/login` respondía `413`.
+  - Ahora `reset_page` se monta con `max_body_size=settings.api_max_body_bytes`.
+  - `test_an_oversized_form_body_is_refused_before_it_is_read` falló primero (`422` en lugar de `413`) y pasa con la corrección (`a1a3a48`).
+  - Spec pidió apuntar el manifiesto a la revisión integrada.
+- **Checks sobre `a1a3a48`**, con `.env` exportado:
+  - format, lint, types, hygiene, migrations (cadena lineal hasta `0027_identity_password_reset`, que es la cabeza), tests (`713 passed`) y api (17 contratos sin diferencias): PASS;
+  - evidence: B01–B36, B41 y B42 APPROVED.
