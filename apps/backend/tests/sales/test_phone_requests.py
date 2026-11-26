@@ -353,9 +353,7 @@ def test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified(
     assert demo_list_settings(environment, "").phone_request_numbers == frozenset()
 
 
-def test_phone_requests_cannot_reach_the_real_provider_until_their_payments_can_be_verified() -> (
-    None
-):
+def test_phone_requests_stay_off_the_real_provider_until_verifiable() -> None:
     with pytest.raises(ValidationError, match="until phone payments can be verified"):
         demo_list_settings("test", CONSENTED, provider="pey")
 
