@@ -1,5 +1,5 @@
 ticket = "B35"
-revision = "b7760f9"
+revision = "f1b05ab"
 
 [vc01]
 status = "PASS"
@@ -42,5 +42,5 @@ mandatory = true
 id = "B35-TC03"
 mode = "automated"
 tests = [
-    "tests/sales/test_rehearsal.py::test_a_rehearsal_with_lost_responses_a_restart_and_repeated_evidence_keeps_one_reception",
+    "tests/sales/test_rehearsal.py::test_a_rehearsal_with_a_client_retry_a_restart_and_repeated_evidence_keeps_one_reception",
 ]
