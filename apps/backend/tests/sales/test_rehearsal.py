@@ -7,7 +7,11 @@ from fastapi.testclient import TestClient
 
 from tappy.platform.clock import SystemClock
 from tappy.platform.database import Database
-from tappy.sales.reconciliation import ReconciliationResult, reconcile_attempt
+from tappy.sales.reconciliation import (
+    ReconciliationReport,
+    ReconciliationResult,
+    reconcile_attempt,
+)
 from tests.payments.pey_support import FakePey
 from tests.payments.webhook_support import Delivery, deliver, settings_for
 from tests.sales.support import (
@@ -67,20 +71,17 @@ def request_qr(client: TestClient, headers: dict[str, str], sale_id: str, key: s
     ).status_code
 
 
-def reconcile(
-    database_url: str, attempt_id: str, fake: FakePey
-) -> tuple[ReconciliationResult, int]:
+def reconcile(database_url: str, attempt_id: str, fake: FakePey) -> ReconciliationReport:
     database = Database.from_settings(build_settings(database_url=database_url))
     try:
-        report = reconcile_attempt(
+        return reconcile_attempt(
             database, uuid.UUID(attempt_id), fake.provider(), ENVIRONMENT, SystemClock()
         )
     finally:
         database.dispose()
-    return report.result, report.applied
 
 
-def test_a_rehearsal_with_lost_responses_a_restart_and_repeated_evidence_keeps_one_reception(
+def test_a_rehearsal_with_a_client_retry_a_restart_and_repeated_evidence_keeps_one_reception(
     migrated_database_url: str,
 ) -> None:
     settings = settings_for(migrated_database_url)
@@ -111,11 +112,13 @@ def test_a_rehearsal_with_lost_responses_a_restart_and_repeated_evidence_keeps_o
         ).json()
 
     assert (first, retried) == (HTTPStatus.CREATED, HTTPStatus.OK)
-    assert len([request for request in issuing.requests if request.method == "POST"]) == 1
+    assert sum(1 for request in issuing.requests if request.method == "POST") == 1
     assert pending["status"] == "open"
     assert pending["attempts"][0]["status"] == "pending"
     assert deliveries == [HTTPStatus.NO_CONTENT] * 3
-    assert queried == (ReconciliationResult.CONFIRMED, 0)
+    assert len(querying.queries()) == 1
+    assert queried.result is ReconciliationResult.CONFIRMED
+    assert (queried.found, queried.duplicates, queried.applied) == (1, 1, 0)
     assert detail["status"] == "paid"
     assert detail["confirmed_amount_cents"] == AMOUNT
     assert [transfer["provider_transaction_id"] for transfer in detail["transfers"]] == [
