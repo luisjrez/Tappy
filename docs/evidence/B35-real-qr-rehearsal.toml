@@ -1,0 +1,48 @@
+ticket = "B35"
+revision = "747b8d8"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B35-real-qr-rehearsal.md#b35-vc01--ensayo-y-estado-de-la-prueba-real"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B35-AC01"
+use_cases = ["B35-UC01"]
+mandatory = true
+applicable = false
+justification = "La prueba real con pey (TC01) salió a su propio ticket, #112, por decisión del responsable del producto (2026-11-26). Sigue sin ejecutarse: sin acceso real autorizado, el resultado es BLOCKED y la simulación no se presenta como integración aprobada."
+
+[[criteria.cases]]
+id = "B35-TC01"
+mode = "external"
+result = "BLOCKED"
+evidence = "Movido a https://github.com/luisjrez/Tappy/issues/112"
+
+[[criteria]]
+id = "B35-AC02"
+use_cases = ["B35-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B35-TC02"
+mode = "manual"
+result = "PASS"
+evidence = "docs/evidence/B35-real-qr-rehearsal.md#b35-tc02--preparación-sin-acceso"
+
+[[criteria]]
+id = "B35-AC03"
+use_cases = ["B35-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B35-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_rehearsal.py::test_a_rehearsal_with_a_client_retry_a_restart_and_repeated_evidence_keeps_one_reception",
+]

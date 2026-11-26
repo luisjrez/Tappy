@@ -205,6 +205,36 @@ Then point a process at the restored database (`TAPPY_DATABASE_URL=…/tappy_res
 
 Switch the application to the restored database only after these checks. The procedure is tested end to end against a disposable Compose project (`tests/test_backup_restore.py`), never against the development or a production database. Dumps contain the stored webhook bodies and must be handled as sensitive data.
 
+## Real QR test
+
+The end-to-end test against pey with real money is manual, small and authorized. It never runs from CI or the test suite, and a simulation or a fake pey server never counts as this test. **Status: blocked.** The prerequisites below are not met yet ([docs/research/pey-validation.md](../../docs/research/pey-validation.md), open questions 1 and 2); the run is tracked in [#112](https://github.com/luisjrez/Tappy/issues/112). Update this line in the same change that records a real run.
+
+Before running it, every prerequisite must be confirmed in writing:
+
+1. **Access:** an authorized pey account, its API key and webhook secret, delivered to the operator running the test (never through git, issues or chat).
+2. **Receiver:** a receiving account whose holder is eligible under pey's terms (each merchant receives in its own account; a concentrating account is forbidden) and that is enabled in Tappy.
+3. **pey environment:** pey confirms which environment the key belongs to; if it is production, the participants agree that the payment is real and is not refunded.
+4. **Webhook:** a public HTTPS URL of this deployment (`…/webhooks/pey`) registered in the pey portal for that API key.
+5. **Tappy environment:** `TAPPY_ENVIRONMENT=integration` with its own database, secrets and identifiers, never the development database. Back it up with the procedure in [Backup and restore](#backup-and-restore) before the run and again after it, keep the second dump with the operator's private record (it holds the only Tappy-side record of a real transfer), and drop the database only after that dump is stored and the sanitized evidence is committed.
+6. **Participants and amount:** who creates the sale, who pays, and the agreed amount, kept as small as pey allows.
+
+Rehearse first, with the test environment loaded: `uv run pytest tests/sales/test_rehearsal.py`. It runs the same API path against a fake pey server: a client retry with the same key, an application restart, the payment notification delivered, redelivered and sent again under another id, and a reconciliation query that finds the same transfer. It must end with one reception of the agreed amount. A lost answer between Tappy and pey (the attempt stays `creating` and goes to reconciliation) is covered by `tests/sales/test_uncertain_creation.py` and `tests/sales/test_pey_qr_flow.py`.
+
+Then, with the real configuration exported only in the operator's shell:
+
+1. Create the sale and its QR (`POST /sales`, `POST /sales/{id}/attempts`), and pay it with the agreed amount.
+2. Wait for the webhook, or run `uv run python -m tappy.sales reconcile <attempt-id>`.
+3. Read `GET /sales/{id}`, `GET /sales`, `GET /merchants/{id}/summary/daily` and `uv run python -m tappy.sales backlog`.
+4. Answer the open checks carried from earlier tickets:
+   - **pey `429 CALL_LIMIT_REACHED` (B15):** ask pey, or observe if it happens, whether a creation answered with `429` can still create a QR. Record yes, no or unknown; a yes means `429` must become an uncertain outcome.
+   - **Quotas (B33):** record pey's request limits for this account and whether `TAPPY_SALE_CREATION_QUOTA`, `TAPPY_ATTEMPT_CREATION_QUOTA` and `TAPPY_SALE_READ_QUOTA` stay below them.
+   - **Redaction (B34):** check the logs of the run for any CLABE, phone or other payer data that the redaction left visible. Record which format leaked, never the value.
+
+The repository is public, so the full record of the run stays outside git, in the operator's private storage. Commit only a sanitized comparison in its own file, `docs/evidence/B35-real-qr-run.md`, separate from the rehearsal evidence:
+
+- **Commit:** the day of the run, the Tappy sale reference, the `X-Request-ID` of each call, the last 4 characters of pey's QR and transaction ids, whether the received amount matches the agreed one and was counted once, the statuses and counts read in step 3, the answers to step 4, and the comparison with the rehearsal.
+- **Never commit:** keys, secrets, full pey ids, the exact amount and time of the transfer, full CLABEs or accounts, the tracking key (`clave de rastreo`), `numRef`, pey's `metadata`, phone numbers, names or emails of payers, raw webhook bodies, or screenshots that show any of them.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.
