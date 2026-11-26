@@ -206,7 +206,7 @@ Switch the application to the restored database only after these checks. The pro
 
 ## Real QR test
 
-The end-to-end test against pey with real money is manual, small and authorized. It never runs from CI or the test suite, and a simulation or a fake pey server never counts as this test. **Status: blocked.** The prerequisites below are not met yet ([docs/research/pey-validation.md](../../docs/research/pey-validation.md), open questions 1 and 2). Update this line in the same change that records a real run.
+The end-to-end test against pey with real money is manual, small and authorized. It never runs from CI or the test suite, and a simulation or a fake pey server never counts as this test. **Status: blocked.** The prerequisites below are not met yet ([docs/research/pey-validation.md](../../docs/research/pey-validation.md), open questions 1 and 2); the run is tracked in [#112](https://github.com/luisjrez/Tappy/issues/112). Update this line in the same change that records a real run.
 
 Before running it, every prerequisite must be confirmed in writing:
 

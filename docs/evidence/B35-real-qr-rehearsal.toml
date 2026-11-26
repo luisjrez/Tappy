@@ -15,12 +15,14 @@ pending_findings = 0
 id = "B35-AC01"
 use_cases = ["B35-UC01"]
 mandatory = true
+applicable = false
+justification = "La prueba real con pey (TC01) salió a su propio ticket, #112, por decisión del responsable del producto (2026-11-26). Sigue sin ejecutarse: sin acceso real autorizado, el resultado es BLOCKED y la simulación no se presenta como integración aprobada."
 
 [[criteria.cases]]
 id = "B35-TC01"
 mode = "external"
 result = "BLOCKED"
-evidence = "docs/evidence/B35-real-qr-rehearsal.md#b35-tc01--prueba-real-bloqueada"
+evidence = "Movido a https://github.com/luisjrez/Tappy/issues/112"
 
 [[criteria]]
 id = "B35-AC02"

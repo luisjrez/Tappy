@@ -2,7 +2,7 @@
 
 Ticket: [#43](https://github.com/luisjrez/Tappy/issues/43) · Historia: [H7 #7](https://github.com/luisjrez/Tappy/issues/7) · Protocolo: [TICKET_QUALITY_PROTOCOL](../planning/TICKET_QUALITY_PROTOCOL.md) · Manifiesto: [B35-real-qr-rehearsal.toml](B35-real-qr-rehearsal.toml)
 
-> **Estado: BLOQUEADO.** No hay acceso autorizado a pey ni receptor habilitado, así que la prueba real (TC01) no se ejecutó. **El ensayo de este documento usa un pey falso y no demuestra la integración bancaria real.** No hay captura ni comprobante bancario, y ninguna parte de esta evidencia debe leerse como integración aprobada.
+> **La prueba real (TC01) salió a su propio ticket, [#112](https://github.com/luisjrez/Tappy/issues/112), y sigue sin ejecutarse.** Fue decisión del responsable del producto (2026-11-26). No hay acceso autorizado a pey ni receptor habilitado. **El ensayo de este documento usa un pey falso y no demuestra la integración bancaria real.** No hay captura ni comprobante bancario, y ninguna parte de esta evidencia debe leerse como integración aprobada.
 
 ## Revisiones y escenario
 
@@ -35,7 +35,7 @@ Ticket: [#43](https://github.com/luisjrez/Tappy/issues/43) · Historia: [H7 #7](
 
 | UC | AC | TC | Prueba | Resultado |
 | --- | --- | --- | --- | --- |
-| B35-UC01 | B35-AC01 | B35-TC01 | Externa y manual: QR real, pago del importe acordado y consulta de detalle, historial y resumen | **BLOCKED** (ver TC01) |
+| B35-UC01 | B35-AC01 | B35-TC01 | Externa y manual: QR real, pago del importe acordado y consulta de detalle, historial y resumen | **No aplica en B35: movido a #112**, donde sigue BLOCKED (ver TC01) |
 | B35-UC02 | B35-AC02 | B35-TC02 | Manual: preparar la ejecución sin acceso ni receptor habilitado. Resultado esperado: BLOCKED, y la simulación no se presenta como integración | PASS |
 | B35-UC03 | B35-AC03 | B35-TC03 | `tests/sales/test_rehearsal.py::test_a_rehearsal_with_a_client_retry_a_restart_and_repeated_evidence_keeps_one_reception`. La parte «evidencia real posterior sanitizada y separada» queda definida por el procedimiento del README y por el entorno `test` comprobado en el ensayo | PASS |
 
@@ -152,11 +152,15 @@ Estado VC01: **PASS** para lo que aplica (ensayo y estado bloqueado declarado). 
 - migrations: PASS, sin migraciones nuevas;
 - tests: PASS, 618 passed, con Postgres real aislado;
 - api: PASS, 15 contratos sin diferencias;
-- evidence: **FAIL a propósito.** B01–B34 están APPROVED, y B35 queda BLOCKED por TC01 (completitud 66.67 %, AC01 bloqueado). Por eso B35 va en un PR borrador fuera de la cadena del stack: su estado bloqueado no debe pintar de rojo los tickets siguientes, ni ocultarse para que el gate pase.
+- evidence: en ese momento, FAIL a propósito (B35 BLOCKED por TC01, 66.67 %). Tras mover TC01 a #112 (2026-11-26), B35 queda APPROVED al 2/2 y la rama vuelve al stack.
 
 ## Umbral
 
-AC PASS / AC aplicables = 2/3 = **66.67 %**, por debajo del 97 %. **B35 no se puede aprobar ni cerrar** hasta ejecutar TC01 con acceso real autorizado.
+AC PASS / AC aplicables = 2/2 = **100 %**.
+
+- AC01 queda como no aplicable en B35 (`applicable = false`), porque su único caso, la prueba real con pey, se movió a #112 por decisión del responsable del producto (2026-11-26).
+- La decisión no convierte la simulación en prueba real. #112 sigue abierto y BLOCKED hasta ejecutarse con acceso autorizado.
+- Hasta entonces, B35 entrega el ensayo y el procedimiento, nada más.
 
 ## Review Standards/Spec
 
@@ -190,4 +194,6 @@ AC PASS / AC aplicables = 2/3 = **66.67 %**, por debajo del 97 %. **B35 no se pu
 ## Estado final
 
 - **Review:** Standards y Spec aprueban (APPROVE) la revisión `8ee622d`.
-- **Ticket:** B35 sigue **BLOQUEADO**. TC01 necesita acceso real autorizado a pey, así que la completitud es 2/3 = 66.67 % y no se puede cerrar ni presentar como integración aprobada. El PR va como borrador, fuera de la cadena del stack #68.
+- **Ticket:** la prueba real salió a #112 por decisión del responsable del producto (2026-11-26).
+  - B35 entrega el ensayo, el procedimiento y la preparación sin acceso. Completitud 2/2 = 100 %.
+  - #112 sigue abierto y BLOCKED: la integración bancaria real no está demostrada.
