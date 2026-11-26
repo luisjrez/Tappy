@@ -43,9 +43,8 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "C4", "PT", "RUF", "N", "S", "AS
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
-"tests/support.py" = ["S603"]
-"tests/test_startup.py" = ["S310"]
-"tests/test_persistence.py" = ["S603", "S607"]
+"tests/support.py" = ["S310", "S603"]
+"tests/compose_support.py" = ["S603", "S607"]
 "tests/quality/*" = ["S603"]
 
 [tool.mypy]

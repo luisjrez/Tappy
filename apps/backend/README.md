@@ -156,6 +156,54 @@ Quotas are counted in Postgres (`operation_quotas`), so they hold across process
 - When a notification is missing, `uv run python -m tappy.sales reconcile <attempt-id>` asks the configured provider for the payments of that attempt's QR (pey `GET /transaction/codi/qr/{id}`, following `nextToken` for at most 10 pages of 20) and applies each `PAID` transaction through the same confirmation as webhooks. pey's answer carries no `bankAccountId`, so the receiving account is the one the QR was issued for, and the QR id must be the attempt's own. A transfer already recorded by a webhook (or by an earlier reconciliation) is a `duplicate` and is never counted twice. No transactions, only `PENDING` ones, a 404, a rate limit, a server error, a timeout or an unbounded number of pages never fail or expire the attempt: the payment stays unconfirmed and the command says why. A confirmation closes the attempt's pending reconciliation jobs. Attempts without a QR id cannot be queried by id. The simulated provider never reports payments.
 - `uv run python -m tappy.sales run-jobs` runs one batch and is meant to be scheduled (for example every minute with cron); there is no external queue. A batch applies up to `TAPPY_JOB_BATCH_SIZE` stored webhook events still `received` (an event persisted before a crash is applied by the next batch), moves `creating` attempts older than `TAPPY_ATTEMPT_CREATION_TIMEOUT_SECONDS` to reconciliation, and claims up to `TAPPY_JOB_BATCH_SIZE` (default 20) due reconciliation jobs with a lease of `TAPPY_JOB_LEASE_SECONDS` (default 600; with pey it must exceed 40 times `TAPPY_PEY_TIMEOUT_SECONDS`, the longest bounded query). Claims use `FOR UPDATE SKIP LOCKED` and a lease owner: while a lease is live no other runner takes the job, and a runner whose lease expired can no longer finish or reschedule it. Every claim counts as a try. A confirmed or reviewed job is `done`, and every batch also closes the jobs of attempts already paid by a webhook. An attempt without a QR id (an interrupted creation) cannot be queried by id, so its job becomes `exhausted` at once for an operator; a later webhook can still confirm it. Any other result (no evidence, provider problem) is rescheduled after `TAPPY_JOB_BACKOFF_SECONDS` doubled per try up to `TAPPY_JOB_BACKOFF_MAX_SECONDS` (defaults 60 and 3600), or later when pey answers `429` with a `Retry-After` in seconds (bounded to one day). After `TAPPY_JOB_MAX_TRIES` (default 8), including claims whose runner crashed, the job becomes `exhausted` and is no longer retried; the payment stays unconfirmed for an operator. `uv run python -m tappy.sales reconciliations` lists pending and exhausted jobs with tries, lease and last problem. Leases are compared with the runner's clock, so runner hosts must keep their clocks synchronized. Money is never counted twice because every path goes through the same deduplicated confirmation.
 
+## Diagnostics and recovery
+
+### Error references and logs
+
+- Every HTTP response carries an `X-Request-ID` header. A caller may send its own (8–64 letters, digits, `-` or `_`, not only digits, so it is never mistaken for a phone or a CLABE in the logs); anything else is replaced by a generated 32-character reference.
+- An unexpected error answers `500` with `{"detail": "Internal server error", "reference": "<X-Request-ID>"}` and logs `Unhandled error in <method> <route template>` with the traceback under the same reference, so a user's report can be matched to the log line. Expected errors keep their own status and `detail`.
+- `python -m tappy` (Uvicorn's own server and access lines included), `python -m tappy.sales` and `python -m tappy.identity` log to stderr as `time level logger [reference] message` (`-` outside a request). Every line, traceback included, is redacted before it is written:
+  - the configured secrets (`TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` with and without its `whsec_` prefix, and the database password) become `[redacted]`, longest first, and so do `Bearer` tokens and `whsec_` keys. A configured secret shorter than 8 characters is not replaced, because it could not be told apart from ordinary words: the process warns at startup which setting is too short (never its value). Use longer secrets;
+  - CLABEs keep only their last four digits (`**************6789`) when written as 18 digits or grouped `3 3 11 1` or `4 4 4 4 2`;
+  - Mexican phone numbers keep only their last four digits (`******5678`) when written as 10 digits, grouped `2 4 4` or `3 3 4` with spaces, dots or hyphens, with the area code in brackets (`(55) 1234 5678`), and optionally prefixed with `52`, `+52` or `+52 1`;
+  - both rules also apply when the number is URL-encoded in a logged path (`%2B52…`, `%20` between groups). Digits inside longer identifiers (UUIDs, digests, ids), amounts, dates and versions are left alone;
+  - email addresses become `[email]`.
+- A command that fails unexpectedly logs `Command <name> failed` with the redacted traceback and exits `1`.
+- Each reconciliation job logs `Reconciliation job <id> for sale <reference> (attempt <id>): <outcome>`, so a sale reference can be followed through `run-jobs`.
+- Stored webhook bodies (`webhook_events.payload`, `webhook_event_conflicts.payload`) may contain payer data from pey's `metadata` (originating CLABE, tracking key, external metadata). They are evidence of a reception. They are never logged, never returned by the API or the back office, and are readable only with direct database access. The commands diagnose with event ids, digests, types and statuses only. How long they are kept and when they are purged or minimized is a pending product decision ([#109](https://github.com/luisjrez/Tappy/issues/109)); until then they are kept.
+
+### Backlog
+
+`uv run python -m tappy.sales backlog` prints the delay indicators:
+
+- `received webhook events`: events stored but not applied yet;
+- `due reconciliation jobs`: jobs a runner may claim now (due, without a live lease);
+- `leased reconciliation jobs`: jobs held by a runner, and how many of those leases already expired (a runner that died);
+- `exhausted reconciliation jobs`;
+- `attempts creating longer than TAPPY_ATTEMPT_CREATION_TIMEOUT_SECONDS`;
+- `open payment exceptions`.
+
+Received events, due jobs and stalled creations also show how long their oldest item has waited, in seconds. `reconciliations` lists the open jobs with their sale reference, and `run-jobs` resumes them.
+
+### Backup and restore
+
+Back up with the server's own `pg_dump` (the custom format keeps the schema, the Alembic version and every row, pending jobs and stored events included). Always restore into a **new** database: `createdb` refuses a name that already exists, so a restore never overwrites the running database. Each step runs only if the previous one succeeded, and `--single-transaction` leaves the new database empty if the restore fails halfway.
+
+```sh
+docker compose exec -T db pg_dump --format=custom --no-owner -U tappy -d tappy > tappy.dump \
+  && docker compose exec -T db createdb -U tappy tappy_restored \
+  && docker compose exec -T db pg_restore --no-owner --exit-on-error --single-transaction \
+    -U tappy -d tappy_restored < tappy.dump
+```
+
+Then point a process at the restored database (`TAPPY_DATABASE_URL=…/tappy_restored`) and check it:
+
+1. `GET /ready` answers `200`, so the schema is current.
+2. `uv run python -m tappy.sales backlog` and `reconciliations` show the pending work.
+3. `uv run python -m tappy.sales run-jobs` resumes it. A job whose runner died keeps its lease until it expires and is then claimed again; it finishes once, and a second `run-jobs` claims nothing.
+
+Switch the application to the restored database only after these checks. The procedure is tested end to end against a disposable Compose project (`tests/test_backup_restore.py`), never against the development or a production database. Dumps contain the stored webhook bodies and must be handled as sensitive data.
+
 ## Back office
 
 Starlette Admin is mounted at `/admin`. Only active administrators can sign in; operators and anonymous visitors are sent back to the login page. The panel reuses the API session model: signing in creates the same revocable session as `POST /auth/login`, expired access is renewed with the stored refresh token, and the logout button revokes the session.

@@ -254,6 +254,17 @@ class JobRunner:
         report = reconcile_attempt(
             self.database, job.attempt_id, self.provider, self.environment, self.clock
         )
+        outcome = self.settle(job, report)
+        logger.info(
+            "Reconciliation job %s for sale %s (attempt %s): %s",
+            job.id,
+            report.attempt.sale_reference,
+            job.attempt_id,
+            outcome,
+        )
+        return outcome
+
+    def settle(self, job: ClaimedJob, report: ReconciliationReport) -> JobOutcome:
         with self.database.transaction() as db:
             finished = FINISHED.get(report.result)
             if finished is None:

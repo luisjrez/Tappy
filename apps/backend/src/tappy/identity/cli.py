@@ -1,5 +1,6 @@
 import argparse
 import getpass
+import logging
 import sys
 from collections.abc import Callable, Sequence
 
@@ -14,8 +15,10 @@ from tappy.identity.provisioning import (
 from tappy.platform.clock import SystemClock
 from tappy.platform.config import ConfigurationError, load_settings
 from tappy.platform.database import Database
+from tappy.platform.diagnostics import configure_logging
 
 Handler = Callable[[Database, str], str]
+logger = logging.getLogger(__name__)
 
 
 def read_password() -> str:
@@ -78,14 +81,19 @@ def main(arguments: Sequence[str]) -> int:
     options = parse(arguments)
     handler: Handler = options.handler
     try:
-        database = Database.from_settings(load_settings())
+        settings = load_settings()
     except ConfigurationError as error:
         print(error, file=sys.stderr)
         return 1
+    configure_logging(settings)
+    database = Database.from_settings(settings)
     try:
         print(handler(database, options.email))
     except IdentityError as error:
         print(f"Error: {error}", file=sys.stderr)
+        return 1
+    except Exception:
+        logger.exception("Command %s failed", options.command)
         return 1
     finally:
         database.dispose()

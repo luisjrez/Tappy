@@ -15,6 +15,7 @@ from tappy.platform import health
 from tappy.platform.clock import Clock, SystemClock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
+from tappy.platform.diagnostics import RequestReference
 from tappy.platform.quota_responses import quota_exceeded_response
 from tappy.platform.quotas import QuotaExceededError
 from tappy.platform.validation import validation_error_response
@@ -49,6 +50,7 @@ def create_app(
     app.state.database = database
     app.state.clock = clock or SystemClock()
     app.state.qr_provider = qr_provider or provider_from(settings)
+    app.add_middleware(RequestReference)
     app.add_exception_handler(RequestValidationError, validation_error_response)
     app.add_exception_handler(QuotaExceededError, quota_exceeded_response)
     for router in API_ROUTERS:
