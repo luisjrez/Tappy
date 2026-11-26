@@ -126,7 +126,7 @@ Ronda 1 sobre `f30a5a5`, sin violaciones duras; correcciones en `f02a52a`.
 | Standards | Digests de límites sin clave; formulario sin límite de longitud y aceptaba archivos | HMAC con clave derivada; límite 254 y solo texto |
 | Standards | `RecoveryService.submit` como Middle Man | Se conserva: agrupa política y sellador para API, panel y worker |
 
-Re-revisión sobre `f02a52a`: sin hallazgos bloqueantes en ambos ejes (sin señal de enumeración; entrega por correo aislada; fragmento; HMAC; sin correos en claro fuera de `identities` y destinatario del outbox). Menores aplicados en `cbe0679` con Red/Green: un correo que ya agotó intentos (caídas repetidas a mitad de envío) se marca `failed` sin reenviar (`test_exhausted_email_is_not_sent_again_after_repeated_crashes`); cada trabajo de recuperación corre en su savepoint y un error de DB en uno no frena al resto; el worker borra intentos fuera de la ventana (`test_worker_discards_attempts_outside_the_window`). Ambos ejes aprobados. **B41 sigue BLOCKED por TC06** (80 %).
+Re-revisión sobre `f02a52a`: sin hallazgos bloqueantes en ambos ejes (sin señal de enumeración; entrega por correo aislada; fragmento; HMAC; sin correos en claro fuera de `identities` y destinatario del outbox). Menores aplicados en `cbe0679` con Red/Green: un correo que ya agotó intentos (caídas repetidas a mitad de envío) se marca `failed` sin reenviar (`test_exhausted_email_is_not_sent_again_after_repeated_crashes`); cada trabajo de recuperación corre en su savepoint y un error de DB en uno no frena al resto; el worker borra intentos fuera de la ventana (`test_worker_discards_attempts_outside_the_window`). Ambos ejes aprobados. En ese momento, B41 seguía BLOCKED por TC06 (80 %). Ver «Integración con el stack #68 y prueba real movida» para el estado posterior al 2026-11-26.
 
 ## Integración con el stack #68 y prueba real movida (2026-11-26)
 
@@ -137,3 +137,16 @@ Re-revisión sobre `f02a52a`: sin hallazgos bloqueantes en ambos ejes (sin seña
   - La exención `S603`/`S607` de `tests/test_persistence.py` ya vive en `tests/compose_support.py` (B34).
 - **Migración:** `0007_identity_password_recovery` pasa a `0026_identity_password_recovery`, con `down_revision = "0025_phone_requests"`, para mantener una sola cabeza encima de B36. El esquema que crea no cambia.
 - **Stack:** B41/B42 dejan el stack lateral #65 y siguen en el stack #68, encima de B36 (#115).
+- **Review de la integración:**
+  - Standards pidió cambios (REQUEST_CHANGES):
+    - la redacción de B34 no cubría `TAPPY_SMTP_PASSWORD`. Ahora está en `named_secrets` y en el README, y `test_configured_secrets_never_reach_a_log_line` lo comprueba (falló primero: la contraseña salía en claro);
+    - la fusión trajo de vuelta una exención muerta, `"tests/test_startup.py" = ["S310"]`, que se retiró.
+  - Spec pidió cambios (REQUEST_CHANGES):
+    - registrar la decisión en #49 (hecho);
+    - apuntar el manifiesto a la revisión integrada;
+    - corregir la línea que seguía diciendo «BLOCKED 80 %».
+  - Correcciones en `06b3308`.
+- **Checks sobre `06b3308`**, con `.env` exportado:
+  - format, lint, types, hygiene, migrations (cadena lineal hasta `0026_identity_password_recovery`, que es la cabeza, con upgrade/downgrade sin drift), tests (`680 passed`) y api (16 contratos sin diferencias): PASS;
+  - evidence: B01–B36 y B41 APPROVED.
+- **Fallo intermitente de infraestructura:** una corrida anterior sobre `ecfb3d8` tuvo 2 errores al levantar proyectos Compose desechables (`docker compose up` no arrancó el contenedor). Esos tests pasan 3 de 3 veces por separado, y la corrida siguiente salió completa en verde. No es un fallo de B41.
