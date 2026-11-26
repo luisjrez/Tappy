@@ -1,5 +1,5 @@
 ticket = "B36"
-revision = "669f3da"
+revision = "3698a3f"
 
 [vc01]
 status = "PASS"
@@ -23,6 +23,8 @@ tests = [
     "tests/sales/test_phone_requests.py::test_a_consented_number_creates_a_pending_request_that_keeps_the_provider_ids",
     "tests/sales/test_phone_requests.py::test_the_simulated_provider_creates_a_marked_pending_request",
     "tests/sales/test_phone_requests.py::test_a_phone_number_is_normalized_to_ten_digits",
+    "tests/sales/test_phone_requests.py::test_the_number_is_only_kept_behind_a_keyed_fingerprint",
+    "tests/sales/test_phone_requests.py::test_a_withdrawn_phone_request_asks_for_no_action",
 ]
 
 [[criteria]]
@@ -40,6 +42,7 @@ tests = [
     "tests/sales/test_phone_requests.py::test_phone_requests_stay_disabled_until_numbers_are_configured",
     "tests/sales/test_phone_requests.py::test_a_malformed_phone_number_is_refused",
     "tests/sales/test_phone_requests.py::test_the_demo_list_only_accepts_ten_digit_numbers",
+    "tests/sales/test_phone_requests.py::test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified",
     "tests/sales/test_phone_requests.py::test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider",
 ]
 
@@ -56,4 +59,5 @@ tests = [
     "tests/sales/test_phone_requests.py::test_a_server_error_or_an_unusable_answer_keeps_the_request_verifying",
     "tests/sales/test_phone_requests.py::test_a_definitive_rejection_fails_the_phone_request_with_its_code",
     "tests/sales/test_phone_requests.py::test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint",
+    "tests/sales/test_phone_requests.py::test_an_expired_phone_request_blocks_new_attempts_until_payments_can_be_verified",
 ]
