@@ -15,7 +15,7 @@ from tappy.platform.dependencies import (
     SessionDependency,
     SettingsDependency,
 )
-from tappy.platform.phones import PhoneNumberError, normalized_phone
+from tappy.platform.phones import PhoneNumberError, normalized_phone, phone_fingerprint
 from tappy.platform.quota_responses import QuotaExceededResponse
 from tappy.platform.quotas import QuotaOperation, QuotaPolicy, identity_scope, reserve_quota
 from tappy.sales.attempts import AttemptOutcome, AttemptRequest, request_attempt
@@ -199,7 +199,14 @@ def attempt_request(
 ) -> AttemptRequest:
     quota = QuotaPolicy(settings.attempt_creation_quota, settings.quota_window)
     phone_number = permitted_phone(payload, settings)
-    return AttemptRequest(actor, sale_id, payload.method, idempotency_key, quota, phone_number)
+    fingerprint = (
+        None
+        if phone_number is None
+        else phone_fingerprint(phone_number, settings.secret_key.get_secret_value())
+    )
+    return AttemptRequest(
+        actor, sale_id, payload.method, idempotency_key, quota, phone_number, fingerprint
+    )
 
 
 def permitted_phone(payload: AttemptCreateRequest, settings: Settings) -> str | None:
@@ -218,9 +225,9 @@ def permitted_phone(payload: AttemptCreateRequest, settings: Settings) -> str | 
         number = normalized_phone(payload.phone_number)
     except PhoneNumberError as error:
         raise HTTPException(HTTPStatus.UNPROCESSABLE_CONTENT, detail=str(error)) from None
-    if not settings.phone_request_allowlist:
+    if not settings.phone_request_numbers:
         raise HTTPException(HTTPStatus.CONFLICT, detail="Phone payment requests are not enabled")
-    if number not in settings.phone_request_allowlist:
+    if number not in settings.phone_request_numbers:
         raise HTTPException(
             HTTPStatus.UNPROCESSABLE_CONTENT,
             detail="The phone number is not permitted for payment requests",

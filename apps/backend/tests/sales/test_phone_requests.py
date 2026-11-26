@@ -1,3 +1,4 @@
+import hashlib
 import json
 import uuid
 from collections.abc import Iterator
@@ -7,12 +8,18 @@ from typing import Any
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import SecretStr, ValidationError
+from pydantic import ValidationError
 
 from tappy.platform.clock import SystemClock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
-from tappy.platform.phones import PhoneNumberError, normalized_phone
+from tappy.platform.phones import (
+    PhoneNumberError,
+    normalized_phone,
+    phone_fingerprint,
+    phone_list,
+)
+from tappy.sales.idempotency import digest_of
 from tappy.sales.reconciliation import ReconciliationResult, reconcile_attempt
 from tests.payments.pey_support import PUSH_CREATED, PUSH_FIXTURE, FakePey
 from tests.sales.support import (
@@ -25,7 +32,7 @@ from tests.sales.support import (
     ready_merchant,
     start_client,
 )
-from tests.support import VALID_SECRET, build_settings, scalar
+from tests.support import VALID_SECRET, build_settings, execute, run_sales, scalar
 
 CONSENTED = "5512345678"
 OTHER_CONSENTED = "5587650000"
@@ -37,7 +44,7 @@ EXPIRATION_MINIMUM = PUSH_FIXTURE["request_schema"]["properties"]["expiration"][
 
 def phone_settings(database_url: str, allowed: str = ALLOWED) -> Settings:
     return build_settings(database_url=database_url).model_copy(
-        update={"phone_request_numbers": allowed}
+        update={"phone_request_numbers": phone_list(allowed)}
     )
 
 
@@ -317,14 +324,30 @@ def test_a_malformed_phone_number_is_refused(raw: str) -> None:
         normalized_phone(raw)
 
 
+def demo_list_settings(environment: str, numbers: str) -> Settings:
+    return Settings.model_validate(
+        {
+            "environment": environment,
+            "secret_key": VALID_SECRET,
+            "database_url": "postgresql+psycopg://user:password@127.0.0.1/db",
+            "phone_request_numbers": numbers,
+        }
+    )
+
+
 def test_the_demo_list_only_accepts_ten_digit_numbers() -> None:
     with pytest.raises(ValidationError, match="exactly 10 digits"):
-        Settings(
-            environment="test",
-            secret_key=SecretStr(VALID_SECRET),
-            database_url=SecretStr("postgresql+psycopg://user:password@127.0.0.1/db"),
-            phone_request_numbers="5512345678,551234",
-        )
+        demo_list_settings("test", "5512345678,551234")
+
+
+@pytest.mark.parametrize("environment", ["local", "integration", "production"])
+def test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified(
+    environment: str,
+) -> None:
+    with pytest.raises(ValidationError, match="until phone payments can be verified"):
+        demo_list_settings(environment, CONSENTED)
+
+    assert demo_list_settings(environment, "").phone_request_numbers == frozenset()
 
 
 def test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint(
@@ -362,3 +385,66 @@ def test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_pr
     assert second.status_code == HTTPStatus.CONFLICT
     assert len(posted(fake)) == 1
     assert attempt_count(migrated_database_url) == 1
+
+
+def test_the_number_is_only_kept_behind_a_keyed_fingerprint(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, operator = open_sale(client, migrated_database_url)
+
+    request_phone(client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED})
+
+    content = {"sale_id": sale["id"], "method": "phone"}
+    keyed = digest_of({**content, "phone": phone_fingerprint(CONSENTED, VALID_SECRET)})
+    unkeyed = digest_of({**content, "phone": hashlib.sha256(CONSENTED.encode()).hexdigest()})
+    stored = scalar(
+        migrated_database_url,
+        "SELECT request_digest FROM idempotency_requests WHERE operation = 'create_attempt'",
+    )
+    assert stored == keyed
+    assert stored != unkeyed
+    assert (
+        scalar(
+            migrated_database_url,
+            "SELECT count(*) FROM idempotency_requests "
+            "WHERE row_to_json(idempotency_requests)::text LIKE :n",
+            {"n": f"%{CONSENTED}%"},
+        )
+        == 0
+    )
+
+
+def test_an_expired_phone_request_blocks_new_attempts_until_payments_can_be_verified(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, operator = open_sale(client, migrated_database_url)
+    request_phone(client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED})
+    execute(
+        migrated_database_url,
+        "UPDATE payment_attempts SET expires_at = now() - interval '1 minute'",
+    )
+
+    expired = client.get(f"/sales/{sale['id']}", headers=operator).json()
+    batch = run_sales(migrated_database_url, "run-jobs")
+    retried = request_phone(client, operator, sale["id"], {"method": "qr"})
+
+    assert [(item["status"], item["next_action"]) for item in expired["attempts"]] == [
+        ("expired", "verify_before_retry")
+    ]
+    assert "exhausted: 1" in batch.stdout
+    assert retried.status_code == HTTPStatus.CONFLICT
+    assert retried.json() == {
+        "detail": "The previous attempt expired; verify it before creating another"
+    }
+
+
+def test_a_withdrawn_phone_request_asks_for_no_action(
+    client: TestClient, migrated_database_url: str
+) -> None:
+    sale, operator = open_sale(client, migrated_database_url)
+    request_phone(client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED})
+    execute(migrated_database_url, "UPDATE payment_attempts SET withdrawn_at = now()")
+
+    read = client.get(f"/sales/{sale['id']}", headers=operator).json()
+
+    assert read["attempts"][0]["next_action"] == "none"

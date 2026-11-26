@@ -25,7 +25,7 @@ from tappy.payments.provider import (
 from tappy.platform.clock import SystemClock
 from tappy.platform.database import Database
 from tappy.platform.schema import alembic_config
-from tappy.sales.attempts import record_issued_qr
+from tappy.sales.attempts import record_issued
 from tappy.sales.receptions import process_stored
 from tests.payments.webhook_support import settings_for
 from tests.sales.support import (
@@ -191,9 +191,7 @@ def test_a_late_response_with_another_qr_never_re_associates_a_paid_attempt(
                 pytest.raises(ProviderUnavailableError) as raised,
                 database.transaction() as session,
             ):
-                record_issued_qr(
-                    session, attempt_id, IssuedQr("OTHER-QR", "late"), datetime.now(UTC)
-                )
+                record_issued(session, attempt_id, IssuedQr("OTHER-QR", "late"), datetime.now(UTC))
         finally:
             database.dispose()
         read = client.get(f"/sales/{sale['id']}", headers=operator_a).json()
@@ -367,7 +365,7 @@ def test_an_event_without_metadata_racing_the_creation_response_is_applied(
         database = Database.from_settings(build_settings(database_url=migrated_database_url))
         try:
             with database.session_factory() as racing, racing.begin():
-                record_issued_qr(racing, attempt_id, IssuedQr(QR_ID, PAYLOAD), datetime.now(UTC))
+                record_issued(racing, attempt_id, IssuedQr(QR_ID, PAYLOAD), datetime.now(UTC))
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     processing = pool.submit(receive, migrated_database_url, event)
                     wait_until_blocked_on_a_lock(migrated_database_url)

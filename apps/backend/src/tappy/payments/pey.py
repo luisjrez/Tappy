@@ -92,11 +92,11 @@ def pesos(amount_cents: int) -> float:
     return sent
 
 
-def qr_request(order: QrOrder | PhoneOrder, qr_window: timedelta) -> dict[str, object]:
+def creation_body(order: QrOrder | PhoneOrder, window: timedelta) -> dict[str, object]:
     body: dict[str, object] = {
         "amount": pesos(order.amount_cents),
         "bankAccountId": order.receiver_account,
-        "expiration": int(qr_window.total_seconds()),
+        "expiration": int(window.total_seconds()),
         "metadata": {"tappy_attempt_id": str(order.attempt_id), "tappy_reference": order.reference},
     }
     if order.concept is not None:
@@ -104,8 +104,8 @@ def qr_request(order: QrOrder | PhoneOrder, qr_window: timedelta) -> dict[str, o
     return body
 
 
-def push_request(order: PhoneOrder, qr_window: timedelta) -> dict[str, object]:
-    return {**qr_request(order, qr_window), "phoneNumber": order.phone_number}
+def push_request(order: PhoneOrder, window: timedelta) -> dict[str, object]:
+    return {**creation_body(order, window), "phoneNumber": order.phone_number}
 
 
 def rejection_code(response: httpx2.Response) -> str:
@@ -186,9 +186,9 @@ class PeyQrProvider:
             except httpx2.TransportError:
                 raise ProviderUnavailableError(UncertainReason.CONNECTION) from None
 
-    def post(self, order: QrOrder) -> httpx2.Response:
+    def post(self, path: str, body: dict[str, object]) -> httpx2.Response:
         with self.client() as client:
-            return client.post("/codi/qr", json=qr_request(order, self.settings.qr_window))
+            return client.post(path, json=body)
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
         path = f"/transaction/codi/qr/{quote(provider_request_id, safe='')}"
@@ -207,8 +207,7 @@ class PeyQrProvider:
         raise PaymentsQueryError(QueryProblem.TOO_MANY_PAGES)
 
     def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest:
-        with self.client() as client:
-            response = client.post("/codi/pn", json=push_request(order, self.settings.qr_window))
+        response = self.post("/codi/pn", push_request(order, self.settings.qr_window))
         logger.info(
             "pey phone request for attempt %s answered %s", order.attempt_id, response.status_code
         )
@@ -219,7 +218,7 @@ class PeyQrProvider:
         raise ProviderUnavailableError(UncertainReason.SERVER_ERROR)
 
     def create_qr(self, order: QrOrder) -> IssuedQr:
-        response = self.post(order)
+        response = self.post("/codi/qr", creation_body(order, self.settings.qr_window))
         logger.info(
             "pey QR creation for attempt %s answered %s", order.attempt_id, response.status_code
         )
