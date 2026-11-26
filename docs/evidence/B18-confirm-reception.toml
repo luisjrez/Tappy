@@ -1,0 +1,54 @@
+ticket = "B18"
+revision = "de0a0c2"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B18-confirm-reception.md#b18-vc01--antesdespués-de-la-recepción"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B18-AC01"
+use_cases = ["B18-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B18-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_reception.py::test_exact_evidence_confirms_the_transfer_and_the_sale",
+    "tests/sales/test_reception.py::test_the_operations_command_applies_stored_events",
+    "tests/sales/test_reception.py::test_epoch_seconds_are_read_as_utc",
+    "tests/sales/test_reception.py::test_transfers_cannot_be_changed_or_removed_once_recorded",
+]
+
+[[criteria]]
+id = "B18-AC02"
+use_cases = ["B18-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B18-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_reception.py::test_insufficient_evidence_never_marks_the_sale_received",
+    "tests/sales/test_reception.py::test_an_invalid_signature_leaves_the_pending_attempt_untouched",
+    "tests/sales/test_reception.py::test_extreme_values_are_treated_as_insufficient_not_as_failures",
+    "tests/sales/test_reception.py::test_a_transaction_id_already_recorded_for_another_sale_opens_a_review",
+]
+
+[[criteria]]
+id = "B18-AC03"
+use_cases = ["B18-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B18-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_reception.py::test_a_failure_inside_the_application_leaves_no_partial_state_and_reprocessing_completes",
+]

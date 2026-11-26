@@ -179,4 +179,9 @@ def test_there_is_no_public_sign_up_route(client: TestClient) -> None:
         "/merchants",
         "/merchants/{merchant_id}/members",
         "/merchants/{merchant_id}/issuance-check",
+        "/sales",
+        "/sales/{sale_id}/attempts",
+        "/webhooks/pey",
+        "/exceptions/{exception_id}/notes",
+        "/exceptions/{exception_id}/reconciliation",
     }

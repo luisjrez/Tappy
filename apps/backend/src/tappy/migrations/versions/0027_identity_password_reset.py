@@ -3,8 +3,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0008_identity_password_reset"
-down_revision: str | None = "0007_identity_password_recovery"
+revision: str = "0027_identity_password_reset"
+down_revision: str | None = "0026_identity_password_recovery"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

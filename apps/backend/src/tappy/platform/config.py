@@ -1,16 +1,49 @@
+import base64
+import binascii
 from collections.abc import Sequence
+from datetime import timedelta
+from typing import Annotated, Literal, Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, SecretStr, ValidationError, ValidationInfo, field_validator
+from pydantic import (
+    Field,
+    SecretStr,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import ErrorDetails
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+from tappy.platform.phones import phone_list
 
 ENV_PREFIX = "TAPPY_"
+TEST_ENVIRONMENT = "test"
+PHONE_REQUESTS_UNVERIFIABLE = (
+    "TAPPY_PHONE_REQUEST_NUMBERS is only accepted in the test environment with the simulated "
+    "provider until phone payments can be verified"
+)
+PROVIDER_MAX_AMOUNT_CENTS = 100_000_000
+PEY_KEY_REQUIRED = "TAPPY_PEY_API_KEY is required when TAPPY_PAYMENT_PROVIDER is pey"
+PROVIDER_TIMEOUT_PHASES = 4
+MAX_QUERY_PAGES = 10
+PEY_MIN_QR_EXPIRATION_SECONDS = 360
+STANDARD_WEBHOOKS_PREFIX = "whsec_"
+WEBHOOK_KEY_MIN_BYTES = 24
+PEY_BASE_URL = r"^(https://|http://(127\.0\.0\.1|localhost)(:\d+)?(/|$))"
+
+
+def standard_webhook_key(secret: str) -> bytes:
+    if not secret.startswith(STANDARD_WEBHOOKS_PREFIX):
+        raise binascii.Error("missing whsec_ prefix")
+    return base64.b64decode(secret.removeprefix(STANDARD_WEBHOOKS_PREFIX), validate=True)
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, frozen=True)
 
-    environment: str = Field(min_length=1)
+    environment: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,31}$")
     secret_key: SecretStr = Field(min_length=32)
     database_url: SecretStr = Field(min_length=1)
     host: str = "127.0.0.1"
@@ -32,6 +65,109 @@ class Settings(BaseSettings):
     smtp_starttls: bool = False
     mail_from: str = "Tappy <no-reply@tappy.example>"
     delivery_max_attempts: int = Field(default=5, ge=1)
+    payment_provider: Literal["simulated", "pey"] = "simulated"
+    pey_base_url: str = Field(default="https://api.pey.mx", pattern=PEY_BASE_URL)
+    pey_api_key: SecretStr | None = Field(default=None, min_length=16)
+    pey_timeout_seconds: float = Field(default=10, gt=0, le=60)
+    attempt_creation_timeout_seconds: int = Field(default=60, ge=1)
+    timezone: str = "America/Mexico_City"
+    qr_expiration_seconds: int = Field(default=900, ge=PEY_MIN_QR_EXPIRATION_SECONDS, le=24 * 3600)
+    job_lease_seconds: int = Field(default=600, ge=1)
+    job_batch_size: int = Field(default=20, ge=1, le=100)
+    job_max_tries: int = Field(default=8, ge=1, le=50)
+    job_backoff_seconds: int = Field(default=60, ge=1)
+    job_backoff_max_seconds: int = Field(default=3600, ge=1, le=24 * 3600)
+    pey_webhook_secret: SecretStr | None = None
+    webhook_tolerance_seconds: int = Field(default=300, ge=1, le=3600)
+    webhook_max_body_bytes: int = Field(default=256 * 1024, ge=1024, le=1024 * 1024)
+    api_max_body_bytes: int = Field(default=16 * 1024, ge=1024, le=1024 * 1024)
+    quota_window_seconds: int = Field(default=60, ge=1, le=24 * 3600)
+    sale_creation_quota: int = Field(default=10, ge=1)
+    attempt_creation_quota: int = Field(default=10, ge=1)
+    sale_read_quota: int = Field(default=120, ge=1)
+    sale_max_amount_cents: int = Field(
+        default=PROVIDER_MAX_AMOUNT_CENTS, ge=1, le=PROVIDER_MAX_AMOUNT_CENTS
+    )
+    phone_request_numbers: Annotated[frozenset[str], NoDecode] = frozenset()
+
+    @field_validator("phone_request_numbers", mode="before")
+    @classmethod
+    def ten_digit_phone_numbers(cls, raw: str | frozenset[str]) -> frozenset[str]:
+        return phone_list(raw)
+
+    @model_validator(mode="after")
+    def phone_requests_wait_for_verification(self) -> Self:
+        if self.phone_request_numbers and (
+            self.environment != TEST_ENVIRONMENT or self.payment_provider != "simulated"
+        ):
+            raise ValueError(PHONE_REQUESTS_UNVERIFIABLE)
+        return self
+
+    @property
+    def quota_window(self) -> timedelta:
+        return timedelta(seconds=self.quota_window_seconds)
+
+    @property
+    def zone(self) -> ZoneInfo:
+        return ZoneInfo(self.timezone)
+
+    @field_validator("timezone")
+    @classmethod
+    def known_timezone(cls, name: str) -> str:
+        try:
+            ZoneInfo(name)
+        except ZoneInfoNotFoundError, ValueError:
+            raise ValueError("must be an IANA time zone such as America/Mexico_City") from None
+        return name
+
+    @field_validator("pey_webhook_secret")
+    @classmethod
+    def webhook_secret_format(cls, secret: SecretStr | None) -> SecretStr | None:
+        if secret is None:
+            return None
+        try:
+            key = standard_webhook_key(secret.get_secret_value())
+        except binascii.Error:
+            key = b""
+        if len(key) < WEBHOOK_KEY_MIN_BYTES:
+            raise ValueError("must be a Standard Webhooks secret (whsec_ followed by base64)")
+        return secret
+
+    @model_validator(mode="after")
+    def pey_needs_a_key(self) -> Self:
+        if self.payment_provider == "pey" and self.pey_api_key is None:
+            raise ValueError(PEY_KEY_REQUIRED)
+        return self
+
+    @model_validator(mode="after")
+    def creation_outlasts_provider_calls(self) -> Self:
+        if (
+            self.attempt_creation_timeout_seconds
+            <= PROVIDER_TIMEOUT_PHASES * self.pey_timeout_seconds
+        ):
+            raise ValueError(
+                "TAPPY_ATTEMPT_CREATION_TIMEOUT_SECONDS must exceed "
+                f"{PROVIDER_TIMEOUT_PHASES} times TAPPY_PEY_TIMEOUT_SECONDS"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def lease_outlasts_a_query(self) -> Self:
+        query_seconds = MAX_QUERY_PAGES * PROVIDER_TIMEOUT_PHASES * self.pey_timeout_seconds
+        if self.payment_provider == "pey" and self.job_lease_seconds <= query_seconds:
+            raise ValueError(
+                "TAPPY_JOB_LEASE_SECONDS must exceed "
+                f"{MAX_QUERY_PAGES * PROVIDER_TIMEOUT_PHASES} times TAPPY_PEY_TIMEOUT_SECONDS"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def backoff_is_bounded(self) -> Self:
+        if self.job_backoff_max_seconds < self.job_backoff_seconds:
+            raise ValueError(
+                "TAPPY_JOB_BACKOFF_MAX_SECONDS must be at least TAPPY_JOB_BACKOFF_SECONDS"
+            )
+        return self
 
     @field_validator("password_max_length")
     @classmethod

@@ -1,8 +1,4 @@
-import json
-import time
 from collections.abc import Iterator
-from urllib.error import URLError
-from urllib.request import urlopen
 
 import pytest
 
@@ -14,21 +10,10 @@ from tests.support import (
     free_port,
     run_tappy,
     spawn_tappy,
+    wait_for_json,
 )
 
 SENSITIVE_SHORT_SECRET = "leaked-if-printed"
-
-
-def wait_for_json(url: str, deadline_seconds: float) -> object:
-    deadline = time.monotonic() + deadline_seconds
-    while True:
-        try:
-            with urlopen(url, timeout=1) as response:
-                return json.load(response)
-        except URLError:
-            if time.monotonic() > deadline:
-                raise
-            time.sleep(0.1)
 
 
 @pytest.fixture

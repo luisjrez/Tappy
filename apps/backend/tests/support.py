@@ -1,10 +1,16 @@
+import json
 import os
 import re
 import socket
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta
+from typing import IO
+from urllib.error import URLError
+from urllib.request import urlopen
 
+import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import create_engine, text
@@ -23,6 +29,7 @@ UNREACHABLE_DATABASE_URL = (
 TAPPY_COMMAND = (sys.executable, "-m", "tappy")
 TOKEN_IN_LINK = re.compile(r"#token=(\S+)")
 IDENTITY_COMMAND = (sys.executable, "-m", "tappy.identity")
+SALES_COMMAND = (sys.executable, "-m", "tappy.sales")
 
 
 def build_settings(
@@ -51,13 +58,27 @@ def run_tappy(environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def spawn_tappy(environment: dict[str, str]) -> subprocess.Popen[bytes]:
+def spawn_tappy(
+    environment: dict[str, str], stderr: IO[bytes] | int = subprocess.DEVNULL
+) -> subprocess.Popen[bytes]:
     return subprocess.Popen(
         TAPPY_COMMAND,
         env=isolated_environment(environment),
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=stderr,
     )
+
+
+def wait_for_json(url: str, deadline_seconds: float) -> object:
+    deadline = time.monotonic() + deadline_seconds
+    while True:
+        try:
+            with urlopen(url, timeout=1) as response:
+                return json.load(response)
+        except URLError:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(0.1)
 
 
 def free_port() -> int:
@@ -81,8 +102,24 @@ def run_identity(
     stdin: str = "",
     extra_environment: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    return run_command(
+        IDENTITY_COMMAND, database_url, *arguments, stdin=stdin, extra_environment=extra_environment
+    )
+
+
+def run_sales(database_url: str, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return run_command(SALES_COMMAND, database_url, *arguments)
+
+
+def run_command(
+    command: tuple[str, ...],
+    database_url: str,
+    *arguments: str,
+    stdin: str = "",
+    extra_environment: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [*IDENTITY_COMMAND, *arguments],
+        [*command, *arguments],
         env=isolated_environment({**app_environment(database_url), **(extra_environment or {})}),
         input=stdin,
         capture_output=True,
@@ -126,6 +163,20 @@ def create_identity(
             {"email": email, "hash": hash_password(password), "role": role, "status": status},
         )
     )
+
+
+def wait_until_blocked_on_a_lock(database_url: str) -> None:
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        waiting = scalar(
+            database_url,
+            "SELECT count(*) FROM pg_stat_activity "
+            "WHERE datname = current_database() AND wait_event_type = 'Lock'",
+        )
+        if waiting:
+            return
+        time.sleep(0.01)
+    pytest.fail("the request never waited for a row lock")
 
 
 class MovableClock:

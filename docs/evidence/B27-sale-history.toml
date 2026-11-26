@@ -1,0 +1,51 @@
+ticket = "B27"
+revision = "80c9d7c"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B27-sale-history.md#b27-vc01--resultado-inicial-del-historial"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B27-AC01"
+use_cases = ["B27-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B27-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_sale_history.py::test_consecutive_pages_are_stable_without_repeats_or_gaps",
+    "tests/sales/test_sale_history.py::test_rows_carry_the_sale_summary_without_attempt_duplication",
+]
+
+[[criteria]]
+id = "B27-AC02"
+use_cases = ["B27-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B27-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_sale_history.py::test_invalid_history_requests_are_rejected",
+    "tests/sales/test_sale_history.py::test_fifty_is_the_largest_accepted_limit",
+    "tests/sales/test_sale_history.py::test_history_never_exposes_another_merchant",
+    "tests/sales/test_sale_history.py::test_history_filters_by_creation_time_and_merchant",
+    "tests/sales/test_sale_history.py::test_history_keeps_confirmed_sales_after_the_receiver_is_disabled",
+]
+
+[[criteria]]
+id = "B27-AC03"
+use_cases = ["B27-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B27-TC03"
+mode = "automated"
+tests = ["tests/sales/test_sale_history.py::test_status_filters_keep_pending_apart_from_confirmed_one_row_per_sale"]

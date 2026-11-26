@@ -1,0 +1,58 @@
+ticket = "B32"
+revision = "9c9d6d1"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B32-exception-review.md#b32-vc01--api-antesdespués-y-panel"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B32-AC01"
+use_cases = ["B32-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B32-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_exception_review.py::test_an_admin_notes_an_incident_and_requests_a_recoverable_reconciliation",
+    "tests/sales/test_exception_review.py::test_the_requested_reconciliation_is_picked_up_by_the_job_runner",
+    "tests/sales/test_exception_review.py::test_the_reconciliation_targets_the_qr_of_the_incident_not_the_latest_attempt",
+    "tests/sales/test_exception_review.py::test_a_paid_attempt_has_nothing_left_to_reconcile",
+    "tests/sales/test_exception_review.py::test_an_unassociated_incident_can_be_noted_but_not_reconciled",
+    "tests/sales/test_exception_review.py::test_invalid_notes_are_rejected",
+    "tests/backoffice/test_exceptions_panel.py::test_the_admin_notes_and_requests_reconciliation_from_the_panel",
+    "tests/backoffice/test_exceptions_panel.py::test_an_empty_note_is_refused_with_a_message",
+]
+
+[[criteria]]
+id = "B32-AC02"
+use_cases = ["B32-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B32-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_exception_review.py::test_operators_and_anonymous_callers_cannot_review_incidents",
+    "tests/backoffice/test_exceptions_panel.py::test_without_a_valid_csrf_token_nothing_is_written",
+    "tests/backoffice/test_exceptions_panel.py::test_operators_cannot_review_incidents_in_the_panel",
+]
+
+[[criteria]]
+id = "B32-AC03"
+use_cases = ["B32-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B32-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_exception_review.py::test_repeating_the_request_keeps_one_logical_job_and_the_evidence_intact",
+    "tests/backoffice/test_exceptions_panel.py::test_a_second_request_from_the_panel_keeps_one_job",
+]

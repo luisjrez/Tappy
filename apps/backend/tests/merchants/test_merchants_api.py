@@ -1,4 +1,3 @@
-import time
 import uuid
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +12,13 @@ from tappy.identity.models import Role
 from tappy.identity.operators import deactivate_operator
 from tappy.main import create_app
 from tappy.platform.database import Database
-from tests.support import build_settings, create_identity, execute, scalar
+from tests.support import (
+    build_settings,
+    create_identity,
+    execute,
+    scalar,
+    wait_until_blocked_on_a_lock,
+)
 
 ADMIN = "admin@tappy.example"
 OPERATOR_A = "operadora.a@tappy.example"
@@ -190,20 +195,6 @@ def test_concurrent_assignments_keep_a_single_membership(
     assert statuses.count(HTTPStatus.CREATED) == 1
     assert statuses.count(HTTPStatus.OK) == len(statuses) - 1
     assert scalar(migrated_database_url, "SELECT count(*) FROM memberships") == 1
-
-
-def wait_until_blocked_on_a_lock(database_url: str) -> None:
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        waiting = scalar(
-            database_url,
-            "SELECT count(*) FROM pg_stat_activity "
-            "WHERE datname = current_database() AND wait_event_type = 'Lock'",
-        )
-        if waiting:
-            return
-        time.sleep(0.01)
-    pytest.fail("assignment never waited for the deactivation lock")
 
 
 def test_assignment_racing_a_deactivation_never_links_an_inactive_operator(

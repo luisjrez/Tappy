@@ -1,0 +1,57 @@
+ticket = "B21"
+revision = "2aa67c3"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B21-out-of-order-events.md#b21-vc01--antesdespués-del-pago-anticipado"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B21-AC01"
+use_cases = ["B21-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B21-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_out_of_order.py::test_a_payment_event_before_the_creation_response_ends_confirmed",
+    "tests/sales/test_out_of_order.py::test_an_attempt_in_reconciliation_without_a_qr_id_adopts_a_later_event",
+    "tests/sales/test_out_of_order.py::test_an_early_short_payment_keeps_the_sale_in_review_and_the_qr_is_still_recorded",
+    "tests/sales/test_out_of_order.py::test_a_failed_attempt_never_adopts_an_event",
+    "tests/sales/test_out_of_order.py::test_a_response_with_another_qr_than_the_adopted_one_goes_to_reconciliation",
+]
+
+[[criteria]]
+id = "B21-AC02"
+use_cases = ["B21-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B21-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_out_of_order.py::test_a_late_pending_response_never_degrades_a_paid_attempt",
+    "tests/sales/test_out_of_order.py::test_a_late_response_with_another_qr_never_re_associates_a_paid_attempt",
+    "tests/sales/test_out_of_order.py::test_a_payment_before_a_creation_timeout_is_reported_as_created_and_paid",
+]
+
+[[criteria]]
+id = "B21-AC03"
+use_cases = ["B21-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B21-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_out_of_order.py::test_an_unassociable_early_event_is_applied_once_the_reference_exists",
+    "tests/sales/test_out_of_order.py::test_an_event_without_metadata_racing_the_creation_response_is_applied",
+    "tests/sales/test_out_of_order.py::test_an_event_naming_an_attempt_that_has_another_qr_is_never_adopted",
+    "tests/sales/test_out_of_order.py::test_waiting_references_are_backfilled_for_existing_exceptions",
+]

@@ -1,0 +1,186 @@
+{
+  "source": "https://docs.pey.mx/openapi.json",
+  "openapi_version": "2026-10-20",
+  "sha256": "568e0255f334cbf8e4830324b2301e7c0d37158d90cf3a7bb8d839dd0f345c5a",
+  "operation": "GET /transaction/codi/qr/{id}",
+  "parameters": [
+    {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "description": "The identifier (IDC) of the CoDi QR whose transactions you want to retrieve",
+      "schema": {
+        "type": "string"
+      }
+    },
+    {
+      "name": "nextToken",
+      "in": "query",
+      "required": false,
+      "description": "Pagination token returned by a previous request. Omit it to retrieve the first page",
+      "schema": {
+        "type": "string"
+      }
+    }
+  ],
+  "item_schema": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Unique identifier (ULID) of the transaction"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "PAID"
+        ],
+        "description": "Current status of the transaction"
+      },
+      "amount": {
+        "type": "number",
+        "description": "Total amount of the transaction in MXN (Mexican Peso)"
+      },
+      "amountBreakdown": {
+        "type": "object",
+        "description": "Breakdown of the transaction amount",
+        "properties": {
+          "base": {
+            "type": "number",
+            "description": "Base amount of the transaction"
+          },
+          "tip": {
+            "type": "number",
+            "description": "Tip amount"
+          },
+          "fee": {
+            "type": "number",
+            "description": "Fee amount charged to the payer"
+          }
+        }
+      },
+      "currency": {
+        "type": "string",
+        "description": "ISO 4217 currency code of the transaction"
+      },
+      "paymentMethod": {
+        "type": "string",
+        "enum": [
+          "CODI"
+        ],
+        "description": "Payment method used for the transaction"
+      },
+      "description": {
+        "type": "string",
+        "description": "Concept of the CoDi QR that was paid"
+      },
+      "applicationFee": {
+        "type": "number",
+        "description": "Application fee charged on the transaction, if any"
+      },
+      "dateCreated": {
+        "type": "integer",
+        "description": "Unix timestamp when the transaction was created"
+      },
+      "datePaid": {
+        "type": "integer",
+        "description": "Unix timestamp when the transaction was paid (only present once paid)"
+      },
+      "metadata": {
+        "type": "object",
+        "description": "Additional information about the transaction. The fields present depend on the payment method and the flow used. See [Metadata Response](/docs/types/metadata-response/)."
+      }
+    }
+  },
+  "responses": {
+    "200": {
+      "default": {
+        "items": [
+          {
+            "id": "01HXYZTXN1234567890ABCDE00",
+            "status": "PAID",
+            "amount": 100,
+            "amountBreakdown": {
+              "base": 100
+            },
+            "currency": "MXN",
+            "paymentMethod": "CODI",
+            "description": "Pago de servicio",
+            "dateCreated": 1704067200,
+            "datePaid": 1704067200,
+            "metadata": {
+              "clabe": "000000000000000000",
+              "bankCode": 40012,
+              "accountType": 40,
+              "description": "Pago de servicio",
+              "trackingKey": "0192191042",
+              "externalMetadata": {
+                "orderId": "12345",
+                "customerEmail": "customer@example.com"
+              }
+            }
+          }
+        ],
+        "nextToken": "eyJQSyI6ICJUWE4jMDFIWFlaVFhOMTIzNDU2Nzg5MEFCQ0RFMDAiLCAiU0siOiAiTUVUQURBVEEiLCAiR1NJNFBLIjogIlRYTiNQQVlBQkxFX1RZUEUjQVBJX0NPRElfUVIjMTIzNDU2Nzg5MCIsICJHU0k0U0siOiAiVFhOI1BBSUQjMDFIWFlaVFhOMTIzNDU2Nzg5MEFCQ0RFMDAifQ=="
+      }
+    },
+    "400": {
+      "authError": {
+        "error": {
+          "message": "['apiKeyId not included in request']",
+          "type": "INVALID_REQUEST",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "missingId": {
+        "error": {
+          "message": "Missing CoDi QR ID in path",
+          "type": "INCOMPLETE_PARAMETERS",
+          "requestId": "abc123-def456-ghi789"
+        }
+      },
+      "invalidNextToken": {
+        "error": {
+          "message": "Invalid nextToken",
+          "type": "INVALID_PARAMETERS",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "404": {
+      "default": {
+        "error": {
+          "message": "CoDi QR not found",
+          "type": "NOT_FOUND",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "429": {
+      "default": {
+        "error": {
+          "message": "API call limit reached for the current period",
+          "type": "CALL_LIMIT_REACHED",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    },
+    "500": {
+      "default": {
+        "error": {
+          "message": "Error querying transactions",
+          "type": "INTERNAL_SERVER_ERROR",
+          "requestId": "abc123-def456-ghi789"
+        }
+      }
+    }
+  },
+  "descriptions": {
+    "200": "CoDi QR transactions retrieved successfully",
+    "400": "Bad request - Invalid parameters or validation error",
+    "404": "Not found - CoDi QR does not exist or does not belong to your API key",
+    "429": "Too many requests - API call limit reached for the current period",
+    "500": "Internal server error"
+  }
+}

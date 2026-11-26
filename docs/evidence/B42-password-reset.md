@@ -2,7 +2,7 @@
 
 Ticket: [#50](https://github.com/luisjrez/Tappy/issues/50) · Historia: [H2 #2](https://github.com/luisjrez/Tappy/issues/2) · Protocolo: [TICKET_QUALITY_PROTOCOL](../planning/TICKET_QUALITY_PROTOCOL.md) · Manifiesto: [B42-password-reset.toml](B42-password-reset.toml)
 
-> Stack lateral encima de B41 (#60). B42 no tiene casos externos propios: todos sus AC se verifican con Postgres y correo simulado/Mailpit. La rama hereda el manifiesto de B41, que sigue BLOCKED por su TC06; por eso el CI de esta rama también falla en `evidence` hasta desbloquear B41.
+> Encima de B41 (#60), ahora en el stack #68. B42 no tiene casos externos propios: todos sus AC se verifican con Postgres y correo simulado/Mailpit. Antes heredaba el manifiesto BLOCKED de B41. Desde que la entrega real de B41 (TC06) salió a #113 (2026-11-26), B41 queda APPROVED y la rama ya no falla por herencia.
 
 ## Revisiones y escenario
 
@@ -131,3 +131,12 @@ Ronda 1 sobre `d0f2b84`, sin violaciones duras; correcciones en `a48d9db` y `203
 | Standards | `RecoveryService.confirm` como Middle Man; callback de aviso con un solo uso productivo | Se conservan: el servicio agrupa sellador y políticas; el callback permite probar la atomicidad con un fallo inducido (test registrado como inyección en frontera interna) |
 
 Re-revisión 1 sobre `203fb0f`: hallazgo importante — una renovación concurrente con el reset dejaba viva la sesión renovada (AC04), reproducido por el revisor; corregido en `4085a8f` con Red/Green y test de carrera determinista. Cambio de contrato asociado en B06: el test que exigía que la renovación no esperara a una desactivación en curso pasa a `test_renewal_waits_for_a_concurrent_deactivation_and_then_fails` (espera y falla, sin deadlock). Menores aplicados: política configurada en `bootstrap-admin`; validación de límites. `same-origin` justificado (token en el fragmento). Re-revisión 2 sobre `4085a8f`: Standards sin pendientes; Spec, hallazgo importante — login con la contraseña anterior durante un reset obtenía una sesión no revocada (reproducido por el revisor); corregido en `59c5375` con Red/Green. Nit aceptado: `test_renewal_waits_for_a_concurrent_deactivation_and_then_fails` también pasa sin `share_owner` (la desactivación ya bloquea las filas de sesión); verifica el contrato de espera y fallo, no el bloqueo nuevo, que cubre `…racing_a_reset…`. Re-revisión 3 sobre `59c5375`: sin hallazgos pendientes en ambos ejes (todo camino que crea o renueva sesiones toma la identidad `FOR SHARE`; sin ciclos de bloqueo; login con correo inexistente sigue igualando trabajo). Manifiesto aprobado.
+
+## Integración con el stack #68 (2026-11-26)
+
+- **Integración:** la rama integró B41 actualizado (`main` con B11–B34, más B35 y B36), con merge commit. Conflictos en `backoffice/admin.py` (importaciones), `identity/cli.py`, `main.py`, `platform/config.py` (importaciones) y `tests/support.py`, resueltos así:
+  - `identity/cli.py` conserva el `CommandContext` de B42 junto con el logger y `configure_logging` de B34;
+  - `main.py` monta `reset_page` fuera del bucle de rutas de API, porque es una página HTML;
+  - `tests/support.py` deja que `run_command` acepte `extra_environment`, que `run_identity` reenvía.
+- **Migración:** `0008_identity_password_reset` pasa a `0027_identity_password_reset`, con `down_revision = "0026_identity_password_recovery"`. Queda una sola cabeza y el esquema no cambia.
+- **Prueba real de B41:** se movió a #113, que sigue BLOCKED. B42 no depende de ella para sus AC.

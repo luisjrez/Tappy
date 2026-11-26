@@ -54,3 +54,12 @@ def get_recovery(request: Request) -> RecoveryService:
 
 
 RecoveryDependency = Annotated[RecoveryService, Depends(get_recovery)]
+
+
+def current_operator(identity: CurrentIdentity) -> IdentitySummary:
+    if identity.role is not Role.OPERATOR:
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Operator role required")
+    return identity
+
+
+CurrentOperator = Annotated[IdentitySummary, Depends(current_operator)]
