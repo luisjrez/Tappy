@@ -21,6 +21,7 @@ from tappy.platform.database import Database
 from tappy.sales.errors import AttemptNotFoundError
 from tappy.sales.evidence import EvidenceOutcome, apply_evidence
 from tappy.sales.models import (
+    AttemptMethod,
     AttemptStatus,
     JobStatus,
     PaymentAttempt,
@@ -68,7 +69,11 @@ def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> Qu
     attempt = db.get(PaymentAttempt, attempt_id)
     if attempt is None:
         raise AttemptNotFoundError
-    if attempt.provider_request_id is None or attempt.provider is not provider.name:
+    if (
+        attempt.method is not AttemptMethod.QR
+        or attempt.provider_request_id is None
+        or attempt.provider is not provider.name
+    ):
         return None
     return QueryTarget(
         attempt.id,
