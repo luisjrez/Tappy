@@ -1,5 +1,5 @@
 ticket = "B34"
-revision = "a37fc63"
+revision = "bcdb773"
 
 [vc01]
 status = "PASS"
@@ -22,6 +22,7 @@ mode = "automated"
 tests = [
     "tests/test_diagnostics.py::test_an_unexpected_error_answers_a_reference_and_logs_it_without_sensitive_data",
     "tests/test_diagnostics.py::test_configured_secrets_never_reach_a_log_line",
+    "tests/test_diagnostics.py::test_a_configured_secret_too_short_to_redact_is_named_without_its_value",
     "tests/test_diagnostics.py::test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced",
     "tests/test_diagnostics.py::test_every_error_response_carries_its_reference",
     "tests/test_diagnostics.py::test_server_and_command_lines_go_through_the_same_redacted_format",

@@ -19,6 +19,7 @@ Ticket: [#42](https://github.com/luisjrez/Tappy/issues/42) · Historia: [H7 #7](
   - Candidato de la ronda 1: `c23d9bb`.
   - Candidato de la ronda 2: `842a4e8` (correcciones de la ronda 1 en `caf9960` y `842a4e8`).
   - Candidato de la ronda 3: `a37fc63` (sugerencias no bloqueantes de la ronda 2).
+  - Candidato de la ronda 4: `bcdb773` (aviso de secretos cortos, sugerido por las dos revisiones de la ronda 3).
 - **Entorno:** macOS, Colima + Compose (Postgres 18.6 en los contenedores; `pg_dump` y `pg_restore` se ejecutan dentro del contenedor, con la misma versión que el servidor) y Python 3.14.8. Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Diseño
@@ -43,7 +44,7 @@ Ticket: [#42](https://github.com/luisjrez/Tappy/issues/42) · Historia: [H7 #7](
 
 `RedactingFormatter` redacta la línea ya formateada completa (mensaje y traza). No modifica el `LogRecord`, así que otros handlers no se ven afectados. `ReferenceFilter` solo añade la referencia.
 
-- **Secretos configurados:** `TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` (con y sin el prefijo `whsec_`) y la contraseña de la base → `[redacted]`, del más largo al más corto, para que uno contenido en otro no deje partes del mayor. Los de menos de 8 caracteres no se reemplazan: no se distinguen de palabras normales (una contraseña `tappy` borraría `tappy.sales.cli` y además revelaría cuál es). El README pide secretos más largos.
+- **Secretos configurados:** `TAPPY_SECRET_KEY`, `TAPPY_PEY_API_KEY`, `TAPPY_PEY_WEBHOOK_SECRET` (con y sin el prefijo `whsec_`) y la contraseña de la base → `[redacted]`, del más largo al más corto, para que uno contenido en otro no deje partes del mayor. Los de menos de 8 caracteres no se reemplazan: no se distinguen de palabras normales (una contraseña `tappy` borraría `tappy.sales.cli` y además revelaría cuál es). Al configurar el logging se avisa una vez qué ajuste es demasiado corto, sin su valor (`The database password is shorter than 8 characters, so logs cannot redact it`). El README pide secretos más largos.
 - **Credenciales en texto:** `Bearer …` y `whsec_…` → `[redacted]`.
 - **Datos personales y bancarios:**
   - CLABE de 18 dígitos, también agrupada `3 3 11 1` o `4 4 4 4 2` → `**************6789`;
@@ -97,7 +98,7 @@ Decisión registrada en el README:
 
 | UC | AC | TC | Test real | Resultado |
 | --- | --- | --- | --- | --- |
-| B34-UC01 | B34-AC01 | B34-TC01 | `tests/test_diagnostics.py::test_an_unexpected_error_answers_a_reference_and_logs_it_without_sensitive_data`: un proveedor sintético lanza un error con token, CLABE, teléfono y correo. Resultado: `500` con la referencia; el log tiene la referencia y la plantilla de ruta, sin ninguno de los cuatro valores; la respuesta tampoco los contiene. Además `…::test_configured_secrets_never_reach_a_log_line`, `…::test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced` `…::test_every_error_response_carries_its_reference` (`404`, `401`, `422`) y `…::test_server_and_command_lines_go_through_the_same_redacted_format`: un proceso real de `python -m tappy` escribe su línea de acceso con la referencia y con el teléfono `%2B52…` y la CLABE de la consulta enmascarados; `tappy.sales` y `tappy.identity` con la base caída salen con `1` y registran `Command … failed` sin la contraseña. Las reglas de redacción se prueban caso por caso en `tests/test_redaction.py` (`…::test_sensitive_values_are_masked`, `…::test_identifiers_amounts_and_dates_are_kept`, `…::test_configured_secrets_are_replaced_wherever_they_appear`) | PASS |
+| B34-UC01 | B34-AC01 | B34-TC01 | `tests/test_diagnostics.py::test_an_unexpected_error_answers_a_reference_and_logs_it_without_sensitive_data`: un proveedor sintético lanza un error con token, CLABE, teléfono y correo. Resultado: `500` con la referencia; el log tiene la referencia y la plantilla de ruta, sin ninguno de los cuatro valores; la respuesta tampoco los contiene. Además `…::test_configured_secrets_never_reach_a_log_line`, `…::test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced` `…::test_every_error_response_carries_its_reference` (`404`, `401`, `422`) y `…::test_server_and_command_lines_go_through_the_same_redacted_format`: un proceso real de `python -m tappy` escribe su línea de acceso con la referencia y con el teléfono `%2B52…` y la CLABE de la consulta enmascarados; `tappy.sales` y `tappy.identity` con la base caída salen con `1` y registran `Command … failed` sin la contraseña. Las reglas de redacción se prueban caso por caso en `tests/test_redaction.py` (`…::test_sensitive_values_are_masked`, `…::test_identifiers_amounts_and_dates_are_kept`, `…::test_configured_secrets_are_replaced_wherever_they_appear`, `…::test_a_longer_secret_is_replaced_whole_even_when_it_contains_a_shorter_one`, `…::test_a_secret_too_short_to_tell_apart_from_ordinary_words_is_not_replaced`) y el aviso de `tests/test_diagnostics.py::test_a_configured_secret_too_short_to_redact_is_named_without_its_value` | PASS |
 | B34-UC02 | B34-AC02 | B34-TC02 | `tests/test_backup_restore.py::test_a_backup_restores_into_a_new_database_with_the_sale_and_its_pending_job`: `pg_dump`, después `createdb` y `pg_restore` en `tappy_restored`; `/ready` da `200`; la misma venta y el trabajo `pending` aparecen en `reconciliations` y `backlog`; el origen no cambia. Además `…::test_the_restore_refuses_to_overwrite_an_existing_database` | PASS |
 | B34-UC03 | B34-AC03 | B34-TC03 | `tests/test_backup_restore.py::test_a_runner_interrupted_after_the_restore_finishes_the_job_once_and_can_be_followed`: tras restaurar, un ejecutor reclama y muere; `backlog` muestra el arriendo vencido. El primer `run-jobs` reclama 1 y lo verifica, y el log nombra la venta; el segundo no reclama nada. El trabajo termina `done` con 2 intentos, el ejecutor interrumpido ya no conserva su reclamo y el `backlog` final queda vacío. Además `tests/sales/test_backlog.py::test_every_backlog_indicator_counts_only_what_is_waiting` y `…::test_the_backlog_command_prints_each_indicator_with_its_age`: cada indicador con un valor distinto de cero, junto a elementos que no deben contar (trabajo futuro, arriendo vivo, trabajos `done`, evento aplicado, incidencia resuelta, creación reciente) | PASS |
 
@@ -477,15 +478,15 @@ Estado VC01: **PASS**.
 
 ## Checks
 
-`uv run python -m quality.check` sobre `a37fc63`, con `.env` exportado:
+`uv run python -m quality.check` sobre `bcdb773`, con `.env` exportado:
 
 - format, lint, types (mypy strict) y hygiene: PASS;
 - migrations: PASS; sin migraciones nuevas, solo upgrade/downgrade/upgrade + `alembic check`;
-- tests: PASS, 616 passed, con Postgres real aislado y proyectos Compose desechables;
+- tests: PASS, 617 passed, con Postgres real aislado y proyectos Compose desechables;
 - api: PASS, 15 contratos sin diferencias (no registran `X-Request-ID`; ver «Aplicabilidad»);
-- evidence: B01–B33 APPROVED. B34 queda bloqueado solo porque su review está `PENDING`, que es lo esperado antes de la ronda 3.
+- evidence: B01–B33 APPROVED. B34 queda bloqueado solo porque su review está `PENDING`, que es lo esperado antes de la ronda 4.
 
-Rondas anteriores, con los mismos pasos en PASS: `c23d9bb` (ronda 1) con 583 tests y `842a4e8` (ronda 2) con 608.
+Rondas anteriores, con los mismos pasos en PASS: `c23d9bb` (ronda 1) con 583 tests `842a4e8` (ronda 2) con 608 y `a37fc63` (ronda 3) con 616.
 
 ## Supresiones
 
@@ -501,7 +502,8 @@ AC PASS / AC aplicables = 3/3 = **100%**.
 | --- | --- | --- | --- | --- |
 | 1 | `c23d9bb` | REQUEST_CHANGES | REQUEST_CHANGES | Standards 5, Spec 9 (ver abajo) |
 | 2 | `842a4e8` | APPROVE | APPROVE | Sin bloqueantes; Standards 4 y Spec 4 sugerencias (ver abajo) |
-| 3 | `a37fc63` | PENDING | PENDING | — |
+| 3 | `a37fc63` | APPROVE | APPROVE | Sin bloqueantes; las dos revisiones señalan que un secreto corto queda visible sin aviso, y Spec, que faltaban dos tests en la fila de trazabilidad |
+| 4 | `bcdb773` | PENDING | PENDING | — |
 
 ### Hallazgos de la ronda 1 y su corrección
 
@@ -541,3 +543,10 @@ Además, la VC01 de la ronda 2 encontró el `+52` codificado en URL sin enmascar
 2. Una contraseña corta borraría palabras normales de los logs → no se reemplazan secretos de menos de 8 caracteres; documentado en el README.
 3. Formatos sin cubrir (`(55) 1234 5678`, `55.1234.5678`, CLABE `4 4 4 4 2`), y el README era más amplio que las reglas → formatos añadidos, y el README nombra exactamente las agrupaciones.
 4. Detalles desactualizados de la evidencia (número de casos y venta de TC03) → corregidos.
+
+### Sugerencias de la ronda 3 y su corrección (`bcdb773`)
+
+1. **Un secreto de menos de 8 caracteres queda visible sin que nadie lo note** (Standards y Spec). `configure_logging` avisa una vez por proceso, con un `WARNING` que nombra el ajuste y nunca su valor.
+   - Se eligió el aviso en lugar de rechazar la configuración (propuesta de Spec) para no romper una base local sin contraseña o con una contraseña corta. El README pide secretos más largos.
+   - **Red:** `test_a_configured_secret_too_short_to_redact_is_named_without_its_value` falló con `assert 0 == 1` antes del cambio.
+2. **Faltaban dos tests en la fila de trazabilidad de TC01** (Spec) → añadidos, con el test del aviso.
