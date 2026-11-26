@@ -13,3 +13,5 @@ Fecha 2026-11-26; ejecutor Codex; macOS 26.6.2 arm64; Node 22.23.4, npm 11.6.2; 
 Resultado inicial: antes del cambio `npm run verify` no existía (salida 1); después ejecuta cadena completa sin servicios bancarios ni secretos. El fallo intencional de navegación fue retirado. No hay skip/xfail. Reporte HTML incluye SHA y artefacto CI se nombra por SHA.
 
 VC01 pendiente de CI. No hay cambios en UI: no aplica nueva comparación de diseño; captura del fallo documenta la frontera de diagnóstico. Reviews y completitud final pendientes. No se declara aprobado un requisito de CI por una ejecución local.
+
+Regresión de configuración detectada al incluir metadatos git: faltaban tipos Node y Astro inspeccionaba el reporte generado. Corregido con @types/node fijado y exclusión de artefactos generados (no de código propio) en tsconfig. `npm run verify` vuelve a pasar completo, salida 0, ocho pruebas; log local /tmp/l03-verify.log.
