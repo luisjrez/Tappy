@@ -36,7 +36,9 @@ for (const viewport of [
   { width: 768, height: 1024 },
   { width: 1440, height: 900 },
 ]) {
-  test(`L02-VC01: evidencia inicial ${viewport.width}`, async ({ page }) => {
+  test(`L02-VC01: evidencia inicial ${viewport.width}`, async ({
+    page,
+  }, testInfo) => {
     await page.setViewportSize(viewport);
     for (const [route, name] of [
       ["/", "inicio"],
@@ -45,9 +47,45 @@ for (const viewport of [
       await page.goto(route);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await page.screenshot({
-        path: `../../docs/evidence/L02/${name}-${viewport.width}.png`,
+        path: testInfo.outputPath(`${name}-${viewport.width}.png`),
         fullPage: true,
       });
+    }
+  });
+}
+
+for (const zoom of [1, 2]) {
+  test(`L02-VC01: reflow 320 CSS px y ampliación ${zoom * 100}%`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    for (const route of ["/", "/ruta-inexistente"]) {
+      await page.goto(route);
+      await page.evaluate((factor) => {
+        document.documentElement.style.zoom = String(factor);
+      }, zoom);
+      expect(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth <=
+            document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      const link = page.getByRole("link", {
+        name: route === "/" ? "Cómo funciona" : "Volver al inicio",
+        exact: true,
+      });
+      await link.scrollIntoViewIfNeeded();
+      await expect(link).toBeVisible();
+      await page.screenshot({
+        path: testInfo.outputPath(
+          `${route === "/" ? "inicio" : "404"}-320-${zoom}.png`,
+        ),
+        fullPage: true,
+      });
+      await link.click();
+      await expect(page).toHaveURL(route === "/" ? /#como-funciona$/ : /\/$/);
     }
   });
 }
