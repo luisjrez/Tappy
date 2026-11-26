@@ -172,7 +172,10 @@ def test_server_and_command_lines_go_through_the_same_redacted_format(
             {**app_environment(migrated_database_url), "TAPPY_PORT": str(port)}, captured
         )
         try:
-            wait_for_json(f"http://127.0.0.1:{port}/health?phone={PHONE}", deadline_seconds=10)
+            wait_for_json(
+                f"http://127.0.0.1:{port}/health?phone=%2B52{PHONE}&clabe={CLABE}",
+                deadline_seconds=10,
+            )
         finally:
             process.terminate()
             process.wait(timeout=10)
@@ -183,9 +186,11 @@ def test_server_and_command_lines_go_through_the_same_redacted_format(
 
     assert "INFO uvicorn.error [-] Uvicorn running on" in server
     assert re.search(
-        r'INFO uvicorn\.access \[[0-9a-f]{32}\] .*"GET /health\?phone=\*{6}5678 ', server
+        r'INFO uvicorn\.access \[[0-9a-f]{32}\] .*"GET /health\?phone=\*{8}5678&clabe=\*{14}6789 ',
+        server,
     )
     assert PHONE not in server
+    assert CLABE not in server
     for result, command in (
         (failed, "tappy.sales.cli [-] Command backlog"),
         (identity, "tappy.identity.cli [-] Command show"),
