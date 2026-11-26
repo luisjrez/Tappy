@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from tappy.platform.config import Settings
-from tappy.platform.redaction import redact
+from tappy.platform.redaction import MIN_SECRET_LENGTH, redact
 
 HEADER = "X-Request-ID"
 SAFE_REFERENCE = re.compile(r"(?!\d+\Z)[A-Za-z0-9_-]{8,64}")
@@ -81,12 +81,33 @@ class RedactingFormatter(logging.Formatter):
         return redact(super().format(record), self.secrets)
 
 
-def configured_secrets(settings: Settings) -> tuple[str, ...]:
-    values = [settings.secret_key, settings.pey_api_key, settings.pey_webhook_secret]
-    revealed = [value.get_secret_value() for value in values if value]
+def named_secrets(settings: Settings) -> dict[str, str]:
+    values = {
+        "TAPPY_SECRET_KEY": settings.secret_key,
+        "TAPPY_PEY_API_KEY": settings.pey_api_key,
+        "TAPPY_PEY_WEBHOOK_SECRET": settings.pey_webhook_secret,
+    }
+    named = {name: value.get_secret_value() for name, value in values.items() if value}
     password = make_url(settings.database_url.get_secret_value()).password
+    if password:
+        named["The database password"] = password
+    return named
+
+
+def configured_secrets(settings: Settings) -> tuple[str, ...]:
+    revealed = list(named_secrets(settings).values())
     bare = [secret.removeprefix("whsec_") for secret in revealed]
-    return tuple(secret for secret in dict.fromkeys([*revealed, *bare, password]) if secret)
+    return tuple(secret for secret in dict.fromkeys([*revealed, *bare]) if secret)
+
+
+def warn_about_short_secrets(settings: Settings) -> None:
+    for name, secret in named_secrets(settings).items():
+        if len(secret) < MIN_SECRET_LENGTH:
+            logger.warning(
+                "%s is shorter than %s characters, so logs cannot redact it",
+                name,
+                MIN_SECRET_LENGTH,
+            )
 
 
 def configure_logging(settings: Settings, stream: TextIO | None = None) -> logging.Handler:
@@ -99,4 +120,5 @@ def configure_logging(settings: Settings, stream: TextIO | None = None) -> loggi
     handler.addFilter(ReferenceFilter())
     root.addHandler(handler)
     root.setLevel(logging.INFO)
+    warn_about_short_secrets(settings)
     return handler

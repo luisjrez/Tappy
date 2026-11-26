@@ -134,6 +134,28 @@ def test_configured_secrets_never_reach_a_log_line(
         assert secret not in log
 
 
+def test_a_configured_secret_too_short_to_redact_is_named_without_its_value(
+    migrated_database_url: str,
+) -> None:
+    short = "pw-1234"
+    url = make_url(migrated_database_url).set(password=short)
+    settings = diagnostic_settings(url.render_as_string(hide_password=False))
+    stream = io.StringIO()
+    root = logging.getLogger()
+    level = root.level
+    handler = configure_logging(settings, stream)
+    root.removeHandler(handler)
+    root.setLevel(level)
+
+    log = stream.getvalue()
+    warning = (
+        "WARNING tappy.platform.diagnostics [-] The database password is shorter than "
+        "8 characters, so logs cannot redact it"
+    )
+    assert log.count(warning) == 1
+    assert short not in log
+
+
 def test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced(
     client: TestClient,
 ) -> None:
