@@ -12,6 +12,7 @@ Ticket: [#43](https://github.com/luisjrez/Tappy/issues/43) · Historia: [H7 #7](
   - Base: rama B34 `6a474a8` ([PR #110](https://github.com/luisjrez/Tappy/pull/110)).
   - Candidato de la ronda 1: `b7760f9`.
   - Candidato de la ronda 2: `f1b05ab` (correcciones de la ronda 1).
+  - Revisión final: `8ee622d` (solo README: respaldo de la base `integration` después de la prueba real, nota de Spec).
 - **Entorno:** macOS, Postgres 18.6 aislado (Colima + Compose), Python 3.14.8 y pey falso (`httpx2.MockTransport`). Fecha: 2026-11-25 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 - **Cambios de producción:** ninguno. El ensayo pasó contra el código existente, así que no hubo hallazgos que ajustar (Refactor: «ajustar únicamente lo demostrado por hallazgos»).
 
@@ -162,7 +163,7 @@ AC PASS / AC aplicables = 2/3 = **66.67 %**, por debajo del 97 %. **B35 no se pu
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `b7760f9` | REQUEST_CHANGES | REQUEST_CHANGES | Standards 1 + 3 notas, Spec 3 + 3 notas (ver abajo) |
-| 2 | `f1b05ab` | PENDING | PENDING | — |
+| 2 | `f1b05ab` | APPROVE | APPROVE | Sin bloqueantes. Nota de Spec aplicada en `8ee622d` y confirmada por Spec |
 
 ### Hallazgos de la ronda 1 y su corrección (`f1b05ab`)
 
@@ -181,3 +182,12 @@ AC PASS / AC aplicables = 2/3 = **66.67 %**, por debajo del 97 %. **B35 no se pu
 4. Nota: «Red» era una caracterización → corregido.
 5. Nota: los cuerpos de VC01 eran proyecciones → marcados como extractos, con conteos explícitos (`len(...)`) y la forma de reproducirlos.
 6. Nota: la pérdida de red del lado de pey → documentada como cubierta por B15/B16.
+
+### Nota de la ronda 2 y su corrección (`8ee622d`)
+
+1. **Respaldo después de la prueba real** (Spec): la base `integration` se borraba sin un respaldo posterior al pago, y es el único registro de Tappy de una transferencia real. El requisito 5 del README ahora pide respaldar antes y después de la prueba, guardar el segundo respaldo con el registro privado del operador y borrar la base solo después. Es un cambio solo de documentación, y Spec lo confirmó (APPROVE).
+
+## Estado final
+
+- **Review:** Standards y Spec aprueban (APPROVE) la revisión `8ee622d`.
+- **Ticket:** B35 sigue **BLOQUEADO**. TC01 necesita acceso real autorizado a pey, así que la completitud es 2/3 = 66.67 % y no se puede cerrar ni presentar como integración aprobada. El PR va como borrador, fuera de la cadena del stack #68.

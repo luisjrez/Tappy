@@ -1,5 +1,5 @@
 ticket = "B35"
-revision = "f1b05ab"
+revision = "8ee622d"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B35-real-qr-rehearsal.md#b35-vc01--ensayo-y-estado-de-la-prueba-real"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
