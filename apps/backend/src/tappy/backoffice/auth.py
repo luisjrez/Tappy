@@ -11,6 +11,7 @@ from starlette_admin.helpers import wrap_endpoint_with_kwargs
 
 from tappy.identity.models import Role
 from tappy.identity.recovery import RECOVERY_ACCEPTED, RecoveryService, RecoverySubmission
+from tappy.identity.provisioning import IdentitySummary
 from tappy.identity.sessions import (
     InvalidAccessTokenError,
     InvalidCredentialsError,
@@ -126,6 +127,7 @@ class AdminAuthProvider(AuthProvider):
         except InvalidRefreshTokenError:
             return None
         store_tokens(request, resumed.tokens)
+        request.state.admin_identity = resumed.identity
         return AdminUser(username=resumed.identity.email)
 
     async def logout(self, request: Request) -> Response | None:
@@ -135,3 +137,10 @@ class AdminAuthProvider(AuthProvider):
             with suppress(InvalidAccessTokenError):
                 await run_in_threadpool(self.end_session, tokens)
         return None
+
+
+def admin_identity(request: Request) -> IdentitySummary:
+    identity = getattr(request.state, "admin_identity", None)
+    if not isinstance(identity, IdentitySummary):
+        raise RuntimeError("The back office view needs an authenticated administrator")
+    return identity

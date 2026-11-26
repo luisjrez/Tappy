@@ -1,0 +1,49 @@
+ticket = "B31"
+revision = "aa4f039"
+
+[vc01]
+status = "PASS"
+modality = "initial"
+evidence = "docs/evidence/B31-backoffice-sales.md#b31-vc01--resultado-inicial-del-panel-de-cobros"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B31-AC01"
+use_cases = ["B31-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B31-TC01"
+mode = "automated"
+tests = ["tests/backoffice/test_sales_panel.py::test_the_admin_sees_sales_with_attempts_transfers_and_amounts"]
+
+[[criteria]]
+id = "B31-AC02"
+use_cases = ["B31-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B31-TC02"
+mode = "automated"
+tests = [
+    "tests/backoffice/test_sales_panel.py::test_operators_cannot_open_the_sales_panel",
+    "tests/backoffice/test_sales_panel.py::test_the_panel_offers_no_way_to_change_money_or_force_a_reception",
+]
+
+[[criteria]]
+id = "B31-AC03"
+use_cases = ["B31-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B31-TC03"
+mode = "automated"
+tests = [
+    "tests/backoffice/test_sales_panel.py::test_malformed_panel_filters_are_client_errors",
+    "tests/backoffice/test_sales_panel.py::test_an_unknown_sale_or_merchant_is_not_found_in_the_panel",
+    "tests/backoffice/test_sales_panel.py::test_panel_pages_recover_every_sale_without_hidden_truncation",
+]

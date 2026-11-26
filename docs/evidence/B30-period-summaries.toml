@@ -1,0 +1,54 @@
+ticket = "B30"
+revision = "34b2679"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B30-period-summaries.md#b30-vc01--antesdespués-de-periodos-y-fechas"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B30-AC01"
+use_cases = ["B30-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B30-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_period_summaries.py::test_movements_follow_the_local_calendar_and_monday_to_sunday_weeks",
+    "tests/sales/test_period_summaries.py::test_the_daily_endpoint_matches_the_day_period",
+    "tests/sales/test_period_summaries.py::test_invalid_periods_are_rejected",
+    "tests/sales/test_period_summaries.py::test_period_summaries_are_limited_to_accessible_merchants",
+]
+
+[[criteria]]
+id = "B30-AC02"
+use_cases = ["B30-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B30-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_period_summaries.py::test_a_valid_reception_without_a_bank_time_uses_the_reception_time_explicitly",
+    "tests/sales/test_receipts.py::test_a_receipt_without_a_bank_time_says_it_is_dated_by_reception",
+]
+
+[[criteria]]
+id = "B30-AC03"
+use_cases = ["B30-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B30-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_period_summaries.py::test_a_month_end_payment_notified_next_month_counts_once_in_its_bank_month",
+    "tests/sales/test_period_summaries.py::test_a_late_bank_time_moves_a_reception_dated_transfer_to_its_bank_period_once",
+    "tests/sales/test_period_summaries.py::test_the_database_only_lets_a_missing_bank_time_be_filled_once",
+]

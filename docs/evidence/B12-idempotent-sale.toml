@@ -1,0 +1,56 @@
+ticket = "B12"
+revision = "28e7058"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B12-idempotent-sale.md#b12-vc01--antesdespués-de-la-creación"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B12-AC01"
+use_cases = ["B12-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B12-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_idempotent_creation.py::test_repeating_a_creation_returns_the_same_sale",
+    "tests/sales/test_idempotent_creation.py::test_repetition_returns_the_sale_even_after_the_receiver_is_disabled",
+    "tests/sales/test_idempotent_creation.py::test_keys_belong_to_the_identity_that_used_them",
+    "tests/sales/test_idempotent_creation.py::test_failed_creation_does_not_consume_the_key",
+    "tests/sales/test_idempotent_creation.py::test_creation_requires_a_well_formed_key",
+    "tests/sales/test_idempotent_creation.py::test_repetition_after_losing_the_membership_reveals_nothing",
+    "tests/sales/test_idempotent_creation.py::test_whitespace_only_differences_in_the_concept_are_the_same_request",
+]
+
+[[criteria]]
+id = "B12-AC02"
+use_cases = ["B12-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B12-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_idempotent_creation.py::test_reusing_a_key_with_other_content_conflicts_without_touching_the_sale",
+    "tests/sales/test_idempotent_creation.py::test_reusing_a_key_for_another_merchant_conflicts",
+]
+
+[[criteria]]
+id = "B12-AC03"
+use_cases = ["B12-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B12-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_idempotent_creation.py::test_concurrent_repetition_waits_and_returns_the_single_sale",
+    "tests/sales/test_idempotent_creation.py::test_concurrent_reuse_with_other_content_conflicts",
+]

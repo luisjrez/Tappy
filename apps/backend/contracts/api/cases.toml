@@ -74,3 +74,30 @@ method = "POST"
 path = "/merchants/00000000-0000-0000-0000-000000000000/issuance-check"
 database = "migrated"
 body = {}
+
+[[cases]]
+name = "sale-create-unauthenticated"
+method = "POST"
+path = "/sales"
+database = "migrated"
+body = { merchant_id = "00000000-0000-0000-0000-000000000000", amount_cents = 30000 }
+
+[[cases]]
+name = "sale-read-unauthenticated"
+method = "GET"
+path = "/sales/00000000-0000-0000-0000-000000000000"
+database = "migrated"
+
+[[cases]]
+name = "attempt-reserve-unauthenticated"
+method = "POST"
+path = "/sales/00000000-0000-0000-0000-000000000000/attempts"
+database = "migrated"
+body = { method = "qr" }
+
+[[cases]]
+name = "webhook-pey-not-configured"
+method = "POST"
+path = "/webhooks/pey"
+database = "migrated"
+body = { type = "codi.qr.payment_received", data = {} }

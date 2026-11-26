@@ -1,4 +1,3 @@
-import time
 import uuid
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +12,7 @@ from tappy.identity.models import Role
 from tappy.main import create_app
 from tappy.merchants.receivers import ReceiverSettings, configure_receiver
 from tappy.platform.database import Database
-from tests.support import build_settings, create_identity, scalar
+from tests.support import build_settings, create_identity, scalar, wait_until_blocked_on_a_lock
 
 ADMIN = "admin@tappy.example"
 OPERATOR_A = "operadora.a@tappy.example"
@@ -290,20 +289,6 @@ def test_unknown_merchant_has_no_receiver(client: TestClient) -> None:
 
     assert configured.status_code == HTTPStatus.NOT_FOUND
     assert read.status_code == HTTPStatus.NOT_FOUND
-
-
-def wait_until_blocked_on_a_lock(database_url: str) -> None:
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        waiting = scalar(
-            database_url,
-            "SELECT count(*) FROM pg_stat_activity "
-            "WHERE datname = current_database() AND wait_event_type = 'Lock'",
-        )
-        if waiting:
-            return
-        time.sleep(0.01)
-    pytest.fail("configuration never waited for the merchant lock")
 
 
 def test_racing_first_configurations_keep_one_receiver(

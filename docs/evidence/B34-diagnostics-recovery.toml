@@ -1,0 +1,61 @@
+ticket = "B34"
+revision = "6e97271"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B34-diagnostics-recovery.md#b34-vc01--respuestas-logs-y-comandos"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B34-AC01"
+use_cases = ["B34-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B34-TC01"
+mode = "automated"
+tests = [
+    "tests/test_diagnostics.py::test_an_unexpected_error_answers_a_reference_and_logs_it_without_sensitive_data",
+    "tests/test_diagnostics.py::test_configured_secrets_never_reach_a_log_line",
+    "tests/test_diagnostics.py::test_a_configured_secret_too_short_to_redact_is_named_without_its_value",
+    "tests/test_diagnostics.py::test_a_safe_caller_reference_is_kept_and_an_unsafe_one_replaced",
+    "tests/test_diagnostics.py::test_every_error_response_carries_its_reference",
+    "tests/test_diagnostics.py::test_server_and_command_lines_go_through_the_same_redacted_format",
+    "tests/test_redaction.py::test_sensitive_values_are_masked",
+    "tests/test_redaction.py::test_identifiers_amounts_and_dates_are_kept",
+    "tests/test_redaction.py::test_configured_secrets_are_replaced_wherever_they_appear",
+    "tests/test_redaction.py::test_a_longer_secret_is_replaced_whole_even_when_it_contains_a_shorter_one",
+    "tests/test_redaction.py::test_a_secret_too_short_to_tell_apart_from_ordinary_words_is_not_replaced",
+]
+
+[[criteria]]
+id = "B34-AC02"
+use_cases = ["B34-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B34-TC02"
+mode = "automated"
+tests = [
+    "tests/test_backup_restore.py::test_a_backup_restores_into_a_new_database_with_the_sale_and_its_pending_job",
+    "tests/test_backup_restore.py::test_the_restore_refuses_to_overwrite_an_existing_database",
+]
+
+[[criteria]]
+id = "B34-AC03"
+use_cases = ["B34-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B34-TC03"
+mode = "automated"
+tests = [
+    "tests/test_backup_restore.py::test_a_runner_interrupted_after_the_restore_finishes_the_job_once_and_can_be_followed",
+    "tests/sales/test_backlog.py::test_every_backlog_indicator_counts_only_what_is_waiting",
+    "tests/sales/test_backlog.py::test_the_backlog_command_prints_each_indicator_with_its_age",
+]

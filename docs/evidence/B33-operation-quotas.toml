@@ -1,0 +1,58 @@
+ticket = "B33"
+revision = "52d691e"
+
+[vc01]
+status = "PASS"
+modality = "comparison"
+evidence = "docs/evidence/B33-operation-quotas.md#b33-vc01--api-antesdespués"
+
+[review]
+standards = "APPROVED"
+spec = "APPROVED"
+pending_findings = 0
+
+[[criteria]]
+id = "B33-AC01"
+use_cases = ["B33-UC01"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B33-TC01"
+mode = "automated"
+tests = [
+    "tests/sales/test_quotas.py::test_sales_within_the_quota_are_created_and_the_excess_gets_429_with_wait_guidance",
+    "tests/sales/test_quotas.py::test_repeated_requests_replay_without_spending_the_quota",
+    "tests/sales/test_quotas.py::test_each_merchant_has_its_own_quota",
+    "tests/sales/test_quotas.py::test_qr_requests_over_the_quota_get_429_without_calling_the_provider",
+    "tests/sales/test_quotas.py::test_repeated_qr_requests_replay_without_spending_the_quota_or_calling_the_provider",
+    "tests/sales/test_quotas.py::test_a_refused_qr_request_spends_no_quota",
+    "tests/sales/test_quotas.py::test_each_actor_has_a_read_quota_that_does_not_block_others",
+    "tests/sales/test_quotas.py::test_unauthenticated_reads_are_refused_before_spending_any_quota",
+    "tests/sales/test_quotas.py::test_oversized_bodies_are_refused_before_creating_anything",
+]
+
+[[criteria]]
+id = "B33-AC02"
+use_cases = ["B33-UC02"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B33-TC02"
+mode = "automated"
+tests = [
+    "tests/sales/test_quotas.py::test_a_creation_waiting_for_the_last_slot_is_refused_once_another_takes_it",
+    "tests/sales/test_quotas.py::test_a_slot_released_by_a_rolled_back_creation_goes_to_the_waiting_one",
+    "tests/sales/test_quotas.py::test_simultaneous_qr_requests_never_exceed_the_quota",
+]
+
+[[criteria]]
+id = "B33-AC03"
+use_cases = ["B33-UC03"]
+mandatory = true
+
+[[criteria.cases]]
+id = "B33-TC03"
+mode = "automated"
+tests = [
+    "tests/sales/test_quotas.py::test_reading_a_pending_attempt_many_times_never_calls_the_provider",
+]
