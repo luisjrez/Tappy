@@ -1,0 +1,32 @@
+# Hosting gratuito para landing y previews — L12
+
+Consulta: 2026-11-25. Alcance: Astro estático y Storybook estático; sin API, SSR, datos bancarios ni credenciales. Leídos CONTEXT.md, PRODUCT_BASE.md y docs/agents/domain.md. L12 se encuentra en `docs/planning/LANDING_TICKETS_DRAFT.md`; la búsqueda de issues GitHub por «L12» no devolvió ticket, por lo que no hubo comentarios que consultar. Investigación, no prueba de despliegue.
+
+## Comparación
+
+| Opción | Uso comercial y repositorio privado | Previews GitHub y límites gratuitos | Costos y reservas |
+| --- | --- | --- | --- |
+| **Cloudflare Pages Free (recomendada)** | Producto orientado también a equipos y empresas; no se identifica restricción de uso personal como en Hobby. Admite repositorios públicos y privados. | Integración GitHub; preview por PR del mismo repositorio y actualización con cada push. 500 builds/mes, una ejecución simultánea, 20 min/build; 20 000 archivos, 25 MiB/archivo. | Tráfico estático gratuito e ilimitado. Funciones y otros servicios tienen cuotas separadas. Dominio propio se paga aparte. Las previews no son archivo permanente: retención de 30 días, conservando además los 100 despliegues más recientes y producción actual. [Producto](https://www.cloudflare.com/products/pages/), [límites](https://developers.cloudflare.com/pages/platform/limits/), [previews](https://developers.cloudflare.com/pages/configuration/preview-deployments/), [tarifa estática](https://developers.cloudflare.com/pages/functions/pricing/). |
+| **Netlify Free** | Permite uso comercial. Repositorios privados de organizaciones requieren Pro; distinguirlos del repositorio privado personal y validar colaboradores autorizados. | Deploy Previews por PR, sin cargo por crear previews ni branch deploys; Free incluye 300 créditos/mes y un build simultáneo. No usar la antigua referencia de 300 minutos de build para cuentas nuevas. | Producción: 15 créditos/despliegue; transferencia: 20/GB; solicitudes: 2/10 000. El tráfico de previews también cuenta. Free tiene límite estricto; no compra automática de créditos. Personal cuesta USD 9/mes y Pro parte de USD 20/mes; recargas opcionales en planes pagados. [Uso comercial](https://www.netlify.com/platform/), [planes y repositorios](https://www.netlify.com/pricing/), [créditos](https://docs.netlify.com/manage/accounts-and-billing/billing/billing-for-credit-based-plans/credit-based-pricing-plans/), [previews](https://www.netlify.com/platform/deploy-previews/). |
+| **Vercel Hobby** | **Descartar para la landing comercial de Tappy**: Hobby restringe el uso a personal/no comercial. No conectar repositorios de organizaciones a Hobby; un repo personal privado no elimina la restricción comercial. | Previews disponibles; Hobby limita a 100 despliegues/día, un build simultáneo y 45 min/build. | Requiere evaluar Pro y consumo facturable; no cumple el objetivo de alojamiento comercial gratis. [Hobby](https://vercel.com/docs/plans/hobby), [términos](https://vercel.com/legal/terms), [límites](https://vercel.com/docs/limits), [precios](https://vercel.com/pricing). |
+
+Los precios son USD y pueden cambiar. En Netlify, «previews gratis» describe su creación, no tráfico ilimitado; sus planes anteriores al 4 de septiembre de 2025 son legacy. No extrapolar sus cuotas a una cuenta nueva.
+
+## Recomendación
+
+Usar dos proyectos Pages conectados al mismo monorepo: landing (`dist`) y catálogo (`storybook-static`), cada uno con comando y directorio explícitos. Es una propuesta de implementación, aún sin validar. Dos builds por actualización pertinente consumen dos unidades: presupuestar conjuntamente previews, producción y reintentos dentro de los 500 builds mensuales. Filtrar cambios ajenos a estas superficies cuando sea compatible con la política de checks.
+
+La integración nativa evita añadir credenciales de despliegue a GitHub Actions. Autorizar la aplicación GitHub únicamente para el repositorio necesario; comprobar los permisos de organización si aplica. Las previews Pages son públicas por defecto aunque el repositorio sea privado; emplear solo contenido sintético/publicable o configurar Access y verificar acceso de revisores. [Integración GitHub](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/), [acceso a previews](https://developers.cloudflare.com/pages/configuration/preview-deployments/).
+
+## Condiciones propuestas para L12 (pendientes, NOT_RUN)
+
+Ampliar **L12-UC01 → AC01 → TC01** con estos casos, conservando evidencia inicial por SHA:
+
+1. Abrir PR desde una rama del mismo repositorio: aparecen dos checks/enlaces HTTPS identificables, landing y Storybook, asociados al SHA candidato. Ambas builds usan lockfile y versiones fijadas; comprobar que son salidas estáticas.
+2. Enviar un segundo commit: ambos enlaces llevan a la revisión nueva; registrar PR, SHA, URL de despliegue y resultado del smoke. La producción permanece en su revisión anterior. Un build fallido muestra fallo y nunca acredita el SHA nuevo con una preview anterior.
+3. Probar landing, rutas legales disponibles, CTA, assets y 404; en Storybook, índice, navegación, iframe de una historia e imágenes/fuentes. Guardar resultados automáticos y revisión visual del mismo SHA.
+4. Verificar `noindex` en previews y catálogo; canonical de landing apunta al dominio final acordado. `noindex` no sustituye control de acceso. No incluir secretos, datos personales/bancarios ni una simulación presentada como integración real.
+5. Definir alcance de «cada PR»: la integración Pages solo garantiza previews automáticas para ramas del propio repositorio. PRs de forks deben quedar explícitamente bloqueados/pendientes de revisión; si L12 exige también forks, implementar y probar un flujo adicional seguro antes de aceptar ese requisito. Nunca ejecutar código no confiable con secretos privilegiados.
+6. Registrar límites y consumo observado de ambos proyectos; ejercitar fallo de build y documentar respuesta a cuota agotada. Costo objetivo USD 0 de hosting, sin extras habilitados; dominio presupuestado por separado.
+
+**L12-UC02/AC02/TC02:** publicación solo tras autorización y checks verdes del SHA aprobado; smoke sobre URL final y configuración final de indexación. **L12-UC03/AC03/TC03:** probar rollback a artefacto conocido aún retenido y repetir smoke; conservar evidencia fuera de la URL efímera. La investigación no cierra ninguno de estos casos ni demuestra integración bancaria.

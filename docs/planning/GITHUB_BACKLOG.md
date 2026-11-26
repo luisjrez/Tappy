@@ -94,3 +94,44 @@ Cada subtarea contiene UC/AC/TC, TDD, criterios, dependencias, evidencia inicial
 ## Cómo empezar
 
 B01 es la frontera inicial sin bloqueos internos. Resolver un incremento con su protocolo completo antes de ampliar alcance. Después avanzar solo a subtareas cuyos bloqueos estén cerrados y dependencias externas disponibles. Las historias no se cierran automáticamente ni por promedio de completitud. GitHub es la fuente del estado vivo; este archivo registra el mapa publicado.
+
+
+# Landing Tappy — mapa publicado
+
+18 issues abiertos: 4 historias y 14 subtareas; 14 relaciones padre/hijo y 31 bloqueos nativos verificados mediante API. Publicación no implica implementación: AC/TC/VC siguen NOT_RUN. L01/L12 requieren intervención humana; el resto ready-for-agent sujeto a bloqueos.
+
+[Plan aprobado](LANDING_TICKETS_DRAFT.md) · [Diseño y capturas](LANDING_DESIGN_REFERENCES.md) · [Hosting acordado](../research/landing-preview-hosting.md).
+
+## [LW1 — Base web y catálogo de componentes](https://github.com/luisjrez/Tappy/issues/89)
+
+| Subtarea | Issue | Bloqueada por |
+| --- | --- | --- |
+| L01 — Consolidar referencia y copy web | [#93](https://github.com/luisjrez/Tappy/issues/93) | Sin bloqueos internos |
+| L02 — Servir la primera página estática | [#94](https://github.com/luisjrez/Tappy/issues/94) | [L01](https://github.com/luisjrez/Tappy/issues/93) |
+| L03 — Verificar cambios web en CI | [#95](https://github.com/luisjrez/Tappy/issues/95) | [L02](https://github.com/luisjrez/Tappy/issues/94) |
+| L13 — Habilitar Storybook con componentes reales | [#96](https://github.com/luisjrez/Tappy/issues/96) | [L02](https://github.com/luisjrez/Tappy/issues/94), [L03](https://github.com/luisjrez/Tappy/issues/95) |
+
+## [LW2 — Explicar qué hace Tappy](https://github.com/luisjrez/Tappy/issues/90)
+
+| Subtarea | Issue | Bloqueada por |
+| --- | --- | --- |
+| L04 — Presentar propuesta y navegación | [#97](https://github.com/luisjrez/Tappy/issues/97) | [L01](https://github.com/luisjrez/Tappy/issues/93), [L03](https://github.com/luisjrez/Tappy/issues/95), [L13](https://github.com/luisjrez/Tappy/issues/96) |
+| L05 — Explicar problema y recorrido de cobro | [#98](https://github.com/luisjrez/Tappy/issues/98) | [L04](https://github.com/luisjrez/Tappy/issues/97) |
+| L06 — Mostrar beneficios con ejemplos honestos | [#99](https://github.com/luisjrez/Tappy/issues/99) | [L05](https://github.com/luisjrez/Tappy/issues/98) |
+
+## [LW3 — Resolver dudas y permitir continuar](https://github.com/luisjrez/Tappy/issues/91)
+
+| Subtarea | Issue | Bloqueada por |
+| --- | --- | --- |
+| L07 — Resolver dudas y explicar al pagador | [#100](https://github.com/luisjrez/Tappy/issues/100) | [L05](https://github.com/luisjrez/Tappy/issues/98) |
+| L08 — Conectar CTA a una acción disponible | [#101](https://github.com/luisjrez/Tappy/issues/101) | [L04](https://github.com/luisjrez/Tappy/issues/97), [L07](https://github.com/luisjrez/Tappy/issues/100) |
+| L09 — Ofrecer información y contacto reales | [#102](https://github.com/luisjrez/Tappy/issues/102) | [L01](https://github.com/luisjrez/Tappy/issues/93), [L08](https://github.com/luisjrez/Tappy/issues/101) |
+
+## [LW4 — Validar y entregar la landing](https://github.com/luisjrez/Tappy/issues/92)
+
+| Subtarea | Issue | Bloqueada por |
+| --- | --- | --- |
+| L14 — Completar catálogo y detectar regresiones visuales | [#103](https://github.com/luisjrez/Tappy/issues/103) | [L04](https://github.com/luisjrez/Tappy/issues/97), [L05](https://github.com/luisjrez/Tappy/issues/98), [L06](https://github.com/luisjrez/Tappy/issues/99), [L07](https://github.com/luisjrez/Tappy/issues/100), [L08](https://github.com/luisjrez/Tappy/issues/101), [L09](https://github.com/luisjrez/Tappy/issues/102), [L13](https://github.com/luisjrez/Tappy/issues/96) |
+| L10 — Validar accesibilidad y fidelidad responsive | [#104](https://github.com/luisjrez/Tappy/issues/104) | [L06](https://github.com/luisjrez/Tappy/issues/99), [L07](https://github.com/luisjrez/Tappy/issues/100), [L08](https://github.com/luisjrez/Tappy/issues/101), [L09](https://github.com/luisjrez/Tappy/issues/102), [L14](https://github.com/luisjrez/Tappy/issues/103) |
+| L11 — Preparar metadatos y presupuesto de rendimiento | [#105](https://github.com/luisjrez/Tappy/issues/105) | [L06](https://github.com/luisjrez/Tappy/issues/99), [L09](https://github.com/luisjrez/Tappy/issues/102) |
+| L12 — Verificar entrega y preparar publicación | [#106](https://github.com/luisjrez/Tappy/issues/106) | [L03](https://github.com/luisjrez/Tappy/issues/95), [L10](https://github.com/luisjrez/Tappy/issues/104), [L11](https://github.com/luisjrez/Tappy/issues/105) |

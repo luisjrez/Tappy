@@ -1,0 +1,94 @@
+{
+  "source": "tappy-design.pen",
+  "frame": "f0UZM",
+  "export_date": "2026-11-25",
+  "scale": 1,
+  "repository_base": "9279430796b993ade00a8bfb2f17a51023b3319e",
+  "purpose": "Referencia de dise\u00f1o; no baseline de implementaci\u00f3n aprobada",
+  "images": [
+    {
+      "node_id": "Fo93N",
+      "file": "Fo93N.png",
+      "width": 1440,
+      "height": 560,
+      "sha256": "efb223d474195095ec0c103432901c88eac1a95e92bf5e9d3d785cde25f2a82e"
+    },
+    {
+      "node_id": "NvxvB",
+      "file": "NvxvB.png",
+      "width": 1201,
+      "height": 561,
+      "sha256": "f6dcbc6535affadcdf8b3b446abf9c07d7190e82b341bebafbdf4f686d85b604"
+    },
+    {
+      "node_id": "Q6PIC0",
+      "file": "Q6PIC0.png",
+      "width": 1440,
+      "height": 1019,
+      "sha256": "db43224f4f1fb18087003b6e265ef38697048c649f414699db637355b7209a69"
+    },
+    {
+      "node_id": "W72wy",
+      "file": "W72wy.png",
+      "width": 1440,
+      "height": 1607,
+      "sha256": "b74990dff225bd5930dfff3e36f966218d27a9033f639185371b4dc1187063ec"
+    },
+    {
+      "node_id": "aboaM",
+      "file": "aboaM.png",
+      "width": 1440,
+      "height": 727,
+      "sha256": "561a035ec16b77a1e07de0c86e3cce9752665068f2d355200519b4b190ec9231"
+    },
+    {
+      "node_id": "ezjQ3",
+      "file": "ezjQ3.png",
+      "width": 1440,
+      "height": 107,
+      "sha256": "111705a9000574097aed57fe1b8b6d3352c52e66a0c88eea8c24d448a0192be7"
+    },
+    {
+      "node_id": "f0UZM",
+      "file": "f0UZM.png",
+      "width": 1440,
+      "height": 5924,
+      "sha256": "32f8a534384f36a3f881fcdd03223eeb596fb26b63ea1d63466ac51191a558c9"
+    },
+    {
+      "node_id": "mBQBr",
+      "file": "mBQBr.png",
+      "width": 1440,
+      "height": 964,
+      "sha256": "8ad95bd226883ed16fe2d4b3534b3926f2a827e3bea4aa097a2d350f22779d0f"
+    },
+    {
+      "node_id": "r8djG",
+      "file": "r8djG.png",
+      "width": 1201,
+      "height": 501,
+      "sha256": "ad16edb3fe7d298ba47635b70681a25ff1420444b26b4278db759087eb41431c"
+    },
+    {
+      "node_id": "v8LGy",
+      "file": "v8LGy.png",
+      "width": 1440,
+      "height": 71,
+      "sha256": "70e2bbce26c85c7eac2a0e901c96a0c191873aec595be38dca960b69f4674bc3"
+    },
+    {
+      "node_id": "w2ypd",
+      "file": "w2ypd.png",
+      "width": 1440,
+      "height": 940,
+      "sha256": "2ee6dbde0549b2a3fcea241af8ef31555f19d0994029f40995e73fe5c731a391"
+    },
+    {
+      "node_id": "w7Vwm1",
+      "file": "w7Vwm1.png",
+      "width": 1440,
+      "height": 965,
+      "sha256": "17ff3abd170f2a6d71d75eb5d2a4884d12ee9a2ce973e9a667ecdcf388a2e74f"
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "frame": "f0UZM",
+  "assets": [
+    {
+      "path": "landing/screens/logo.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "20d9048b4bd99fb20f151ec77f1e9c4afa1598a904ab7dead87df053d51e398b",
+      "width": 280,
+      "height": 82
+    },
+    {
+      "path": "landing/screens/inicio.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "bdbfe43c986d6e4c8c45e0e2024670d90e5d7990f0a35a466a51b172c98a7ff0",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/pago-recibido.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "39b473a4255275a4495627bb76ec0fa00b58fcdf5add0b80ae209f52c2077657",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/nuevo-cobro.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "0c32198cf364058cf9f851057d3ddc45c54b13af616495c037aa7f04585527d1",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/elige-metodo.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "079c2481dd4e69fda2bd788fde48bf2e05df7dc56afaa52cf28675a5bc1a9930",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/resumen-semanal.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "a9b1b176307291f11c467e7703254ba694c3f9971ad8d1eb3a48322d2481f853",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/historial.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "df6eb1e40da826a4011d3859db26cc1aa83e881d41f1e8dc6f08ee9440baef29",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/comprobante.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "ea5159ad88e64ef20b4702e0f5262b78267870754e9260fcfe4ecb6d2688b6db",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/notificaciones.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "42f3570c0a672aaaceab670b79a62e38969132ed6be3bdeb93695a692a86ecee",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/dia-por-dia.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "cf74314ab1c7ef287455001210870f10809917df29a000a887be1edf700b8584",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/que-es-codi.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "b56f7aa19ce29b663d60a0151c67c3ad0db29f797dd0c52bccd94cf65c721ca7",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/esperando-pago.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "0300e2b2cc50f96d571e52cdcc3bbad09eac1390fc0e9e24d8a484f4271f8269",
+      "width": 804,
+      "height": 1748
+    },
+    {
+      "path": "landing/screens/app-icon.png",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "8158dc3f58afe1ea8e18afccdadd549cbe27591bd88fb750b8b382fb00d6c8d3",
+      "width": 2048,
+      "height": 2048
+    },
+    {
+      "path": "landing/shaders/waves.glsl",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "b895c44e2c7745f9f93d7144abc9e3be183b8fe7f2e483df0f3b5a9ffaa47ef8"
+    },
+    {
+      "path": "landing/shaders/contour.glsl",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "f9b67984fbb1ca93434ee3176eb412d59af5d462fed2c3e47c3089dcc15b6c80"
+    },
+    {
+      "path": "landing/shaders/dots.glsl",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "2ed2f233c6ed99db3d0c5694c286fdfe0f69bad818b1593e0a42bb83d54a56d2"
+    },
+    {
+      "path": "landing/shaders/plus.glsl",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "cd064750e5d7fd0a2d50e6a0f49d5fe9ead0f52230d8674672ff8dc14b1c2efc"
+    },
+    {
+      "path": "landing/shaders/bars.glsl",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "8df16943442106748fffb3223b0578e2e04c8bfbbc6b60ec34aacf72669052e1"
+    },
+    {
+      "path": "landing/shaders/pulse.glsl",
+      "source": "Asset referenciado por f0UZM en Pen; material aportado en el repositorio",
+      "license": "Sin licencia específica presente; uso dentro del proyecto, no licencia abierta inferida",
+      "sha256": "eaad3cb9db4efa2a6825ddec29fc227eaea5fa785fb6705f83474d88de3e7249"
+    }
+  ]
+}
