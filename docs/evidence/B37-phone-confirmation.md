@@ -272,3 +272,5 @@ Notas aceptadas sin cambio: comparar el `amount` total (con comisión) manda a r
 ## Estado final
 
 Standards y Spec aprueban (APPROVE) la ronda 2 sobre `838e033`. La revisión final `bad1ef2` aplica las dos notas de Standards sin cambiar comportamiento. AC 3/3 = 100 % (AC03 por su parte automatizada; la externa sigue BLOCKED en #112), VC01 PASS.
+
+`uv run python -m quality.check` sobre `bad1ef2` con esta evidencia aprobada: PASS en format, lint, types, hygiene, migrations, tests (725 passed), api y evidence (B01–B37 y B41–B42 APPROVED).
