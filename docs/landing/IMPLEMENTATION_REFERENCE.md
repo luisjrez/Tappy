@@ -70,3 +70,7 @@ Este copy concreta los ajustes previamente aprobados en el plan. Evita afirmar d
 | Dominio público | Sin dominio | Cloudflare Pages Free acordado; accesos en L12 | Operación: persona por asignar |
 
 Pendientes de destino no bloquean la base técnica ni redactar esta referencia: L01-AC03 exige registrarlos con responsable por asignar y condición. Sí bloquean declarar L09/L12 completos. No cerrar L01 ni levantar su bloqueo de L02 automáticamente: requiere revisión humana del PR.
+
+## Ajuste autorizado el 27 de noviembre de 2026
+
+Se omiten privacidad y términos de esta entrega por indicación del usuario, sin enlaces ni páginas provisionales. Este cambio sustituye su condición anterior en L09/L12; no bloquea publicación por esos textos. El contacto atendido permanece pendiente. Issues #102 y #106 actualizados con esta decisión.
