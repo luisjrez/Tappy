@@ -150,16 +150,9 @@ def answered_json(response: httpx2.Response) -> object:
         raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
 
 
-def query_page(response: httpx2.Response) -> QueryPage:
+def answered[M: BaseModel](response: httpx2.Response, model: type[M]) -> M:
     try:
-        return QueryPage.model_validate(answered_json(response))
-    except ValidationError:
-        raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
-
-
-def queried_transaction(response: httpx2.Response) -> QueryItem:
-    try:
-        return QueryItem.model_validate(answered_json(response))
+        return model.model_validate(answered_json(response))
     except ValidationError:
         raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE) from None
 
@@ -208,7 +201,7 @@ class PeyQrProvider:
         try:
             with self.client() as client:
                 for _ in range(MAX_QUERY_PAGES):
-                    page = query_page(client.get(path, params=params))
+                    page = answered(client.get(path, params=params), QueryPage)
                     payments.extend(paid_payments(page))
                     if page.next_token is None:
                         return payments
@@ -221,9 +214,11 @@ class PeyQrProvider:
         path = f"/transaction/{quote(provider_request_id, safe='')}"
         try:
             with self.client() as client:
-                item = queried_transaction(client.get(path))
+                item = answered(client.get(path), QueryItem)
         except ProviderUnavailableError as error:
             raise PaymentsQueryError(NETWORK_PROBLEMS[error.reason]) from None
+        if item.id != provider_request_id:
+            raise PaymentsQueryError(QueryProblem.INVALID_RESPONSE)
         return [paid_payment(item)] if item.status == PAID else []
 
     def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest:

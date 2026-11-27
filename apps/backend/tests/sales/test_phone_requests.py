@@ -4,7 +4,6 @@ import json
 import uuid
 from collections.abc import Iterator
 from http import HTTPStatus
-from typing import Any
 
 import httpx2
 import pytest
@@ -12,7 +11,6 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from tappy.platform.clock import SystemClock
-from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.platform.phones import (
     PhoneNumberError,
@@ -23,30 +21,25 @@ from tappy.platform.phones import (
 from tappy.sales.idempotency import digest_of
 from tappy.sales.reconciliation import ReconciliationResult, reconcile_attempt
 from tests.payments.pey_support import PUSH_CREATED, PUSH_FIXTURE, FakePey
+from tests.sales.phone_support import (
+    CONSENTED,
+    NOT_CONSENTED,
+    OTHER_CONSENTED,
+    demo_list_settings,
+    open_sale,
+    phone_settings,
+    posted,
+    request_phone,
+)
 from tests.sales.support import (
     AMOUNT,
-    IDEMPOTENCY_HEADER,
-    OPERATOR_A,
     RECEIVER_A,
-    bearer,
-    create_sale,
-    ready_merchant,
     start_client,
 )
 from tests.support import VALID_SECRET, build_settings, execute, scalar
 
-CONSENTED = "5512345678"
-OTHER_CONSENTED = "5587650000"
-NOT_CONSENTED = "5599990000"
-ALLOWED = f"{CONSENTED},{OTHER_CONSENTED}"
 FULLWIDTH_DIGITS = "".join(chr(0xFF10 + int(digit)) for digit in CONSENTED)
 EXPIRATION_MINIMUM = PUSH_FIXTURE["request_schema"]["properties"]["expiration"]["minimum"]
-
-
-def phone_settings(database_url: str, allowed: str = ALLOWED) -> Settings:
-    return build_settings(database_url=database_url).model_copy(
-        update={"phone_request_numbers": phone_list(allowed)}
-    )
 
 
 @pytest.fixture
@@ -59,30 +52,6 @@ def client(migrated_database_url: str, fake: FakePey) -> Iterator[TestClient]:
     settings = phone_settings(migrated_database_url)
     with start_client(settings, migrated_database_url, fake.provider()) as started:
         yield started
-
-
-def open_sale(client: TestClient, database_url: str) -> tuple[dict[str, Any], dict[str, str]]:
-    merchant = ready_merchant(client, database_url, "Tienda Demo A", OPERATOR_A)
-    operator = bearer(client, OPERATOR_A)
-    return create_sale(client, operator, merchant, amount_cents=AMOUNT).json(), operator
-
-
-def request_phone(
-    client: TestClient,
-    headers: dict[str, str],
-    sale_id: str,
-    payload: dict[str, object],
-    key: str | None = None,
-) -> httpx2.Response:
-    return client.post(
-        f"/sales/{sale_id}/attempts",
-        json=payload,
-        headers={**headers, IDEMPOTENCY_HEADER: key or str(uuid.uuid4())},
-    )
-
-
-def posted(fake: FakePey) -> list[httpx2.Request]:
-    return [request for request in fake.requests if request.method == "POST"]
 
 
 def attempt_count(database_url: str) -> object:
@@ -323,19 +292,6 @@ def test_a_phone_number_is_normalized_to_ten_digits(raw: str, expected: str) -> 
 def test_a_malformed_phone_number_is_refused(raw: str) -> None:
     with pytest.raises(PhoneNumberError):
         normalized_phone(raw)
-
-
-def demo_list_settings(environment: str, numbers: str, provider: str = "simulated") -> Settings:
-    return Settings.model_validate(
-        {
-            "environment": environment,
-            "secret_key": VALID_SECRET,
-            "database_url": "postgresql+psycopg://user:password@127.0.0.1/db",
-            "payment_provider": provider,
-            "pey_api_key": "test-pey-secret-0123456789abcdef",
-            "phone_request_numbers": numbers,
-        }
-    )
 
 
 def test_the_demo_list_only_accepts_ten_digit_numbers() -> None:

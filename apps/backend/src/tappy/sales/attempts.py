@@ -276,8 +276,7 @@ def record_issued(
     if attempt.qr_payload is not None or attempt.provider_folio is not None:
         return describe_attempt(attempt)
     attach_issued(db, attempt, issued, now, expires_at)
-    if isinstance(issued, IssuedQr):
-        apply_waiting_events(db, attempt, now)
+    apply_waiting_events(db, attempt, now)
     db.flush()
     return describe_attempt(attempt)
 

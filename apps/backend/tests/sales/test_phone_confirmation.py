@@ -10,23 +10,33 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
+from tappy.payments.events import ReceivedEvent, store_event
+from tappy.payments.pey import PeyQrProvider
+from tappy.payments.provider import IssuedPhoneRequest, PhoneOrder, ProviderName
 from tappy.platform.clock import SystemClock
 from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.platform.phones import phone_list
+from tappy.sales.receptions import process_stored
 from tappy.sales.reconciliation import ReconciliationReport, ReconciliationResult, reconcile_attempt
 from tests.payments.pey_support import PUSH_CREATED, FakePey
 from tests.payments.webhook_support import Delivery, deliver, settings_for
-from tests.sales.support import AMOUNT, RECEIVER_A, start_client
-from tests.sales.test_phone_requests import ALLOWED, CONSENTED, open_sale, request_phone
+from tests.sales.phone_support import (
+    ALLOWED,
+    CONSENTED,
+    demo_list_settings,
+    open_sale,
+    posted,
+    request_phone,
+)
+from tests.sales.support import AMOUNT, RECEIVER_A, create_sale, start_client
 from tests.support import build_settings, execute, run_sales, scalar
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "pey"
 WEBHOOK_FIXTURE: dict[str, Any] = json.loads((FIXTURES / "webhook-codi-pn.json").read_text())
 TRANSACTION_FIXTURE: dict[str, Any] = json.loads((FIXTURES / "transaction.json").read_text())
 TRANSACTION_ID = PUSH_CREATED["transactionId"]
-PAID_AT = WEBHOOK_FIXTURE["example"]["datePaid"]
-PAID_DAY = datetime.fromtimestamp(PAID_AT, UTC).astimezone().date().isoformat()
+PHONE_EVENT = WEBHOOK_FIXTURE["event"]
 
 
 def confirmation_settings(database_url: str, **changes: object) -> Settings:
@@ -57,13 +67,12 @@ def pending_phone_request(
     return sale, attempt, operator
 
 
-def push_paid_event(sale: dict[str, Any], attempt: dict[str, Any], **changes: object) -> bytes:
+def push_paid_event(attempt: dict[str, Any], **changes: object) -> bytes:
     event = {
         **WEBHOOK_FIXTURE["example"],
         "amount": AMOUNT / 100,
         "bankAccountId": RECEIVER_A["provider_account_id"],
         "transactionId": attempt["provider_request_id"],
-        "metadata": {"tappy_attempt_id": attempt["id"], "tappy_reference": sale["reference"]},
         **changes,
     }
     return json.dumps(event, separators=(",", ":")).encode()
@@ -84,6 +93,37 @@ def reconcile(database_url: str, attempt: dict[str, Any], fake: FakePey) -> Reco
         database.dispose()
 
 
+class EarlyPaymentPey(PeyQrProvider):
+    def __init__(self, fake: FakePey, database_url: str) -> None:
+        issuing = fake.provider()
+        super().__init__(issuing.settings, issuing.transport)
+        self.database_url = database_url
+
+    def request_phone_payment(self, order: PhoneOrder) -> IssuedPhoneRequest:
+        event = {
+            **WEBHOOK_FIXTURE["example"],
+            "amount": order.amount_cents / 100,
+            "bankAccountId": order.receiver_account,
+            "transactionId": TRANSACTION_ID,
+        }
+        received = ReceivedEvent(
+            provider=ProviderName.PEY,
+            environment="test",
+            message_id="msg_push_early",
+            event_type=PHONE_EVENT,
+            body=json.dumps(event).encode(),
+            signed_at=datetime.now(UTC),
+        )
+        database = Database.from_settings(build_settings(database_url=self.database_url))
+        try:
+            with database.transaction() as session:
+                store_event(session, received, datetime.now(UTC))
+            process_stored(database, received, SystemClock())
+        finally:
+            database.dispose()
+        return super().request_phone_payment(order)
+
+
 def read(client: TestClient, operator: dict[str, str], sale: dict[str, Any]) -> dict[str, Any]:
     body: dict[str, Any] = client.get(f"/sales/{sale['id']}", headers=operator).json()
     return body
@@ -93,7 +133,7 @@ def test_an_exact_phone_payment_event_confirms_the_sale_once(
     client: TestClient, migrated_database_url: str
 ) -> None:
     sale, attempt, operator = pending_phone_request(client, migrated_database_url)
-    body = push_paid_event(sale, attempt)
+    body = push_paid_event(attempt)
 
     statuses = [
         deliver(client, body, Delivery(message_id=message)).status_code
@@ -138,10 +178,10 @@ def test_a_query_finds_the_paid_phone_payment_through_its_transaction(
 def test_a_webhook_and_a_query_for_the_same_phone_payment_count_once(
     client: TestClient, migrated_database_url: str, fake: FakePey
 ) -> None:
-    sale, attempt, _operator = pending_phone_request(client, migrated_database_url)
+    _sale, attempt, _operator = pending_phone_request(client, migrated_database_url)
     fake.pages = [transaction("PAID")]
 
-    deliver(client, push_paid_event(sale, attempt), Delivery(message_id="msg_push_query"))
+    deliver(client, push_paid_event(attempt), Delivery(message_id="msg_push_query"))
     report = reconcile(migrated_database_url, attempt, fake)
 
     assert (report.result, report.found, report.duplicates) == (
@@ -159,7 +199,7 @@ def test_a_different_amount_goes_to_review_instead_of_confirming(
 
     deliver(
         client,
-        push_paid_event(sale, attempt, amount=AMOUNT / 100 + 2.5),
+        push_paid_event(attempt, amount=AMOUNT / 100 + 2.5),
         Delivery(message_id="msg_push_fee"),
     )
     detail = read(client, operator, sale)
@@ -191,6 +231,10 @@ def test_a_pending_transaction_is_not_read_as_a_rejection(
         ((429, TRANSACTION_FIXTURE["responses"]["429"]["default"]), "rate_limited"),
         ((500, TRANSACTION_FIXTURE["responses"]["500"]["default"]), "server_error"),
         ((200, "not json"), "invalid_response"),
+        (
+            (200, {**TRANSACTION_FIXTURE["responses"]["200"]["default"], "status": "PAID"}),
+            "invalid_response",
+        ),
     ],
 )
 def test_an_unanswered_query_keeps_the_doubt_and_never_fails_the_request(
@@ -255,7 +299,7 @@ def test_new_phone_requests_over_the_quota_get_429_without_reaching_pey(
     settings = confirmation_settings(migrated_database_url, attempt_creation_quota=1)
     with start_client(settings, migrated_database_url, fake.provider()) as client:
         first, operator = open_sale(client, migrated_database_url)
-        second, _ = open_sale_again(client, migrated_database_url, operator)
+        second = create_sale(client, operator, first["merchant_id"], amount_cents=AMOUNT).json()
         allowed = request_phone(
             client, operator, first["id"], {"method": "phone", "phone_number": CONSENTED}
         )
@@ -265,32 +309,11 @@ def test_new_phone_requests_over_the_quota_get_429_without_reaching_pey(
 
     assert allowed.status_code == HTTPStatus.CREATED
     assert refused.status_code == HTTPStatus.TOO_MANY_REQUESTS
-    assert len([request for request in fake.requests if request.method == "POST"]) == 1
-
-
-def open_sale_again(
-    client: TestClient, database_url: str, operator: dict[str, str]
-) -> tuple[dict[str, Any], dict[str, str]]:
-    merchant = scalar(database_url, "SELECT merchant_id FROM sales")
-    sale = client.post(
-        "/sales",
-        json={"merchant_id": str(merchant), "amount_cents": AMOUNT},
-        headers={**operator, "Idempotency-Key": str(uuid.uuid4())},
-    ).json()
-    return sale, operator
+    assert len(posted(fake)) == 1
 
 
 def test_phone_requests_can_be_enabled_outside_tests_once_payments_are_verifiable() -> None:
-    settings = Settings.model_validate(
-        {
-            "environment": "production",
-            "secret_key": "x" * 40,
-            "database_url": "postgresql+psycopg://user:password@127.0.0.1/db",
-            "payment_provider": "pey",
-            "pey_api_key": "test-pey-secret-0123456789abcdef",
-            "phone_request_numbers": CONSENTED,
-        }
-    )
+    settings = demo_list_settings("production", CONSENTED, provider="pey")
 
     assert settings.phone_request_numbers == frozenset({CONSENTED})
 
@@ -313,3 +336,39 @@ def test_the_jobs_runner_verifies_an_expired_phone_request(migrated_database_url
     assert "exhausted: 0" in batch.stdout
     assert detail["attempts"][0]["verified_at"] is not None
     assert detail["attempts"][0]["next_action"] == "new_attempt"
+
+
+def test_a_payment_event_before_the_phone_request_answer_ends_confirmed(
+    migrated_database_url: str, fake: FakePey
+) -> None:
+    provider = EarlyPaymentPey(fake, migrated_database_url)
+    settings = confirmation_settings(migrated_database_url)
+    with start_client(settings, migrated_database_url, provider) as client:
+        sale, attempt, operator = pending_phone_request(client, migrated_database_url)
+        detail = read(client, operator, sale)
+
+    assert attempt["provider_request_id"] == TRANSACTION_ID
+    assert detail["status"] == "paid"
+    assert detail["attempts"][0]["status"] == "paid"
+    assert [(item["reason"], item["resolved_at"] is not None) for item in detail["exceptions"]] == [
+        ("unassociated", True)
+    ]
+    assert scalar(migrated_database_url, "SELECT status FROM webhook_events") == "applied"
+    assert scalar(migrated_database_url, "SELECT count(*) FROM transactions") == 1
+
+
+def test_a_link_attempt_is_never_queried_as_another_channel(
+    client: TestClient, migrated_database_url: str, fake: FakePey
+) -> None:
+    sale, operator = open_sale(client, migrated_database_url)
+    link = request_phone(client, operator, sale["id"], {"method": "link"}).json()
+    execute(
+        migrated_database_url,
+        "UPDATE payment_attempts SET provider = 'pey', provider_request_id = :id",
+        {"id": TRANSACTION_ID},
+    )
+
+    report = reconcile(migrated_database_url, link, fake)
+
+    assert report.result is ReconciliationResult.NOT_QUERYABLE
+    assert fake.queries() == []
