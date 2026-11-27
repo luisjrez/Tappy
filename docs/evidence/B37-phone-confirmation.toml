@@ -1,5 +1,5 @@
 ticket = "B37"
-revision = "4169172"
+revision = "838e033"
 
 [vc01]
 status = "PASS"
@@ -22,8 +22,10 @@ mode = "automated"
 tests = [
     "tests/sales/test_phone_confirmation.py::test_an_exact_phone_payment_event_confirms_the_sale_once",
     "tests/sales/test_phone_confirmation.py::test_a_query_finds_the_paid_phone_payment_through_its_transaction",
+    "tests/sales/test_phone_confirmation.py::test_a_payment_event_before_the_phone_request_answer_ends_confirmed",
     "tests/sales/test_phone_confirmation.py::test_phone_requests_can_be_enabled_outside_tests_once_payments_are_verifiable",
     "tests/sales/test_phone_requests.py::test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint",
+    "tests/sales/test_phone_confirmation.py::test_a_link_attempt_is_never_queried_as_another_channel",
 ]
 
 [[criteria]]
