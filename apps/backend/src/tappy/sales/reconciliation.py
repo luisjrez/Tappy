@@ -44,9 +44,6 @@ class ReconciliationResult(StrEnum):
     NOT_QUERYABLE = "not_queryable"
 
 
-QUERYABLE_METHODS = frozenset({AttemptMethod.QR, AttemptMethod.PHONE})
-
-
 @dataclass(frozen=True)
 class QueryTarget:
     attempt_id: uuid.UUID
@@ -79,7 +76,7 @@ def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> Qu
     if attempt is None:
         raise AttemptNotFoundError
     if (
-        attempt.method not in QUERYABLE_METHODS
+        attempt.method not in payment_queries(provider)
         or attempt.provider_request_id is None
         or attempt.provider is not provider.name
     ):

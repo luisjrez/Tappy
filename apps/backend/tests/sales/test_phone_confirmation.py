@@ -29,7 +29,7 @@ from tests.sales.phone_support import (
     posted,
     request_phone,
 )
-from tests.sales.support import AMOUNT, RECEIVER_A, create_sale, start_client
+from tests.sales.support import AMOUNT, IDEMPOTENCY_HEADER, RECEIVER_A, create_sale, start_client
 from tests.support import build_settings, execute, run_sales, scalar
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "pey"
@@ -361,7 +361,11 @@ def test_a_link_attempt_is_never_queried_as_another_channel(
     client: TestClient, migrated_database_url: str, fake: FakePey
 ) -> None:
     sale, operator = open_sale(client, migrated_database_url)
-    link = request_phone(client, operator, sale["id"], {"method": "link"}).json()
+    link = client.post(
+        f"/sales/{sale['id']}/attempts",
+        json={"method": "link"},
+        headers={**operator, IDEMPOTENCY_HEADER: str(uuid.uuid4())},
+    ).json()
     execute(
         migrated_database_url,
         "UPDATE payment_attempts SET provider = 'pey', provider_request_id = :id",
