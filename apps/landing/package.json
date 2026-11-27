@@ -13,16 +13,23 @@
     "check": "astro check",
     "test": "playwright test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "verify": "npm run format:check && npm run lint && npm run check && npm test"
   },
   "dependencies": {
     "astro": "7.4.13"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.65.1",
+    "@types/node": "22.20.7",
+    "eslint": "10.15.0",
+    "eslint-plugin-astro": "3.2.2",
     "prettier": "3.10.1",
     "prettier-plugin-astro": "1.1.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.74.0"
   }
 }
