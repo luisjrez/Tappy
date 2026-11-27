@@ -12,6 +12,7 @@ Ticket: [#45](https://github.com/luisjrez/Tappy/issues/45) · Historia: [H8 #8](
   - Base: rama B42 `78f646f` ([PR #61](https://github.com/luisjrez/Tappy/pull/61)), stack #68.
   - Candidato de la ronda 1: `7f97772` (función) + `4169172` (expectativa de `test_reception`) + `e916498` (evidencia).
   - Candidato de la ronda 2: `838e033` (correcciones de la ronda 1).
+  - Revisión final: `bad1ef2` (notas de la ronda 2).
 - **Entorno:** macOS, Postgres 18.6 aislado (Colima + Compose) y Python 3.14.8. Fecha: 2026-11-27 (UTC). Ejecutor: sesión local de desarrollo del autor del PR.
 
 ## Contrato de pey usado
@@ -232,7 +233,9 @@ Estado VC01: **PASS** (con la parte externa de TC03 fuera de alcance por decisi�
 - migrations: PASS (sin migraciones nuevas; cadena hasta `0027`);
 - tests: PASS, 725 passed, con Postgres real aislado;
 - api: PASS, 15 contratos sin diferencias;
-- evidence: B01–B36 y B41–B42 APPROVED. B37 al 100 % y bloqueado solo porque la review está `PENDING`.
+- evidence: B01–B36 y B41–B42 APPROVED. B37 al 100 % y bloqueado solo porque la review estaba `PENDING`.
+
+Sobre la revisión final `bad1ef2`: ver «Estado final».
 
 En la ronda 1 (`4169172`): format, lint, types, hygiene, migrations, tests (722 passed) y api PASS; evidence FAIL porque el manifiesto de B36 listaba los tres tests retirados (corregido en `e916498`) y B37 estaba `PENDING`. El primer `quality.check`, sobre `7f97772`, falló en `test_reception::…[changes8]` (ver «Cambios esperados en tests anteriores») y en un error intermitente de Docker Compose en `test_backup_restore` (contenedores atascados en `Created`), que pasa al repetirse.
 
@@ -245,7 +248,7 @@ AC PASS / AC aplicables = 3/3 = **100 %** (AC03 por su parte automatizada; la ex
 | Ronda | Revisión | Standards | Spec | Hallazgos |
 | --- | --- | --- | --- | --- |
 | 1 | `e916498` | APPROVE | REQUEST_CHANGES | Standards 6 notas; Spec 3 (should-fix) + 3 notas |
-| 2 | `838e033` | pendiente | pendiente | — |
+| 2 | `838e033` | APPROVE | APPROVE | Sin bloqueantes; Standards 2 notas, aplicadas en `bad1ef2` |
 
 ### Hallazgos de la ronda 1 y su corrección (`838e033`)
 
@@ -260,3 +263,12 @@ AC PASS / AC aplicables = 3/3 = **100 %** (AC03 por su parte automatizada; la ex
 9. **Despacho implícito, validación repetida e id sin comprobar** (Standards 6) → `QUERYABLE_METHODS` + mapa explícito (R3, `link` sigue `not_queryable`), un `answered(response, Model)` genérico, y una respuesta con otro `id` es `invalid_response` (R2).
 
 Notas aceptadas sin cambio: comparar el `amount` total (con comisión) manda a revisión y nunca confirma de más (se confirma en #112); `PENDING` en un intento vencido se lee como verificado sin pago, el mismo margen que QR; renombrar `QrProvider`/`QrPayment` queda para un cambio propio.
+
+### Notas de la ronda 2 y su corrección (`bad1ef2`)
+
+1. **`QUERYABLE_METHODS` repetía las claves del mapa de consultas** (Standards) → `query_target` usa `attempt.method not in payment_queries(provider)`. La reversión sigue fallando en `test_a_link_attempt_is_never_queried_as_another_channel` (1 failed, 16 passed).
+2. **El test de enlace usaba `request_phone`** (Standards) → crea el intento con `POST /sales/{id}/attempts` directamente.
+
+## Estado final
+
+Standards y Spec aprueban (APPROVE) la ronda 2 sobre `838e033`. La revisión final `bad1ef2` aplica las dos notas de Standards sin cambiar comportamiento. AC 3/3 = 100 % (AC03 por su parte automatizada; la externa sigue BLOCKED en #112), VC01 PASS.

@@ -1,5 +1,5 @@
 ticket = "B37"
-revision = "838e033"
+revision = "bad1ef2"
 
 [vc01]
 status = "PASS"
@@ -7,8 +7,8 @@ modality = "initial"
 evidence = "docs/evidence/B37-phone-confirmation.md#b37-vc01--api-confirmación-al-celular"
 
 [review]
-standards = "PENDING"
-spec = "PENDING"
+standards = "APPROVED"
+spec = "APPROVED"
 pending_findings = 0
 
 [[criteria]]
