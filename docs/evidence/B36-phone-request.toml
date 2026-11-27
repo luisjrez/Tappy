@@ -42,8 +42,6 @@ tests = [
     "tests/sales/test_phone_requests.py::test_phone_requests_stay_disabled_until_numbers_are_configured",
     "tests/sales/test_phone_requests.py::test_a_malformed_phone_number_is_refused",
     "tests/sales/test_phone_requests.py::test_the_demo_list_only_accepts_ten_digit_numbers",
-    "tests/sales/test_phone_requests.py::test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified",
-    "tests/sales/test_phone_requests.py::test_phone_requests_stay_off_the_real_provider_until_verifiable",
     "tests/sales/test_phone_requests.py::test_a_list_built_in_code_is_held_to_the_same_ten_digit_rule",
     "tests/sales/test_phone_requests.py::test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider",
 ]
@@ -61,5 +59,4 @@ tests = [
     "tests/sales/test_phone_requests.py::test_a_server_error_or_an_unusable_answer_keeps_the_request_verifying",
     "tests/sales/test_phone_requests.py::test_a_definitive_rejection_fails_the_phone_request_with_its_code",
     "tests/sales/test_phone_requests.py::test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint",
-    "tests/sales/test_phone_requests.py::test_an_expired_phone_request_blocks_new_attempts_until_payments_can_be_verified",
 ]

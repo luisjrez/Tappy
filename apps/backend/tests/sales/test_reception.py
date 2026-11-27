@@ -116,7 +116,7 @@ def test_exact_evidence_confirms_the_transfer_and_the_sale(
         ({"codiQrId": "UNKNOWN-QR"}, ("review", "open", 0)),
         ({"transactionId": None}, ("review", "open", 0)),
         ({"metadata": {"tappy_attempt_id": str(uuid.uuid4())}}, ("review", "open", 0)),
-        ({"type": "codi.pn.payment_received"}, ("unmatched", "open", 0)),
+        ({"type": "codi.pn.payment_received"}, ("review", "open", 0)),
         ({"datePaid": "yesterday"}, ("review", "open", 0)),
     ],
 )

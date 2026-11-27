@@ -256,3 +256,7 @@ AC PASS / AC aplicables = 3/3 = **100 %**.
 ## Estado final
 
 Standards y Spec aprueban (APPROVE) la ronda 3 sobre `4fabf71`. La revisión final `59b3566` solo acorta el nombre de un test que Standards pidió. AC 3/3 = 100 %, VC01 PASS.
+
+## Nota posterior (B37)
+
+[B37](B37-phone-confirmation.md) añadió la confirmación y la consulta de pagos al celular, y con eso retiró la restricción provisional de este ticket («solo `test` con el simulador»). Los tests que la fijaban (`test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified`, `test_phone_requests_stay_off_the_real_provider_until_verifiable` y `test_an_expired_phone_request_blocks_new_attempts_until_payments_can_be_verified`) se retiraron y el manifiesto ya no los lista. La revisión aprobada de B36 (`59b3566`) no cambia.

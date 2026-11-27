@@ -4,7 +4,6 @@ import json
 import uuid
 from collections.abc import Iterator
 from http import HTTPStatus
-from typing import Any
 
 import httpx2
 import pytest
@@ -12,7 +11,6 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from tappy.platform.clock import SystemClock
-from tappy.platform.config import Settings
 from tappy.platform.database import Database
 from tappy.platform.phones import (
     PhoneNumberError,
@@ -23,30 +21,25 @@ from tappy.platform.phones import (
 from tappy.sales.idempotency import digest_of
 from tappy.sales.reconciliation import ReconciliationResult, reconcile_attempt
 from tests.payments.pey_support import PUSH_CREATED, PUSH_FIXTURE, FakePey
+from tests.sales.phone_support import (
+    CONSENTED,
+    NOT_CONSENTED,
+    OTHER_CONSENTED,
+    demo_list_settings,
+    open_sale,
+    phone_settings,
+    posted,
+    request_phone,
+)
 from tests.sales.support import (
     AMOUNT,
-    IDEMPOTENCY_HEADER,
-    OPERATOR_A,
     RECEIVER_A,
-    bearer,
-    create_sale,
-    ready_merchant,
     start_client,
 )
-from tests.support import VALID_SECRET, build_settings, execute, run_sales, scalar
+from tests.support import VALID_SECRET, build_settings, execute, scalar
 
-CONSENTED = "5512345678"
-OTHER_CONSENTED = "5587650000"
-NOT_CONSENTED = "5599990000"
-ALLOWED = f"{CONSENTED},{OTHER_CONSENTED}"
 FULLWIDTH_DIGITS = "".join(chr(0xFF10 + int(digit)) for digit in CONSENTED)
 EXPIRATION_MINIMUM = PUSH_FIXTURE["request_schema"]["properties"]["expiration"]["minimum"]
-
-
-def phone_settings(database_url: str, allowed: str = ALLOWED) -> Settings:
-    return build_settings(database_url=database_url).model_copy(
-        update={"phone_request_numbers": phone_list(allowed)}
-    )
 
 
 @pytest.fixture
@@ -59,30 +52,6 @@ def client(migrated_database_url: str, fake: FakePey) -> Iterator[TestClient]:
     settings = phone_settings(migrated_database_url)
     with start_client(settings, migrated_database_url, fake.provider()) as started:
         yield started
-
-
-def open_sale(client: TestClient, database_url: str) -> tuple[dict[str, Any], dict[str, str]]:
-    merchant = ready_merchant(client, database_url, "Tienda Demo A", OPERATOR_A)
-    operator = bearer(client, OPERATOR_A)
-    return create_sale(client, operator, merchant, amount_cents=AMOUNT).json(), operator
-
-
-def request_phone(
-    client: TestClient,
-    headers: dict[str, str],
-    sale_id: str,
-    payload: dict[str, object],
-    key: str | None = None,
-) -> httpx2.Response:
-    return client.post(
-        f"/sales/{sale_id}/attempts",
-        json=payload,
-        headers={**headers, IDEMPOTENCY_HEADER: key or str(uuid.uuid4())},
-    )
-
-
-def posted(fake: FakePey) -> list[httpx2.Request]:
-    return [request for request in fake.requests if request.method == "POST"]
 
 
 def attempt_count(database_url: str) -> object:
@@ -325,37 +294,9 @@ def test_a_malformed_phone_number_is_refused(raw: str) -> None:
         normalized_phone(raw)
 
 
-def demo_list_settings(environment: str, numbers: str, provider: str = "simulated") -> Settings:
-    return Settings.model_validate(
-        {
-            "environment": environment,
-            "secret_key": VALID_SECRET,
-            "database_url": "postgresql+psycopg://user:password@127.0.0.1/db",
-            "payment_provider": provider,
-            "pey_api_key": "test-pey-secret-0123456789abcdef",
-            "phone_request_numbers": numbers,
-        }
-    )
-
-
 def test_the_demo_list_only_accepts_ten_digit_numbers() -> None:
     with pytest.raises(ValidationError, match="exactly 10 digits"):
         demo_list_settings("test", "5512345678,551234")
-
-
-@pytest.mark.parametrize("environment", ["local", "integration", "production"])
-def test_phone_requests_cannot_be_enabled_until_their_payments_can_be_verified(
-    environment: str,
-) -> None:
-    with pytest.raises(ValidationError, match="until phone payments can be verified"):
-        demo_list_settings(environment, CONSENTED)
-
-    assert demo_list_settings(environment, "").phone_request_numbers == frozenset()
-
-
-def test_phone_requests_stay_off_the_real_provider_until_verifiable() -> None:
-    with pytest.raises(ValidationError, match="until phone payments can be verified"):
-        demo_list_settings("test", CONSENTED, provider="pey")
 
 
 def test_a_list_built_in_code_is_held_to_the_same_ten_digit_rule() -> None:
@@ -371,6 +312,7 @@ def test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint(
     created = request_phone(
         client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED}
     ).json()
+    fake.pages = [(200, {"id": created["provider_request_id"], "status": "PENDING"})]
     database = Database.from_settings(build_settings(database_url=migrated_database_url))
     try:
         report = reconcile_attempt(
@@ -379,8 +321,10 @@ def test_a_phone_request_is_never_queried_through_the_qr_payments_endpoint(
     finally:
         database.dispose()
 
-    assert report.result is ReconciliationResult.NOT_QUERYABLE
-    assert fake.queries() == []
+    assert report.result is ReconciliationResult.NO_EVIDENCE
+    assert [request.url.path for request in fake.queries()] == [
+        f"/transaction/{created['provider_request_id']}"
+    ]
 
 
 def test_a_phone_request_conflicts_with_an_active_attempt_without_calling_the_provider(
@@ -428,30 +372,6 @@ def test_the_number_is_only_kept_behind_a_keyed_fingerprint(
         )
         == 0
     )
-
-
-def test_an_expired_phone_request_blocks_new_attempts_until_payments_can_be_verified(
-    client: TestClient, migrated_database_url: str
-) -> None:
-    sale, operator = open_sale(client, migrated_database_url)
-    request_phone(client, operator, sale["id"], {"method": "phone", "phone_number": CONSENTED})
-    execute(
-        migrated_database_url,
-        "UPDATE payment_attempts SET expires_at = now() - interval '1 minute'",
-    )
-
-    expired = client.get(f"/sales/{sale['id']}", headers=operator).json()
-    batch = run_sales(migrated_database_url, "run-jobs")
-    retried = request_phone(client, operator, sale["id"], {"method": "qr"})
-
-    assert [(item["status"], item["next_action"]) for item in expired["attempts"]] == [
-        ("expired", "verify_before_retry")
-    ]
-    assert "exhausted: 1" in batch.stdout
-    assert retried.status_code == HTTPStatus.CONFLICT
-    assert retried.json() == {
-        "detail": "The previous attempt expired; verify it before creating another"
-    }
 
 
 def test_a_withdrawn_phone_request_asks_for_no_action(

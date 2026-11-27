@@ -1,5 +1,6 @@
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -50,6 +51,7 @@ class QueryTarget:
     provider_request_id: str
     receiver_account: str
     expired: bool
+    method: AttemptMethod
 
 
 @dataclass(frozen=True)
@@ -65,12 +67,16 @@ class ReconciliationReport:
     retry_after: timedelta | None = None
 
 
+def payment_queries(provider: QrProvider) -> dict[AttemptMethod, Callable[[str], list[QrPayment]]]:
+    return {AttemptMethod.QR: provider.qr_payments, AttemptMethod.PHONE: provider.phone_payments}
+
+
 def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> QueryTarget | None:
     attempt = db.get(PaymentAttempt, attempt_id)
     if attempt is None:
         raise AttemptNotFoundError
     if (
-        attempt.method is not AttemptMethod.QR
+        attempt.method not in payment_queries(provider)
         or attempt.provider_request_id is None
         or attempt.provider is not provider.name
     ):
@@ -81,6 +87,7 @@ def query_target(db: Session, attempt_id: uuid.UUID, provider: QrProvider) -> Qu
         attempt.provider_request_id,
         attempt.receiver_account,
         attempt.status is AttemptStatus.EXPIRED,
+        attempt.method,
     )
 
 
@@ -183,10 +190,10 @@ def reconcile_attempt(
         if target is None:
             return report_for(db, attempt_id, [], ReconciliationResult.NOT_QUERYABLE)
     try:
-        payments = provider.qr_payments(target.provider_request_id)
+        payments = payment_queries(provider)[target.method](target.provider_request_id)
     except PaymentsQueryError as error:
         logger.warning(
-            "QR payments query for attempt %s failed (%s); payment stays unconfirmed",
+            "Payments query for attempt %s failed (%s); payment stays unconfirmed",
             attempt_id,
             error.problem,
         )

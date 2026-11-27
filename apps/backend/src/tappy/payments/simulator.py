@@ -51,3 +51,6 @@ class SimulatedQrProvider:
 
     def qr_payments(self, provider_request_id: str) -> list[QrPayment]:
         return []
+
+    def phone_payments(self, provider_request_id: str) -> list[QrPayment]:
+        return []
