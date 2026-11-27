@@ -226,7 +226,13 @@ Estado VC01: **PASS** (con la parte externa de TC03 fuera de alcance por decisi�
 
 ## Checks
 
-`uv run python -m quality.check` sobre la ronda 2 (`838e033` + esta evidencia), con `.env` exportado: ver `GATE_R2` abajo.
+`uv run python -m quality.check` sobre la ronda 2 (`838e033` + evidencia), con `.env` exportado:
+
+- format, lint, types (mypy strict) y hygiene: PASS;
+- migrations: PASS (sin migraciones nuevas; cadena hasta `0027`);
+- tests: PASS, 725 passed, con Postgres real aislado;
+- api: PASS, 15 contratos sin diferencias;
+- evidence: B01–B36 y B41–B42 APPROVED. B37 al 100 % y bloqueado solo porque la review está `PENDING`.
 
 En la ronda 1 (`4169172`): format, lint, types, hygiene, migrations, tests (722 passed) y api PASS; evidence FAIL porque el manifiesto de B36 listaba los tres tests retirados (corregido en `e916498`) y B37 estaba `PENDING`. El primer `quality.check`, sobre `7f97772`, falló en `test_reception::…[changes8]` (ver «Cambios esperados en tests anteriores») y en un error intermitente de Docker Compose en `test_backup_restore` (contenedores atascados en `Created`), que pasa al repetirse.
 
